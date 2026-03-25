@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:kern.humdrum.org)",
+      "Bash(curl -s \"https://kern.humdrum.org/search?s=t&keyword=Bach+Johann\")",
+      "Bash(python download_kern.py)",
+      "Bash(python -c \"import music21; print\\(music21.__version__\\)\")",
+      "Bash(python -c \"import matplotlib; print\\(matplotlib.__version__\\)\")",
+      "Bash(python -c \"import tkinter; print\\(''tkinter ok''\\)\")",
+      "Bash(pip install:*)",
+      "Bash(python -m pip install music21 matplotlib)",
+      "Bash(python -c \"import tkinter; r = tkinter.Tk\\(\\); r.title\\(''test''\\); r.after\\(2000, r.destroy\\); r.mainloop\\(\\); print\\(''tkinter ok''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(timeout 60 python kern_reader.py)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(python kern_reader.py)",
+      "Bash(xargs rm:*)",
+      "Bash(xxd \"C:/Users/yire7sd/AGSC-HX/myPython/m_a/kern/musedata/bach/chorales/chor-001.krn\")",
+      "Bash(find \"C:/Users/yire7sd/AGSC-HX/myPython/m_a/kern/\" -name \"*.krn\" -empty -delete)",
+      "Bash(python -m pip install verovio svglib reportlab pillow)",
+      "Bash(python:*)",
+      "Read(//c/Users/yire7sd/AppData/Local/Programs/Python/Python313/Lib/site-packages/verovio/**)",
+      "Bash(find C:/Users/yire7sd/AGSC-HX/myPython/m_a/kern/osu -name wtc1p01*)",
+      "Bash(find C:/Users/yire7sd/AGSC-HX/myPython/m_a/kern/osu -name *.krn)",
+      "Bash(curl -s http://127.0.0.1:8765/)",
+      "Bash(netstat -ano)",
+      "Bash(python -W ignore -c \":*)",
+      "Bash(curl -s http://127.0.0.1:8765/version)",
+      "WebFetch(domain:www.humdrum.org)",
+      "WebFetch(domain:verovio.org)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/yire7sd/AGSC-HX/myPython/m_a/**)",
+      "Bash(done)",
+      "Bash(tasklist /fi 'imagename eq python.exe' /fo csv)"
+    ]
+  }
+}

@@ -1,0 +1,139 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Running the app
+
+```
+python kern_reader.py
+```
+
+Starts the tkinter file browser + HTTP server on port 8765. The browser opens automatically at http://127.0.0.1:8765/. Click a file in the panel to render it. **Do not close the tkinter window** — the HTTP server runs as a daemon thread and dies with the main process.
+
+## Architecture
+
+- **kern_reader.py** — single-file application
+  - `FileBrowser` (tkinter, main thread): file list (filtered to 4 collections), search, metadata strip; window is resizable, 480×800; positioned at right edge of screen (`+{sw-480}+0`)
+  - `start_server()` (daemon thread): HTTP server on port 8765 serving rendered HTML
+  - `load_file_bg()` (thread per selection): spawns a **subprocess** via `multiprocessing` to isolate verovio segfaults; reads result from queue, updates `_state`
+  - `_render_worker()` (subprocess): runs `render_score()` in a separate process, puts HTML into a `Queue`
+  - Browser polls `/version` every 400ms and reloads when score changes
+  - Browser launched via Chrome/Edge subprocess with `--window-position=0,0 --window-size={sw-480},{sh}` to fill the left side of the screen
+
+## Key functions
+
+- `add_beam_markers(content)` — injects `L`/`J` beam markers into kern files that have none (OSU inventions and WTC fugues):
+  - Groups beamable notes (8th–64th) within each beat per spine
+  - 8th → `L`/`J`, 16th → `LL`/`JJ`, 32nd → `LLL`/`JJJ`
+  - Never crosses barlines; skips files that already have beam markers (musedata WTC preludes)
+  - Beat duration derived from `*M` time signature token
+
+- `prepare_grand_staff(content)` — preprocesses kern content before passing to verovio:
+  - **Multi-spine files** (≥2 `**kern` columns in header): adds `*staff`/`*clef` tokens if missing
+  - **Single-spine files** with `*^` splits: converts to 2-spine grand-staff format by absorbing the first `*^` into a new `**kern\t**kern` header; subsequent splits stay in place as inner voice splits within the treble spine
+  - Key fix for musedata WTC preludes (single spine with `*^` splits)
+
+- `render_score(path, version)` — validates file, applies `prepare_grand_staff` + `add_beam_markers`, loads into verovio, renders all pages to SVG, runs motif analysis, returns `(html, n_pages, version)`
+
+- `analyze_motifs(vtk, mei_str=None)` — extracts per-voice note sequences from MEI, computes **diatonic** intervals (ignores minor/major distinction), finds repeating motif patterns; accepts pre-fetched `mei_str` to avoid double call to `vtk.getMEI()`
+
+- `get_metadata(path)` — uses music21 to extract title, composer, key, time signature, parts, duration
+
+## Motif analysis pipeline
+
+1. `_voice_notes_from_mei(mei_str)` — parses MEI XML; recurses into `<beam>` and `<tuplet>` containers; tracks **rests, spaces, mRest** to compute correct absolute onset time per note; returns `{(staff_n, layer_n): [(nid, pname, oct_int, dur_quarters, midi, onset_quarters), ...]}`
+   - `onset_quarters` = `measure_onset + within_measure_pos` — absolute from piece start
+   - Rests and tied-note continuations advance `pos` but are not added to the voice list
+   - **Grace notes** (`grace` attribute in MEI, from kern `q`/`Q`) are skipped entirely; pos is NOT advanced (grace notes borrow time from the next note)
+   - Time signature parsed from `<scoreDef>` attrs (`meter.count`/`meter.unit`) **or** from a child `<meterSig count=... unit=.../>` inside `<staffDef>` — verovio uses the latter for violin/cello partita files; code falls back to `sd.iter('meterSig')` if attrs absent
+   - Returns `(voices_dict, beat_dur_q)` — beat duration in quarter notes (1.0 for 4/4, 1.5 for 9/8)
+2. `_merge_ornamental_slurs(notes, slur_ends)` — merges 2-note slur/phrase pairs where the first note is strictly shorter (ornament/appoggiatura). Slur map built from `<slur>` and `<phrase>` elements (both used by verovio for kern `(...)` markers). Ornament note dropped; its duration added to main note; onset = onset of ornament.
+3. `_interval_seq(notes, beat_dur_q=1.0)` — computes diatonic intervals: `oct*7 + diatonic_step(pname)`; minor/major ignored (C→E = C→Eb = 2); returns `(interval, dur, nid0, nid1, onset, phase)` per step; `phase = _metric_phase(onset, dur, beat_dur_q)`
+4. `_metric_phase(onset_q, dur_q, beat_dur_q=1.0)` — metric phase of a note within its beat:
+   - `n_per_beat = round(beat_dur_q / dur_q)` — how many of this note fit in one beat
+   - `phase = round((onset % beat_dur_q) / dur_q) % n_per_beat`
+   - Examples: 8th in 4/4 (beat=1.0) → 2 phases; 8th in 9/8 (beat=1.5) → 3 phases; triplet 1/3 (beat=1.0) → 3 phases
+   - Compound meter detection: `mc%3==0 and mc>3 and mu>=8` → `beat_dur_q = 4.0/mu * 3`
+5. `_find_motifs(all_seqs)` — pattern key = `(body, start_phase)` where `body` = tuple of `(interval, dur)` pairs and `start_phase` = metric phase of the first note. Two occurrences of the same pitch/rhythm pattern at different metric phases = different motifs. Window-shift and sub-pattern dominance deduplication operate on `body` only (not phase).
+   - Per-voice greedy non-overlapping selection (`last_end = start + len + 1`)
+   - Cross-voice deduplication: same beat (quantised to 16th grid) counts once
+   - `_is_window_shift(p, q)`: eliminates cyclic/sliding-window duplicate patterns (inven02 case)
+   - Up to 8 motifs; result sorted by occurrence count descending
+6. HTML output: motif dictionary table (sorted by count desc) before score; notes colored; click row → SVG boxes on all occurrences; occurrence number shown above first group of each box; count shown **bold** if it is a regular number (2^a·3^b) and ≥ 8; motif name shows metric phase as `_|` (phase 1) or `_|_|` (phase 2) subscript
+
+## Kern ornament handling
+
+| Kern token | Meaning | MEI output | Effect on analysis |
+|---|---|---|---|
+| `q`/`Q` prefix | grace note / acciaccatura | `<note grace="...">` | Skipped, pos not advanced |
+| `t`/`T` in token | trill / inverted trill | `<trill>` element | None (note stays single) |
+| `m`/`M` in token | mordent / inverted mordent | `<mordent>` element | None |
+| `S`/`$`/`R` in token | turn / inverted turn | `<turn>` element | None |
+| `(note1 note2)` pair | written-out appoggiatura | 2 `<note>` + `<slur>`/`<phrase>` | Merged by `_merge_ornamental_slurs` |
+| `!!` lines with `P` | musedata ornament realization | Ignored (global comment) | None |
+
+## Motif box rendering (JavaScript in HTML)
+
+- Groups note elements by SVG page, then by system (y-gap threshold = `max(minNoteHeight*2, 30px)`)
+- Single group → full rect; first group → `[` bracket; last group → `]` bracket; middle → top+bottom lines
+- `stroke-width: 2` with `vector-effect: non-scaling-stroke` — always 2px regardless of SVG zoom
+- Occurrence number drawn as `<text>` above the first group of each occurrence; font-size = `ypad * 1.5` (proportional to box height, consistent across all occurrences)
+
+## Interval notation in motif dictionary
+
+- 0-indexed diatonic steps: unison = 0, second = 1, third = 2, … (matches `_DIATONIC_STEP` values)
+- `_DIATONIC_NAMES = ['0','1','2','3','4','5','6']`
+- Arrow prefix: `↑` ascending, `↓` descending, `—` unison
+
+## Meta-analysis script
+
+`meta_analysis.py` — runs motif analysis across all kern files (no SVG rendering), collects occurrence counts, tests whether smooth numbers (2^a·3^b ≥ 8) are over-represented vs. random expectation. Output: `meta_report.txt`.
+
+```
+python meta_analysis.py
+```
+
+### Design
+- Each file is analyzed in a **fresh subprocess** (`multiprocessing.get_context('spawn')`) with a 90-second timeout — isolates verovio segfaults and hangs
+- Worker: `_worker_func(path, q)` — spawned per file, puts result into a `Queue`; main process calls `q.get(timeout=90)`, terminates process if it doesn't respond
+- Imports `kern_reader` as module (no HTTP server started); uses `kr.find_kern_files`, `kr.prepare_grand_staff`, `kr.add_beam_markers`, `kr.analyze_motifs`
+- Also calls `_kr._voice_notes_from_mei`, `_kr._interval_seq`, `_kr._find_motifs` directly for null model
+- Last run (91 files, min_len=2, max_motifs=50): 90 OK, 1 error; 4116 total motif counts
+
+### Statistical test
+Three null models for smooth-number enrichment among counts ≥ 8:
+- **Uniform prior**: every integer in [8, max] equally likely → 3.07x (misleading)
+- **Log-uniform prior**: weight 1/k → 1.72x (more conservative, still misleading)
+- **Permutation null** (correct): shuffle `(interval, dur)` pairs within each voice, preserve rhythm, run `_find_motifs` 100× per file → **0.84x** (no enrichment)
+
+**Conclusion**: smooth numbers in motif counts are an artifact of metric/rhythmic structure (piece lengths, meter), not a property of melodic content. Hypothesis not confirmed.
+
+### Permutation null model details
+- Worker returns `{'actual': [...], 'null': [...]}` — null is flat list of counts from 100 permutations
+- Bug fixed: `_find_motifs` returns `{'occurrences': [...]}` not `{'count': ...}` — use `len(m['occurrences'])`
+
+## File layout
+
+- `kern/` — 1166 kern files; 6 collections shown in the browser:
+  - `kern/musedata/bach/keyboard/wtc-1/` — WTC preludes (single-spine with `*^` splits; have beam markers)
+  - `kern/osu/classical/bach/wtc-1/` — WTC fugues (multi-spine; no beam markers → injected)
+  - `kern/osu/classical/bach/inventions/` — Inventions (multi-spine; no beam markers → injected)
+  - `kern/musedata/bach/chorales/` — Chorales (multi-spine; have beam markers)
+  - `kern/users/craig/classical/bach/violin/` — Violin partitas/sonatas (single-spine, has `**dynam` spines in some files)
+  - `kern/users/craig/classical/bach/cello/` — Cello suites
+
+## Dependencies
+
+- `verovio` 6.1.0 — renders kern → SVG; initialized once as global `_vtk`; some files cause segfaults → isolated via subprocess
+- `music21` — metadata extraction only
+- `multiprocessing` (spawn context) — isolates verovio crashes; **important**: read from queue BEFORE joining subprocess to avoid pipe-buffer deadlock on large HTML payloads
+- `tkinter` / `http.server` / `webbrowser` — stdlib
+
+## Known issues
+
+- Verovio prints harmless C++ warnings to stderr (beamSpan, mixed beam, unknown clef types)
+- Some chorales files cause verovio segfaults → subprocess isolation catches these, shows error in status bar
+- `autoBeam` is not a supported option in verovio 6.1.0 — beam markers must be injected manually
+- music21 prints `'Rest' object has no attribute 'beams'` for some chorales — harmless
+- `ConnectionAbortedError: [WinError 10053]` in HTTP server — harmless, browser closed connection on page reload
+- User communicates in Russian
