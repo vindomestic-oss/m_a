@@ -312,8 +312,8 @@ def _voice_notes_from_mei(mei_str):
     def _parse_meter(c, u):
         mc, mu = int(c), int(u)
         bpm = mc * 4.0 / mu
-        # Compound meter (9/8, 6/8, 12/8 …): beat = dotted note = 3 subdivisions
-        bdq = (4.0 / mu * 3) if (mc % 3 == 0 and mc > 3 and mu >= 8) else (4.0 / mu)
+        # Compound meter (3/8, 6/8, 9/8, 12/8 …): beat = dotted note = 3 subdivisions
+        bdq = (4.0 / mu * 3) if (mc % 3 == 0 and mu >= 8) else (4.0 / mu)
         return bpm, bdq
 
     for sd in tree.iter(tag_pfx + 'scoreDef'):
@@ -598,54 +598,152 @@ def _dur_matches(actual, spec):
 def _search_motif(query):
     """
     Parse query "dur[,dur...];phase;+iv-iv..." (phase optional, default 0).
+    Rhythm-only mode: "dur[,dur...];phase" or "dur[,dur...]" — no intervals,
+    N durations = N notes, any interval accepted.
     Durations may have operators: >1/16, <=1/8, etc. (default = exact match).
-    N+1 durations accepted for N intervals; last one ignored.
+    N+1 durations accepted for N intervals; last one checks last note's duration.
     Returns {"occs": [[nid,...], ...], "count": N}, sorted by onset.
     """
     parts = query.split(';')
-    if len(parts) == 3:
+    # strip optional ;inv modifier
+    invert = parts[-1].strip().lower() == 'inv'
+    if invert:
+        parts = parts[:-1]
+    # detect rhythm-only: 1 part, or 2 parts where second has no +/-
+    rhythm_only = False
+    if len(parts) == 1:
+        dur_str = parts[0]
+        start_phase = 0
+        rhythm_only = True
+    elif len(parts) == 2 and not re.search(r'[+-]\d', parts[1]):
+        dur_str = parts[0]
+        start_phase = int(parts[1].strip()) if parts[1].strip() else 0
+        rhythm_only = True
+    elif len(parts) == 3:
         dur_str, phase_str, ivs_str = parts
         start_phase = int(phase_str.strip())
     elif len(parts) == 2:
         dur_str, ivs_str = parts
         start_phase = 0
     else:
-        raise ValueError("Формат: длит;фаза;+iv-iv… или длит;+iv-iv…")
+        raise ValueError("Формат: длит;фаза;+iv-iv… или длит;фаза (только ритм)")
 
     durs = [_parse_dur(s) for s in dur_str.split(',')]
 
-    iv_parts = re.findall(r'[+-]\d+', ivs_str)
-    if not iv_parts:
-        raise ValueError("Интервалы не найдены (ожидается +N или -N)")
-    intervals = [int(p) for p in iv_parts]
-    n = len(intervals)
-
-    last_dur = None
-    if len(durs) == 1:
-        durs = durs * n
-    elif len(durs) == n + 1:
-        last_dur = durs[n]   # spec for the last note's duration
+    if rhythm_only:
+        if len(durs) < 2:
+            raise ValueError("Для ритмического поиска нужно минимум 2 длительности")
+        # if first spec has operator (not exact), treat it as pre-gap condition
+        pre_gap_spec = None
+        if durs[0][0] != '=':
+            pre_gap_spec = durs[0]
+            durs = durs[1:]
+            if len(durs) < 2:
+                raise ValueError("После условия паузы нужно минимум 2 длительности нот")
+        n = len(durs) - 1
+        last_dur = durs[n]
         durs = durs[:n]
-    elif len(durs) != n:
-        raise ValueError(f"Длительностей {len(durs)}, интервалов {n} (ожидается 1, {n} или {n+1})")
+        intervals = None   # any interval accepted
+        pattern = None
+    else:
+        pre_gap_spec = None
+        # contour mode: ivs_str contains only +/-/= chars, no digits (e.g. "+-+")
+        contour_chars = re.findall(r'[+\-=]', ivs_str)
+        if contour_chars and not re.search(r'\d', ivs_str):
+            contour = contour_chars   # list of '+', '-', '='
+            intervals = None
+            n = len(contour)
+        else:
+            contour = None
+            iv_parts = re.findall(r'[+-]\d+', ivs_str)
+            if not iv_parts:
+                raise ValueError("Интервалы не найдены (ожидается +N/-N или контур +-=)")
+            intervals = [int(p) for p in iv_parts]
+            n = len(intervals)
+        last_dur = None
+        if len(durs) == 1:
+            durs = durs * n
+        elif len(durs) == n + 1:
+            last_dur = durs[n]
+            durs = durs[:n]
+        elif len(durs) != n:
+            raise ValueError(f"Длительностей {len(durs)}, интервалов {n} (ожидается 1, {n} или {n+1})")
+        pattern = list(zip(contour if contour else intervals, durs))
 
-    pattern = list(zip(intervals, durs))
+    # build inverted pattern (negate exact intervals; swap +/- in contour)
+    if invert and not rhythm_only:
+        def _inv_key(k):
+            if isinstance(k, str):
+                return '-' if k == '+' else ('+' if k == '-' else '=')
+            return -k
+        pattern_inv = [(_inv_key(k), d) for k, d in pattern]
+    else:
+        pattern_inv = None
 
     with _state_lock:
         seqs = list(_state.get("seqs", []))
+        beat_dur_q = _state.get("beat_dur_q", 1.0)
+
+    # compute phase using the smallest note duration in the pattern as unit
+    # rhythm_only: durs elements are (op, val) → s[1] = val
+    # interval:    pattern elements are (interval, (op, val)) → s[1][1] = val
+    if rhythm_only:
+        all_dur_vals = [s[1] for s in durs] + ([last_dur[1]] if last_dur is not None else [])
+    else:
+        # pattern elements are (contour_char_or_interval, dur_spec); dur_spec = (op, val)
+        all_dur_vals = [s[1][1] for s in pattern] + ([last_dur[1]] if last_dur is not None else [])
+    min_dur_q = min(all_dur_vals) if all_dur_vals else None
 
     occs_with_onset = []
     seen_onsets = set()
     for _vk, seq in seqs:
         if len(seq) < n:
             continue
+        last_end = -1  # greedy non-overlapping per voice
         for i in range(len(seq) - n + 1):
-            if seq[i][5] != start_phase:
+            if i < last_end:
                 continue
-            if not all(seq[i + k][0] == pattern[k][0] and
-                       _dur_matches(seq[i + k][1], pattern[k][1])
-                       for k in range(n)):
+            # phase of first note, measured in units of the smallest pattern duration
+            if min_dur_q is not None:
+                ph = _metric_phase(seq[i][4], min_dur_q, beat_dur_q)
+            else:
+                ph = seq[i][5]
+            if ph != start_phase:
                 continue
+            # pre-gap check: first spec was >x / >=x / <x / <=x → gap before this note
+            if pre_gap_spec is not None:
+                if i == 0:
+                    # start of voice — matches > and >=, not < or <=
+                    gap_ok = pre_gap_spec[0] in ('>', '>=')
+                elif not seq[i - 1][6]:  # non-contiguous → rest before this note
+                    gap = seq[i][4] - (seq[i - 1][4] + seq[i - 1][1])
+                    gap_ok = _dur_matches(gap, pre_gap_spec)
+                else:
+                    # contiguous — check duration of the preceding note
+                    gap_ok = _dur_matches(seq[i - 1][1], pre_gap_spec)
+                if not gap_ok:
+                    continue
+            if rhythm_only:
+                if not all(_dur_matches(seq[i + k][1], durs[k]) for k in range(n)):
+                    continue
+            elif contour:
+                def _dir(iv):
+                    return '+' if iv > 0 else ('-' if iv < 0 else '=')
+                def _match_pat(pat):
+                    return all(_dir(seq[i + k][0]) == pat[k][0] and
+                               _dur_matches(seq[i + k][1], pat[k][1])
+                               for k in range(n))
+                if not (_match_pat(pattern) or
+                        (pattern_inv is not None and _match_pat(pattern_inv))):
+                    continue
+            else:
+                def _match_pat(pat):
+                    return all(seq[i + k][0] == pat[k][0] and
+                               _dur_matches(seq[i + k][1], pat[k][1])
+                               for k in range(n))
+                if not (_match_pat(pattern) or
+                        (pattern_inv is not None and _match_pat(pattern_inv))):
+                    continue
             # check last note's duration: seq[i+n][1] is its duration as first note of next interval
             if last_dur is not None and i + n < len(seq):
                 if not _dur_matches(seq[i + n][1], last_dur):
@@ -658,6 +756,7 @@ def _search_motif(query):
                 nids = [seq[i][2]] + [seq[i + k][3] for k in range(n)]
                 occs_with_onset.append((seq[i][4], nids))
                 seen_onsets.add(onset_q)
+            last_end = i + n + 1  # greedy: skip overlapping positions in this voice
 
     occs_with_onset.sort(key=lambda x: x[0])
     occs = [nids for _, nids in occs_with_onset]
@@ -1043,7 +1142,7 @@ def render_score(path: str, version: str = "1") -> tuple:
         f'<span style="font-weight:normal;font-size:10px;color:#999">'
         f'(кликни по строке чтобы выделить вхождения)</span></div>'
         f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
-        f'<input id="motif-search-input" type="text" placeholder="1/16;0;+2-1+3" '
+        f'<input id="motif-search-input" type="text" placeholder="1/16,1/8;0;+2-1  или  1/16,1/8,1/4;2" '
         f'style="font:12px monospace;padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:200px" '
         f'onkeydown="if(event.key===\'Enter\')window.searchMotif()">'
         f'<button onclick="window.searchMotif()" '
