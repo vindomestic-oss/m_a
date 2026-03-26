@@ -10,6 +10,7 @@ import json
 import math
 import multiprocessing
 import os
+import queue
 import re
 import threading
 import warnings
@@ -18,7 +19,8 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 import tkinter as tk
 from tkinter import ttk
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler
+from socketserver import ThreadingTCPServer, TCPServer
 
 warnings.filterwarnings("ignore")
 
@@ -31,8 +33,10 @@ SERVER_PORT  = 8765
 
 # Only these subdirectories are shown in the file list
 KERN_ALLOWED = (
-    os.path.join("musedata", "bach", "keyboard", "wtc-1"),        # WTC preludes
-    os.path.join("osu", "classical", "bach", "wtc-1"),             # WTC fugues
+    os.path.join("musedata", "bach", "keyboard", "wtc-1"),        # WTC1 preludes
+    os.path.join("musedata", "bach", "keyboard", "wtc-2"),        # WTC2 preludes
+    os.path.join("osu", "classical", "bach", "wtc-1"),             # WTC1 fugues
+    os.path.join("osu", "classical", "bach", "wtc-2"),             # WTC2 fugues
     os.path.join("osu", "classical", "bach", "inventions"),        # Inventions
     os.path.join("musedata", "bach", "chorales"),                   # Chorales
     os.path.join("users", "craig", "classical", "bach", "violin"), # Violin sonatas & partitas
@@ -46,11 +50,41 @@ _vtk.setResourcePath(VEROVIO_DATA)
 # ── shared state ──────────────────────────────────────────────────────────────
 
 _state = {
-    "html":    "<html><body style='font:16px sans-serif;padding:40px;color:#888'>"
-               "Select a kern file in the browser panel.</body></html>",
-    "version": "0",
+    "html":       """<!DOCTYPE html><html><head><meta charset="utf-8">
+<script>
+(function(){
+  var cur="0";
+  var es=new EventSource('/events');
+  es.onmessage=function(e){
+    if(e.data!==cur){ es.close(); window.location.replace('/?t='+Date.now()); }
+  };
+})();
+</script>
+</head><body style='font:16px sans-serif;padding:40px;color:#888'>
+Select a kern file in the panel.</body></html>""",
+    "version":    "0",
+    "seqs":       [],   # [(voice_key, interval_seq), ...] for current file
+    "beat_dur_q": 1.0,
 }
 _state_lock = threading.Lock()
+
+# ── SSE clients ───────────────────────────────────────────────────────────────
+
+_sse_clients = []
+_sse_lock    = threading.Lock()
+
+def _notify_sse(version):
+    """Push new version to all connected SSE clients."""
+    msg = f"data: {version}\n\n".encode()
+    with _sse_lock:
+        dead = []
+        for q in _sse_clients:
+            try:
+                q.put_nowait(msg)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            _sse_clients.remove(q)
 
 # ── HTTP server ───────────────────────────────────────────────────────────────
 
@@ -58,9 +92,69 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass  # silence server logs
 
+    def do_GET_events(self):
+        """Server-Sent Events: push version number whenever score changes."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        q = queue.Queue()
+        with _sse_lock:
+            _sse_clients.append(q)
+        try:
+            # send current version immediately so the client can compare
+            with _state_lock:
+                cur = _state["version"]
+            self.wfile.write(f"data: {cur}\n\n".encode())
+            self.wfile.flush()
+            while True:
+                try:
+                    msg = q.get(timeout=20)
+                    self.wfile.write(msg)
+                    self.wfile.flush()
+                except queue.Empty:
+                    self.wfile.write(b": keepalive\n\n")  # prevent proxy timeout
+                    self.wfile.flush()
+        except Exception:
+            pass
+        finally:
+            with _sse_lock:
+                try:
+                    _sse_clients.remove(q)
+                except ValueError:
+                    pass
+
+    def do_POST(self):
+        if self.path == "/search":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8").strip()
+            try:
+                result = _search_motif(body)
+                resp = json.dumps(result).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", len(resp))
+                self.end_headers()
+                self.wfile.write(resp)
+            except Exception as e:
+                msg = json.dumps({"error": str(e)}).encode("utf-8")
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", len(msg))
+                self.end_headers()
+                self.wfile.write(msg)
+        else:
+            self.send_response(405)
+            self.end_headers()
+
     def do_GET(self):
+        path = self.path.split('?')[0]
+        if path == "/events":
+            self.do_GET_events()
+            return
         with _state_lock:
-            if self.path == "/version":
+            if path == "/version":
                 body = _state["version"].encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain")
@@ -72,12 +166,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", len(body))
+                self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(body)
 
 
+class _ThreadingHTTPServer(ThreadingTCPServer):
+    allow_reuse_address = True
+
 def start_server():
-    srv = HTTPServer(("127.0.0.1", SERVER_PORT), Handler)
+    srv = _ThreadingHTTPServer(("127.0.0.1", SERVER_PORT), Handler)
     srv.serve_forever()
 
 # ── file discovery ────────────────────────────────────────────────────────────
@@ -110,12 +208,13 @@ def check_file(path: str):
 
 _RELOAD_JS = """
 <script>
-var _ver = "{version}";
-setInterval(function() {{
-  fetch("/version").then(function(r){{return r.text();}}).then(function(v){{
-    if(v !== _ver){{ _ver=v; location.reload(); }}
-  }});
-}}, 400);
+(function(){{
+  var _cur="{version}";
+  var es=new EventSource('/events');
+  es.onmessage=function(e){{
+    if(e.data!==_cur){{ es.close(); window.location.replace('/?t='+Date.now()); }}
+  }};
+}})();
 </script>
 """
 
@@ -352,11 +451,12 @@ def _interval_seq(notes, beat_dur_q=1.0):
     result = []
     for i in range(len(notes) - 1):
         nid0, pname0, oct0, dur0, _, onset0 = notes[i]
-        nid1, pname1, oct1, _,   _, _       = notes[i + 1]
+        nid1, pname1, oct1, _,   _, onset1  = notes[i + 1]
         dp0 = oct0 * 7 + _DIATONIC_STEP.get(pname0.lower(), 0)
         dp1 = oct1 * 7 + _DIATONIC_STEP.get(pname1.lower(), 0)
         phase0 = _metric_phase(onset0, dur0, beat_dur_q)
-        result.append((dp1 - dp0, dur0, nid0, nid1, onset0, phase0))
+        contiguous = round((onset0 + dur0) * 16) == round(onset1 * 16)
+        result.append((dp1 - dp0, dur0, nid0, nid1, onset0, phase0, contiguous))
     return result
 
 
@@ -380,6 +480,9 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=16
         for start in range(n):
             start_phase = seq[start][5]
             for ln in range(min_len, min(max_pat_len, n - start) + 1):
+                # skip if any interval in the window spans a rest
+                if not all(seq[start + k][6] for k in range(ln)):
+                    break  # longer patterns from same start also won't be contiguous
                 body  = tuple((s[0], s[1]) for s in seq[start:start + ln])
                 key   = (body, start_phase)
                 nids  = [seq[start][2]] + [seq[start + k][3] for k in range(ln)]
@@ -460,6 +563,105 @@ def _get_note_beat_positions(mei_str):
             phase = _metric_phase(onset, dur, _bdq)
             labels[nid] = f'{pos:g}|{phase}'
     return labels
+
+
+def _parse_dur(s):
+    """
+    Parse a duration string like '1/16', '>1/8', '<=3/8' to (op, quarter_float).
+    op is one of '=', '>', '<', '>=', '<='.
+    """
+    s = s.strip()
+    op = '='
+    for prefix in ('>=', '<=', '>', '<'):
+        if s.startswith(prefix):
+            op = prefix
+            s = s[len(prefix):]
+            break
+    if '/' in s:
+        num, den = s.split('/', 1)
+        val = round(float(num) * 4.0 / float(den) * 16) / 16
+    else:
+        val = round(float(s) * 16) / 16
+    return (op, val)
+
+
+def _dur_matches(actual, spec):
+    op, val = spec
+    if op == '=':  return abs(actual - val) < 1e-9
+    if op == '>':  return actual > val + 1e-9
+    if op == '<':  return actual < val - 1e-9
+    if op == '>=': return actual >= val - 1e-9
+    if op == '<=': return actual <= val + 1e-9
+    return False
+
+
+def _search_motif(query):
+    """
+    Parse query "dur[,dur...];phase;+iv-iv..." (phase optional, default 0).
+    Durations may have operators: >1/16, <=1/8, etc. (default = exact match).
+    N+1 durations accepted for N intervals; last one ignored.
+    Returns {"occs": [[nid,...], ...], "count": N}, sorted by onset.
+    """
+    parts = query.split(';')
+    if len(parts) == 3:
+        dur_str, phase_str, ivs_str = parts
+        start_phase = int(phase_str.strip())
+    elif len(parts) == 2:
+        dur_str, ivs_str = parts
+        start_phase = 0
+    else:
+        raise ValueError("Формат: длит;фаза;+iv-iv… или длит;+iv-iv…")
+
+    durs = [_parse_dur(s) for s in dur_str.split(',')]
+
+    iv_parts = re.findall(r'[+-]\d+', ivs_str)
+    if not iv_parts:
+        raise ValueError("Интервалы не найдены (ожидается +N или -N)")
+    intervals = [int(p) for p in iv_parts]
+    n = len(intervals)
+
+    last_dur = None
+    if len(durs) == 1:
+        durs = durs * n
+    elif len(durs) == n + 1:
+        last_dur = durs[n]   # spec for the last note's duration
+        durs = durs[:n]
+    elif len(durs) != n:
+        raise ValueError(f"Длительностей {len(durs)}, интервалов {n} (ожидается 1, {n} или {n+1})")
+
+    pattern = list(zip(intervals, durs))
+
+    with _state_lock:
+        seqs = list(_state.get("seqs", []))
+
+    occs_with_onset = []
+    seen_onsets = set()
+    for _vk, seq in seqs:
+        if len(seq) < n:
+            continue
+        for i in range(len(seq) - n + 1):
+            if seq[i][5] != start_phase:
+                continue
+            if not all(seq[i + k][0] == pattern[k][0] and
+                       _dur_matches(seq[i + k][1], pattern[k][1])
+                       for k in range(n)):
+                continue
+            # check last note's duration: seq[i+n][1] is its duration as first note of next interval
+            if last_dur is not None and i + n < len(seq):
+                if not _dur_matches(seq[i + n][1], last_dur):
+                    continue
+            # exclude matches with rests between notes (use precomputed contiguous flag)
+            if not all(seq[i + k][6] for k in range(n)):
+                continue
+            onset_q = round(seq[i][4] * 16)
+            if onset_q not in seen_onsets:
+                nids = [seq[i][2]] + [seq[i + k][3] for k in range(n)]
+                occs_with_onset.append((seq[i][4], nids))
+                seen_onsets.add(onset_q)
+
+    occs_with_onset.sort(key=lambda x: x[0])
+    occs = [nids for _, nids in occs_with_onset]
+    return {"occs": occs, "count": len(occs)}
 
 
 def analyze_motifs(vtk, mei_str=None):
@@ -774,7 +976,23 @@ def render_score(path: str, version: str = "1") -> tuple:
     # ── motif analysis ────────────────────────────────────────────────────────
     mei_str = _vtk.getMEI()
     motifs = analyze_motifs(_vtk, mei_str=mei_str)
-    motifs.sort(key=lambda m: m['count'], reverse=True)
+
+    # compute interval sequences for the /search endpoint + build note label map
+    try:
+        _voices_s, _beat_dur_q_s = _voice_notes_from_mei(mei_str)
+        all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s))
+                    for vk, notes in _voices_s.items() if len(notes) >= 4]
+        _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
+        nid_labels = {}
+        for _notes in _voices_s.values():
+            for nid, pname, oct_int, _dur, midi_val, _onset in _notes:
+                base = _PITCH_CLASS.get(pname.lower(), 0) + (oct_int + 1) * 12
+                acc = _ACC_SFX.get(midi_val - base, '')
+                nid_labels[nid] = pname.upper() + acc
+    except Exception:
+        all_seqs = []
+        _beat_dur_q_s = 1.0
+        nid_labels = {}
 
     def _is_smooth(k):
         """True if k = 2^a * 3^b (a,b >= 0)."""
@@ -786,55 +1004,72 @@ def render_score(path: str, version: str = "1") -> tuple:
             k //= 3
         return k == 1
 
+    motifs.sort(key=lambda m: (_is_smooth(m['count']) and m['count'] >= 8, m['count']), reverse=True)
+
     reload_js = _RELOAD_JS.format(version=version)
 
-    # Build legend + highlight script
-    legend_html  = ""
-    motif_script = ""
-    if motifs:
-        def _row(i, m):
-            pfx = m['phase_pfx']
-            phase_html = (f'<sub style="letter-spacing:-1px;color:#aaa">{pfx}</sub>'
-                          if pfx else '')
-            cnt = m['count']
-            cnt_html = (f'<b>{cnt}</b>' if _is_smooth(cnt) and cnt >= 8 else str(cnt))
-            return (
-                f'<tr data-midx="{i}" style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
-                f'onmouseover="this.style.background=\'#f0f0f0\'" '
-                f'onmouseout="if(this.getAttribute(\'data-active\')!==\'1\')this.style.background=\'\'">'
-                f'<td style="padding:5px 10px 5px 0;white-space:nowrap">'
-                f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
-                f'background:{m["color"]};margin-right:5px;vertical-align:middle"></span>'
-                f'<b>M{i+1}</b>{phase_html}</td>'
-                f'<td style="padding:5px 16px 5px 0;font-family:monospace;font-size:11px">'
-                f'{" &nbsp; ".join(m["pattern"])}</td>'
-                f'<td style="padding:5px 10px 5px 0;text-align:center">&times;{cnt_html}</td>'
-                f'<td style="padding:5px 0;text-align:center;color:#888">{m["length"]}</td>'
-                f'</tr>'
-            )
-        rows = "".join(_row(i, m) for i, m in enumerate(motifs))
-        legend_html = (
-            f'<div style="font:12px sans-serif;color:#333;margin-bottom:12px;'
-            f'padding:8px 14px 10px;background:#fafafa;border:1px solid #ddd;border-radius:5px">'
-            f'<div style="font-weight:bold;font-size:13px;margin-bottom:4px">&#127925; Мотивы '
-            f'<span style="font-weight:normal;font-size:10px;color:#999">'
-            f'(кликни по строке чтобы выделить вхождения)</span></div>'
-            f'<table id="motif-dict" style="border-collapse:collapse">'
-            f'<thead><tr style="color:#888;font-size:10px;border-bottom:2px solid #ccc">'
-            f'<th style="text-align:left;padding:0 10px 4px 0">Мотив</th>'
-            f'<th style="text-align:left;padding:0 16px 4px 0">Паттерн (&uarr;&darr; интервал, длит.)</th>'
-            f'<th style="padding:0 10px 4px 0">Вхожд.</th>'
-            f'<th style="padding:0 0 4px 0">Нот</th>'
-            f'</tr></thead>'
-            f'<tbody>{rows}</tbody>'
-            f'</table></div>'
+    # ── build motif table rows (auto-detected motifs) ─────────────────────────
+    def _row(i, m):
+        pfx = m['phase_pfx']
+        phase_html = (f'<sub style="letter-spacing:-1px;color:#aaa">{pfx}</sub>'
+                      if pfx else '')
+        cnt = m['count']
+        cnt_html = (f'<b>{cnt}</b>' if _is_smooth(cnt) and cnt >= 8 else str(cnt))
+        return (
+            f'<tr data-midx="{i}" style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
+            f'onmouseover="this.style.background=\'#f0f0f0\'" '
+            f'onmouseout="if(this.getAttribute(\'data-active\')!==\'1\')this.style.background=\'\'">'
+            f'<td style="padding:5px 10px 5px 0;white-space:nowrap">'
+            f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
+            f'background:{m["color"]};margin-right:5px;vertical-align:middle"></span>'
+            f'<b>M{i+1}</b>{phase_html}</td>'
+            f'<td style="padding:5px 16px 5px 0;font-family:monospace;font-size:11px">'
+            f'{" &nbsp; ".join(m["pattern"])}</td>'
+            f'<td style="padding:5px 10px 5px 0;text-align:center">&times;{cnt_html}</td>'
+            f'<td style="padding:5px 0;text-align:center;color:#888">{m["length"]}</td>'
+            f'</tr>'
         )
-        motif_data  = [{"color": m["color"], "occs": m["occs"]} for m in motifs]
-        motif_json  = json.dumps(motif_data)
-        motif_script = f"""<script>
+
+    auto_rows = "".join(_row(i, m) for i, m in enumerate(motifs))
+    motif_data = [{"color": m["color"], "occs": m["occs"]} for m in motifs]
+    motif_json = json.dumps(motif_data)
+    note_labels_json = json.dumps(nid_labels)
+
+    # ── legend panel (always shown — contains search input + table) ───────────
+    legend_html = (
+        f'<div style="font:12px sans-serif;color:#333;margin-bottom:12px;'
+        f'padding:8px 14px 10px;background:#fafafa;border:1px solid #ddd;border-radius:5px">'
+        f'<div style="font-weight:bold;font-size:13px;margin-bottom:6px">&#127925; Мотивы '
+        f'<span style="font-weight:normal;font-size:10px;color:#999">'
+        f'(кликни по строке чтобы выделить вхождения)</span></div>'
+        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+        f'<input id="motif-search-input" type="text" placeholder="1/16;0;+2-1+3" '
+        f'style="font:12px monospace;padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:200px" '
+        f'onkeydown="if(event.key===\'Enter\')window.searchMotif()">'
+        f'<button onclick="window.searchMotif()" '
+        f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
+        f'border-radius:4px;background:#f5f5f5;cursor:pointer">Найти</button>'
+        f'<span id="motif-search-status" style="font:11px sans-serif;color:#888"></span>'
+        f'</div>'
+        f'<table id="motif-dict" style="border-collapse:collapse">'
+        f'<thead><tr style="color:#888;font-size:10px;border-bottom:2px solid #ccc">'
+        f'<th style="text-align:left;padding:0 10px 4px 0">Мотив</th>'
+        f'<th style="text-align:left;padding:0 16px 4px 0">Паттерн (&uarr;&darr; интервал, длит.)</th>'
+        f'<th style="padding:0 10px 4px 0">Вхожд.</th>'
+        f'<th style="padding:0 0 4px 0">Нот</th>'
+        f'</tr></thead>'
+        f'<tbody>{auto_rows}</tbody>'
+        f'</table></div>'
+    )
+
+    # ── combined script (highlight + search) ─────────────────────────────────
+    motif_script = f"""<script>
 (function(){{
 var motifs={motif_json};
-var activeIdx=-1;
+var noteLabels={note_labels_json};
+var customMotifs=[];
+var CUSTOM_COLORS=['#ff6b35','#c77dff','#06d6a0','#ffd166'];
+var activeKey=null;
 var drawnRects=[];
 
 function clearRects(){{
@@ -848,13 +1083,9 @@ function clientToSVG(svg,cx,cy){{
   return pt.matrixTransform(svg.getScreenCTM().inverse());
 }}
 
-function drawBoxes(mIdx){{
+function drawBoxes(m){{
   clearRects();
-  var m=motifs[mIdx];
   m.occs.forEach(function(occ,occIdx){{
-    // Group note rects by (svg page, verovio <g class="system"> ancestor).
-    // Pixel-gap heuristics are unreliable: verovio bounding rects include beams
-    // so .height and .bottom can extend far, making threshold-based splits fail.
     var svgList=[]; var svgSysGroups=[];
     occ.forEach(function(id){{
       var el=document.getElementById(id); if(!el)return;
@@ -864,7 +1095,6 @@ function drawBoxes(mIdx){{
         if(cr.width<=0&&cr.height<=0)return;
         var si=svgList.indexOf(svg);
         if(si===-1){{si=svgList.length; svgList.push(svg); svgSysGroups.push([]);}}
-        // Walk up DOM to find <g class="system"> ancestor
         var sys=el.parentNode;
         while(sys&&sys!==svg){{
           if(sys.nodeType===1&&sys.getAttribute('class')==='system')break;
@@ -883,7 +1113,6 @@ function drawBoxes(mIdx){{
     if(svgList.length===0)return;
     var totalSvgs=svgList.length;
     svgList.forEach(function(svg,si){{
-      // Sort system groups top-to-bottom by min top of their rects
       svgSysGroups[si].sort(function(a,b){{
         var ta=Math.min.apply(null,a.rects.map(function(r){{return r.top;}}));
         var tb=Math.min.apply(null,b.rects.map(function(r){{return r.top;}}));
@@ -923,7 +1152,6 @@ function drawBoxes(mIdx){{
         path.setAttribute('pointer-events','none');
         svg.appendChild(path);
         drawnRects.push(path);
-        // Label: occurrence number above the first group of each occurrence
         if(isVeryFirst||isOnly){{
           var numSz=ypad*1.5;
           var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
@@ -934,13 +1162,49 @@ function drawBoxes(mIdx){{
           txt.setAttribute('font-size', String(numSz));
           txt.setAttribute('font-family', 'sans-serif');
           txt.setAttribute('font-weight', 'bold');
-          txt.setAttribute('pointer-events', 'none');
+          txt.setAttribute('cursor', 'default');
+          (function(occNids){{
+            var tip=document.getElementById('motif-tooltip');
+            txt.addEventListener('mouseenter',function(e){{
+              var names=occNids.map(function(id){{return noteLabels[id]||'?';}}).join(' ');
+              tip.textContent=names;
+              tip.style.display='block';
+              tip.style.left=(e.clientX+12)+'px';
+              tip.style.top=(e.clientY-8)+'px';
+            }});
+            txt.addEventListener('mousemove',function(e){{
+              tip.style.left=(e.clientX+12)+'px';
+              tip.style.top=(e.clientY-8)+'px';
+            }});
+            txt.addEventListener('mouseleave',function(){{
+              tip.style.display='none';
+            }});
+          }})(occ);
           svg.appendChild(txt);
           drawnRects.push(txt);
         }}
       }});
     }});
   }});
+}}
+
+function clearActiveRows(){{
+  document.querySelectorAll('#motif-dict tr[data-midx],#motif-dict tr[data-cidx]').forEach(function(r){{
+    r.style.background=''; r.setAttribute('data-active','0');
+  }});
+}}
+
+function isSmooth(k){{
+  if(k<=0)return false;
+  while(k%2===0)k/=2;
+  while(k%3===0)k/=3;
+  return k===1;
+}}
+
+function scrollToFirst(m){{
+  if(!m.occs||!m.occs[0]||!m.occs[0][0])return;
+  var el=document.getElementById(m.occs[0][0]);
+  if(el)el.scrollIntoView({{behavior:'smooth',block:'center'}});
 }}
 
 function highlight(){{
@@ -952,24 +1216,92 @@ function highlight(){{
       }});
     }});
   }});
-  // attach click handlers
   document.querySelectorAll('#motif-dict tr[data-midx]').forEach(function(row){{
     row.addEventListener('click',function(){{
       var idx=parseInt(this.getAttribute('data-midx'));
-      document.querySelectorAll('#motif-dict tr[data-midx]').forEach(function(r){{
-        r.style.background=''; r.setAttribute('data-active','0');
-      }});
-      if(activeIdx===idx){{
-        clearRects(); activeIdx=-1;
+      var key='auto:'+idx;
+      var wasActive=(activeKey===key);
+      clearActiveRows();
+      if(wasActive){{
+        clearRects(); activeKey=null;
       }}else{{
-        activeIdx=idx;
+        activeKey=key;
         this.style.background='#e8f0fe';
         this.setAttribute('data-active','1');
-        drawBoxes(idx);
+        drawBoxes(motifs[idx]);
+        scrollToFirst(motifs[idx]);
       }}
     }});
   }});
 }}
+
+function addCustomMotif(occs,queryStr){{
+  var cidx=customMotifs.length;
+  var color=CUSTOM_COLORS[cidx%CUSTOM_COLORS.length];
+  customMotifs.push({{color:color,occs:occs}});
+  occs.forEach(function(occ){{
+    occ.forEach(function(id){{
+      var el=document.getElementById(id);
+      if(el)try{{el.setAttribute('fill',color);}}catch(e){{}}
+    }});
+  }});
+  var tbody=document.querySelector('#motif-dict tbody');
+  var tr=document.createElement('tr');
+  tr.setAttribute('data-cidx',String(cidx));
+  tr.style.borderBottom='1px solid #e8e8e8';
+  tr.style.cursor='pointer';
+  tr.style.background='#fff8f0';
+  var nNotes=occs[0]?occs[0].length:'?';
+  var esc=queryStr.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  tr.innerHTML=
+    '<td style="padding:5px 10px 5px 0;white-space:nowrap">'+
+    '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'+
+    'background:'+color+';margin-right:5px;vertical-align:middle"></span>'+
+    '<b>M_'+(cidx+1)+'</b></td>'+
+    '<td style="padding:5px 16px 5px 0;font-family:monospace;font-size:11px">'+esc+'</td>'+
+    '<td style="padding:5px 10px 5px 0;text-align:center">\xd7'+(isSmooth(occs.length)&&occs.length>=8?'<b>'+occs.length+'</b>':occs.length)+'</td>'+
+    '<td style="padding:5px 0;text-align:center;color:#888">'+nNotes+'</td>';
+  tbody.insertBefore(tr,tbody.firstChild);
+  tr.addEventListener('click',function(){{
+    var key='custom:'+cidx;
+    var wasActive=(activeKey===key);
+    clearActiveRows();
+    if(wasActive){{
+      clearRects(); activeKey=null;
+    }}else{{
+      activeKey=key;
+      tr.style.background='#e8f0fe';
+      tr.setAttribute('data-active','1');
+      drawBoxes(customMotifs[cidx]);
+      scrollToFirst(customMotifs[cidx]);
+    }}
+  }});
+  clearActiveRows();
+  activeKey='custom:'+cidx;
+  tr.style.background='#e8f0fe';
+  tr.setAttribute('data-active','1');
+  drawBoxes({{color:color,occs:occs}});
+  scrollToFirst({{occs:occs}});
+}}
+
+window.searchMotif=function(){{
+  var inp=document.getElementById('motif-search-input');
+  var st=document.getElementById('motif-search-status');
+  var query=inp.value.trim();
+  if(!query)return;
+  st.style.color='#888'; st.textContent='\u2026';
+  fetch('/search',{{method:'POST',headers:{{'Content-Type':'text/plain'}},body:query}})
+  .then(function(r){{return r.json();}})
+  .then(function(data){{
+    if(data.error){{st.style.color='#c0392b';st.textContent=data.error;return;}}
+    st.style.color='#888';
+    if(data.count===0){{st.textContent='\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e';return;}}
+    st.textContent='';
+    addCustomMotif(data.occs,query);
+  }})
+  .catch(function(e){{st.style.color='#c0392b';st.textContent=String(e);}});
+}};
+
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',highlight);
 else highlight();
 }})();
@@ -988,20 +1320,21 @@ else highlight();
 {motif_script}
 </head>
 <body>
+<div id="motif-tooltip" style="display:none;position:fixed;background:rgba(0,0,0,0.78);color:#fff;font:12px monospace;padding:4px 8px;border-radius:4px;pointer-events:none;z-index:9999;white-space:nowrap"></div>
 <div class="fn">{os.path.basename(path)}</div>
 {legend_html}
 {pages}
 </body>
 </html>"""
-    return html, n_pages, version
+    return html, n_pages, version, all_seqs, _beat_dur_q_s
 
 # ── background render + update ────────────────────────────────────────────────
 
 def _render_worker(path: str, version: str, queue):
     """Runs in a subprocess to isolate verovio segfaults from the main process."""
     try:
-        html, n_pages, ver = render_score(path, version)
-        queue.put(('ok', html, n_pages, ver))
+        html, n_pages, ver, seqs, beat_dur_q = render_score(path, version)
+        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q))
     except Exception as e:
         queue.put(('error', str(e)))
 
@@ -1035,10 +1368,13 @@ def load_file_bg(path: str, status_cb):
         status_cb(f"ERROR: {result[1]}", error=True)
         return
 
-    _, html, n_pages, ver = result
+    _, html, n_pages, ver, seqs, beat_dur_q = result
     with _state_lock:
-        _state["html"]    = html
-        _state["version"] = ver
+        _state["html"]       = html
+        _state["version"]    = ver
+        _state["seqs"]       = seqs
+        _state["beat_dur_q"] = beat_dur_q
+    _notify_sse(ver)
     status_cb(f"{n_pages} page{'s' if n_pages != 1 else ''} — {os.path.basename(path)}")
 
 # ── metadata ──────────────────────────────────────────────────────────────────
@@ -1143,7 +1479,7 @@ class FileBrowser(tk.Tk):
     def _populate_list(self, files=None):
         self._tree.delete(*self._tree.get_children())
         for rel, full in (files or self._files):
-            self._tree.insert("", tk.END, text=rel, values=(full,))
+            self._tree.insert("", tk.END, text=os.path.basename(rel), values=(full,))
         n = len(files) if files is not None else len(self._files)
         self._count_var.set(f"{n} file{'s' if n != 1 else ''}")
 
