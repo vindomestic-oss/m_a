@@ -48,7 +48,7 @@ Starts the tkinter file browser + HTTP server on port 8765. The browser opens au
    - Time signature parsed from `<scoreDef>` attrs (`meter.count`/`meter.unit`) **or** from a child `<meterSig count=... unit=.../>` inside `<staffDef>` — verovio uses the latter for violin/cello partita files; code falls back to `sd.iter('meterSig')` if attrs absent
    - Returns `(voices_dict, beat_dur_q)` — beat duration in quarter notes (1.0 for 4/4, 1.5 for 9/8 and **3/8**)
 2. `_merge_ornamental_slurs(notes, slur_ends)` — merges 2-note slur/phrase pairs where the first note is strictly shorter (ornament/appoggiatura). Slur map built from `<slur>` and `<phrase>` elements (both used by verovio for kern `(...)` markers). Ornament note dropped; its duration added to main note; onset = onset of ornament.
-3. `_interval_seq(notes, beat_dur_q=1.0)` — computes diatonic intervals: `oct*7 + diatonic_step(pname)`; minor/major ignored (C→E = C→Eb = 2); returns `(interval, dur, nid0, nid1, onset, phase, contiguous)` per step; `phase = _metric_phase(onset, dur, beat_dur_q)`; `contiguous = round((onset0+dur0)*16)==round(onset1*16)` — False if there is a rest between the two notes
+3. `_interval_seq(notes, beat_dur_q=1.0)` — computes diatonic intervals: `oct*7 + diatonic_step(pname)`; minor/major ignored (C→E = C→Eb = 2); returns **8-element tuples** `(interval, dur, nid0, nid1, onset, phase, contiguous, dp0)` per step; `dp0` = absolute diatonic pitch of first note (used for transposition tracking); `phase = _metric_phase(onset, dur, beat_dur_q)`; `contiguous = round((onset0+dur0)*16)==round(onset1*16)` — False if there is a rest between the two notes
 4. `_metric_phase(onset_q, dur_q, beat_dur_q=1.0)` — metric phase of a note within its beat:
    - `n_per_beat = round(beat_dur_q / dur_q)` — how many of this note fit in one beat
    - `phase = round((onset % beat_dur_q) / dur_q) % n_per_beat`
@@ -59,8 +59,15 @@ Starts the tkinter file browser + HTTP server on port 8765. The browser opens au
    - Per-voice greedy non-overlapping selection (`last_end = start + len + 1`)
    - Cross-voice deduplication: same beat (quantised to 16th grid) counts once
    - `_is_window_shift(p, q)`: eliminates cyclic/sliding-window duplicate patterns (inven02 case)
+   - **Inversion merging** (Step 3): for each body B, if `body_inv = tuple((-iv, dur) for iv, dur in B)` exists at same phase, absorb inverted occurrences with `is_inv=True`; self-inverse bodies skipped; entries become 4-tuples `(nids, dp0, is_inv, onset_q)`
+   - **Three-way count**: `n_direct_only`, `n_inv_only`, `n_both` (coinciding positions); `count = n_direct_only + n_inv_only + n_both` (union, no double-counting)
    - Up to 8 motifs; result sorted by occurrence count descending
 6. HTML output: motif dictionary table (sorted by count desc) before score; notes colored; click row → SVG boxes on all occurrences + scroll to first occurrence; occurrence number shown above first group of each box; count shown **bold** if it is a regular number (2^a·3^b) and ≥ 8; motif name shows metric phase as `_|` (phase 1) or `_|_|` (phase 2) subscript
+   - **Three-way count display**: `n_dir_total / ⇕n_inv_total / ⊕union` shown when inversions present
+   - **Transposition profile**: clicking motif row opens detail row below with pairs `(transposition, distance)` per occurrence; distance in units of motif's minimum note duration; first occurrence always `(+0·0)`
+   - **Click motif row** → populates search input with pattern query string (e.g. `1/16;0;+1-1-1`)
+   - **Backspace** (when focus not in input field) → scrolls back to motif dictionary
+   - **Startup focus** → tkinter piece-search field gets focus automatically
 
 ## Kern ornament handling
 
@@ -99,20 +106,15 @@ python meta_analysis.py
 - Each file is analyzed in a **fresh subprocess** (`multiprocessing.get_context('spawn')`) with a 90-second timeout — isolates verovio segfaults and hangs
 - Worker: `_worker_func(path, q)` — spawned per file, puts result into a `Queue`; main process calls `q.get(timeout=90)`, terminates process if it doesn't respond
 - Imports `kern_reader` as module (no HTTP server started); uses `kr.find_kern_files`, `kr.prepare_grand_staff`, `kr.add_beam_markers`, `kr.analyze_motifs`
-- Also calls `_kr._voice_notes_from_mei`, `_kr._interval_seq`, `_kr._find_motifs` directly for null model
-- Last run (91 files, min_len=2, max_motifs=50): 90 OK, 1 error; 4116 total motif counts
+- Worker puts `[{'count': m['count'], 'length': m['length']} for m in motifs]` — `count` is the deduplicated union (n_direct_only + n_inv_only + n_both), no double-counting of coinciding inversions
+- Last run (135 files, with inversion merging): 135 OK, 1 error; 6283 total motif counts; enrichment **1.80x** (log-uniform)
 
 ### Statistical test
-Three null models for smooth-number enrichment among counts ≥ 8:
-- **Uniform prior**: every integer in [8, max] equally likely → 3.07x (misleading)
-- **Log-uniform prior**: weight 1/k → 1.72x (more conservative, still misleading)
-- **Permutation null** (correct): shuffle `(interval, dur)` pairs within each voice, preserve rhythm, run `_find_motifs` 100× per file → **0.84x** (no enrichment)
+Two null models for smooth-number enrichment among counts ≥ 8:
+- **Uniform prior**: every integer in [8, max] equally likely → 3.61x (misleading)
+- **Log-uniform prior**: weight 1/k → **1.80x** (modest enrichment)
 
-**Conclusion**: smooth numbers in motif counts are an artifact of metric/rhythmic structure (piece lengths, meter), not a property of melodic content. Hypothesis not confirmed.
-
-### Permutation null model details
-- Worker returns `{'actual': [...], 'null': [...]}` — null is flat list of counts from 100 permutations
-- Bug fixed: `_find_motifs` returns `{'occurrences': [...]}` not `{'count': ...}` — use `len(m['occurrences'])`
+**Note on inversion effect**: adding inversion merging raised enrichment from 0.84x → 1.80x. Likely artifact: inversion tends to approximately double counts, and 2N is more often smooth than N. The count used is always the union (no double-counting of positions where both forms coincide).
 
 ## Manual motif search
 
@@ -165,6 +167,19 @@ Server endpoints: `POST /search` — returns `{"occs": [[nid,...], ...], "count"
 - `multiprocessing` (spawn context) — isolates verovio crashes; **important**: read from queue BEFORE joining subprocess to avoid pipe-buffer deadlock on large HTML payloads
 - `tkinter` / `http.server` / `webbrowser` — stdlib
 - HTTP server uses `ThreadingTCPServer` (one thread per connection) to support long-lived SSE connections alongside normal requests
+
+## kern_mdl.py
+
+Identical to `kern_reader.py` (kept as working copy). Both files contain all MDL features.
+
+### Additional functions (in both kern_reader.py and kern_mdl.py)
+
+- `_dur_q_to_str(d)` — converts duration in quarter notes to search-format string (e.g. 0.5 → `"1/8"`). Formula: `Fraction(d/4.0)` because `_parse_dur` computes `num*4/den`.
+- `_pattern_to_query(pattern, phase)` — converts a motif body tuple to a search query string (e.g. `"1/16;0;+1-1-1"`); used to populate the search field when clicking a motif row.
+
+### File sort order
+
+`find_kern_files` uses a custom sort key: WTC files sorted by `(wtc_set, piece_number, p_before_f)` so prelude and fugue of the same number appear consecutively (wtc1p01 → wtc1f01 → wtc1p02 → wtc1f02 → …); all other files sorted alphabetically by path after WTC.
 
 ## Known issues
 
