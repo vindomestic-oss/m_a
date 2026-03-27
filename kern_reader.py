@@ -488,7 +488,7 @@ def _interval_seq(notes, beat_dur_q=1.0):
     return result
 
 
-def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=16):
+def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=None):
     """
     all_seqs: [(voice_key, interval_seq), ...]
     Returns list of {'pattern': tuple, 'occurrences': [[nid, ...], ...]}
@@ -508,7 +508,8 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=16
         for start in range(n):
             start_phase = seq[start][5]
             dp0_first   = seq[start][7]
-            for ln in range(min_len, min(max_pat_len, n - start) + 1):
+            max_ln = (n - start) if max_pat_len is None else min(max_pat_len, n - start)
+            for ln in range(min_len, max_ln + 1):
                 if not all(seq[start + k][6] for k in range(ln)):
                     break
                 body  = tuple((s[0], s[1]) for s in seq[start:start + ln])
@@ -844,6 +845,25 @@ def _search_motif(query):
     return {"occs": occs, "count": len(occs)}
 
 
+def _mdl_score(n, L, transforms):
+    """MDL saving = n*(L-1) - L - transp_cost.
+    Sequence bonus: if ≥3 occurrences have constant ∆transposition,
+    the transposition list encodes as (start, step, count) → cost = log2(n+1).
+    """
+    import math
+    if n < 2 or L < 1:
+        return 0
+    transposes = [t['transposition'] for t in transforms]
+    n_distinct = len(set(transposes))
+    is_seq = False
+    if n >= 3:
+        deltas = [transposes[i + 1] - transposes[i] for i in range(n - 1)]
+        if len(set(deltas)) == 1 and deltas[0] != 0:
+            is_seq = True
+    transp_cost = math.log2(n + 1) if is_seq else n * math.log2(n_distinct + 1)
+    return round(n * (L - 1) - L - transp_cost)
+
+
 def analyze_motifs(vtk, mei_str=None):
     """
     Run motif analysis on the currently-loaded verovio score.
@@ -882,19 +902,22 @@ def analyze_motifs(vtk, mei_str=None):
                     'dist':   dist,
                 })
                 prev_oq = oq
+            n_occ = len(m['occurrences'])
+            L_pat = len(m['pattern'])
             result.append({
                 'color':          _MOTIF_COLORS[i % len(_MOTIF_COLORS)],
                 'occs':           m['occurrences'],
-                'count':          len(m['occurrences']),
-                'length':         len(m['pattern']) + 1,
+                'count':          n_occ,
+                'length':         L_pat + 1,
                 'pattern':        steps,
                 'phase_pfx':      phase_pfx,
                 'transforms':     transforms,
-                'n_direct_only':  m.get('n_direct_only', len(m['occurrences'])),
+                'n_direct_only':  m.get('n_direct_only', n_occ),
                 'n_inv_only':     m.get('n_inv_only', 0),
                 'n_both':         m.get('n_both', 0),
                 'queryStr':       _pattern_to_query(m['pattern'], phase),
                 'profile':        profile,
+                'mdl':            _mdl_score(n_occ, L_pat, transforms),
             })
         return result
     except Exception as e:
@@ -1224,21 +1247,29 @@ def render_score(path: str, version: str = "1") -> tuple:
         def _bold(n):
             return f'<b>{n}</b>' if _is_smooth(n) and n >= 8 else str(n)
         if n_inv > 0 or n_both > 0:
-            # show total direct / total inv / union
             n_dir_total = n_dir + n_both
             n_inv_total = n_inv + n_both
             total       = n_dir + n_inv + n_both
-            parts = [_bold(n_dir_total)]
-            if n_inv_total > 0: parts.append(f'&#x21C5;{_bold(n_inv_total)}')
-            parts.append(f'&#x2295;{_bold(total)}')
-            cnt_html = f'<span style="font-size:11px">' + \
-                       f'<span style="color:#555">{parts[0]}</span>' + \
-                       ''.join(f'&nbsp;<span style="color:#888">{p}</span>' for p in parts[1:]) + \
-                       '</span>'
+            cnt_html = (
+                f'<span style="font-size:11px">'
+                f'<span class="cnt-f" data-fi="{i}" data-ff="direct" '
+                f'style="cursor:pointer;color:#555" title="только прямые">'
+                f'&times;{_bold(n_dir_total)}</span>'
+                f'&nbsp;<span class="cnt-f" data-fi="{i}" data-ff="inv" '
+                f'style="cursor:pointer;color:#888" title="только инверсии">'
+                f'&#x21C5;{_bold(n_inv_total)}</span>'
+                f'&nbsp;<span class="cnt-f" data-fi="{i}" data-ff="all" '
+                f'style="cursor:pointer;color:#888" title="все">'
+                f'&#x2295;{_bold(total)}</span>'
+                f'</span>'
+            )
         else:
             cnt_html = _bold(cnt)
+        mdl = m.get('mdl', 0)
+        mdl_html = f'<b>{mdl}</b>' if mdl > 0 else f'<span style="color:#bbb">{mdl}</span>'
         return (
-            f'<tr data-midx="{i}" style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
+            f'<tr data-midx="{i}" data-count="{m["count"]}" data-mdl="{mdl}" '
+            f'style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
             f'onmouseover="this.style.background=\'#f0f0f0\'" '
             f'onmouseout="if(this.getAttribute(\'data-active\')!==\'1\')this.style.background=\'\'">'
             f'<td style="padding:5px 10px 5px 0;white-space:nowrap">'
@@ -1248,7 +1279,8 @@ def render_score(path: str, version: str = "1") -> tuple:
             f'<td style="padding:5px 16px 5px 0;font-family:monospace;font-size:11px">'
             f'{" &nbsp; ".join(m["pattern"])}</td>'
             f'<td style="padding:5px 10px 5px 0;text-align:center">&times;{cnt_html}</td>'
-            f'<td style="padding:5px 0;text-align:center;color:#888">{m["length"]}</td>'
+            f'<td style="padding:5px 8px 5px 0;text-align:center;color:#888">{m["length"]}</td>'
+            f'<td style="padding:5px 0;text-align:right;font-size:11px;color:#557">{mdl_html}</td>'
             f'</tr>'
         )
 
@@ -1256,7 +1288,8 @@ def render_score(path: str, version: str = "1") -> tuple:
     motif_data = [{"color": m["color"], "occs": m["occs"],
                    "transforms": m.get("transforms", []),
                    "queryStr": m.get("queryStr", ""),
-                   "profile": m.get("profile", [])}
+                   "profile": m.get("profile", []),
+                   "mdl": m.get("mdl", 0)}
                   for m in motifs]
     motif_json = json.dumps(motif_data)
     note_labels_json = json.dumps(nid_labels)
@@ -1281,8 +1314,11 @@ def render_score(path: str, version: str = "1") -> tuple:
         f'<thead><tr style="color:#888;font-size:10px;border-bottom:2px solid #ccc">'
         f'<th style="text-align:left;padding:0 10px 4px 0">Мотив</th>'
         f'<th style="text-align:left;padding:0 16px 4px 0">Паттерн (&uarr;&darr; интервал, длит.)</th>'
-        f'<th style="padding:0 10px 4px 0">Вхожд.</th>'
-        f'<th style="padding:0 0 4px 0">Нот</th>'
+        f'<th id="sort-count-hdr" style="padding:0 10px 4px 0;cursor:pointer" '
+        f'title="Сортировать по числу вхождений">Вхожд.&#9660;</th>'
+        f'<th style="padding:0 8px 4px 0;text-align:center">Нот</th>'
+        f'<th id="sort-mdl-hdr" style="padding:0 0 4px 0;cursor:pointer;text-align:right" '
+        f'title="Сортировать по MDL-оценке">MDL</th>'
         f'</tr></thead>'
         f'<tbody>{auto_rows}</tbody>'
         f'</table></div>'
@@ -1296,6 +1332,7 @@ var noteLabels={note_labels_json};
 var customMotifs=[];
 var CUSTOM_COLORS=['#ff6b35','#c77dff','#06d6a0','#ffd166'];
 var activeKey=null;
+var activeFilter='all';
 var drawnRects=[];
 
 function clearRects(){{
@@ -1422,9 +1459,52 @@ document.addEventListener('keydown',function(e){{
   }}
 }});
 
+var _dictSortKey='count';
+function sortDict(key){{
+  _dictSortKey=key;
+  var tbody=document.querySelector('#motif-dict tbody');
+  if(!tbody)return;
+  // remove any open profile rows first
+  tbody.querySelectorAll('tr[id^="motif-profile-"]').forEach(function(r){{r.remove();}});
+  var rows=Array.from(tbody.querySelectorAll('tr[data-midx]'));
+  rows.sort(function(a,b){{
+    return parseFloat(b.getAttribute('data-'+key))-parseFloat(a.getAttribute('data-'+key));
+  }});
+  rows.forEach(function(r){{tbody.appendChild(r);}});
+  // update header arrows
+  var ch=document.getElementById('sort-count-hdr');
+  var mh=document.getElementById('sort-mdl-hdr');
+  if(ch)ch.innerHTML='Вхожд.'+(key==='count'?'&#9660;':'');
+  if(mh)mh.innerHTML='MDL'+(key==='mdl'?'&#9660;':'');
+}}
+document.addEventListener('DOMContentLoaded',function(){{
+  var ch=document.getElementById('sort-count-hdr');
+  var mh=document.getElementById('sort-mdl-hdr');
+  if(ch)ch.addEventListener('click',function(){{sortDict('count');}});
+  if(mh)mh.addEventListener('click',function(){{sortDict('mdl');}});
+}});
+
 function clearActiveRows(){{
   document.querySelectorAll('#motif-dict tr[data-midx],#motif-dict tr[data-cidx]').forEach(function(r){{
     r.style.background=''; r.setAttribute('data-active','0');
+  }});
+  document.querySelectorAll('.cnt-f').forEach(function(s){{
+    s.style.textDecoration=''; s.style.fontWeight='';
+  }});
+}}
+
+function _filteredOccs(idx,filter){{
+  var m=motifs[idx];
+  if(filter==='direct') return m.occs.filter(function(_,i){{return !m.transforms[i].inversion;}});
+  if(filter==='inv')    return m.occs.filter(function(_,i){{return  m.transforms[i].inversion;}});
+  return m.occs;
+}}
+
+function _highlightFilter(idx,filter){{
+  document.querySelectorAll('.cnt-f[data-fi="'+idx+'"]').forEach(function(s){{
+    var active=(s.getAttribute('data-ff')===filter);
+    s.style.textDecoration=active?'underline':'';
+    s.style.fontWeight=active?'bold':'';
   }});
 }}
 
@@ -1441,30 +1521,58 @@ function scrollToFirst(m){{
   if(el)el.scrollIntoView({{behavior:'smooth',block:'center'}});
 }}
 
+function colorMotif(m){{
+  m.occs.forEach(function(occ){{
+    occ.forEach(function(id){{
+      var el=document.getElementById(id);
+      if(el)try{{el.setAttribute('fill',m.color);}}catch(e){{}}
+    }});
+  }});
+}}
+
 function highlight(){{
-  motifs.forEach(function(m){{
-    m.occs.forEach(function(occ){{
-      occ.forEach(function(id){{
-        var el=document.getElementById(id);
-        if(el)try{{el.setAttribute('fill',m.color);}}catch(e){{}}
-      }});
+  document.querySelectorAll('.cnt-f').forEach(function(sp){{
+    sp.addEventListener('click',function(e){{
+      e.stopPropagation();
+      var idx=parseInt(this.getAttribute('data-fi'));
+      var filter=this.getAttribute('data-ff');
+      var key='auto:'+idx;
+      var sameActive=(activeKey===key && activeFilter===filter);
+      var detailId='motif-profile-'+idx;
+      var existingDetail=document.getElementById(detailId);
+      if(existingDetail) existingDetail.remove();
+      clearRects(); clearActiveRows();
+      if(sameActive){{
+        activeKey=null; activeFilter='all';
+      }}else{{
+        activeKey=key; activeFilter=filter;
+        var row=document.querySelector('#motif-dict tr[data-midx="'+idx+'"]');
+        if(row){{row.style.background='#e8f0fe';row.setAttribute('data-active','1');}}
+        colorMotif(motifs[idx]);
+        var occs=_filteredOccs(idx,filter);
+        drawBoxes({{occs:occs,color:motifs[idx].color}});
+        scrollToFirst({{occs:occs}});
+        _highlightFilter(idx,filter);
+      }}
     }});
   }});
   document.querySelectorAll('#motif-dict tr[data-midx]').forEach(function(row){{
     row.addEventListener('click',function(){{
       var idx=parseInt(this.getAttribute('data-midx'));
       var key='auto:'+idx;
-      var wasActive=(activeKey===key);
+      var wasActive=(activeKey===key && activeFilter==='all');
       var detailId='motif-profile-'+idx;
       var existingDetail=document.getElementById(detailId);
       clearActiveRows();
       if(existingDetail) existingDetail.remove();
+      activeFilter='all';
       if(wasActive){{
         clearRects(); activeKey=null;
       }}else{{
         activeKey=key;
         this.style.background='#e8f0fe';
         this.setAttribute('data-active','1');
+        colorMotif(motifs[idx]);
         drawBoxes(motifs[idx]);
         scrollToFirst(motifs[idx]);
         var qs=motifs[idx].queryStr;
@@ -1478,7 +1586,7 @@ function highlight(){{
           dtr.id=detailId;
           dtr.style.background='#f4f4ff';
           var dtd=document.createElement('td');
-          dtd.colSpan=4;
+          dtd.colSpan=5;
           dtd.style.cssText='padding:3px 10px 5px 20px;font:10px monospace;color:#555;line-height:1.6';
           var html='';
           for(var pi=0;pi<prof.length;pi++){{

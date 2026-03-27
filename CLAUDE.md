@@ -168,18 +168,47 @@ Server endpoints: `POST /search` — returns `{"occs": [[nid,...], ...], "count"
 - `tkinter` / `http.server` / `webbrowser` — stdlib
 - HTTP server uses `ThreadingTCPServer` (one thread per connection) to support long-lived SSE connections alongside normal requests
 
-## kern_mdl.py
+## kern_mdl.py — MDL working copy
 
-Identical to `kern_reader.py` (kept as working copy). Both files contain all MDL features.
+**Primary development file.** All new features and changes go here first. `kern_reader.py` is only synced from `kern_mdl.py` when explicitly requested. Both files are currently identical.
 
-### Additional functions (in both kern_reader.py and kern_mdl.py)
+Run with `python kern_mdl.py`.
+
+### Additional functions
 
 - `_dur_q_to_str(d)` — converts duration in quarter notes to search-format string (e.g. 0.5 → `"1/8"`). Formula: `Fraction(d/4.0)` because `_parse_dur` computes `num*4/den`.
 - `_pattern_to_query(pattern, phase)` — converts a motif body tuple to a search query string (e.g. `"1/16;0;+1-1-1"`); used to populate the search field when clicking a motif row.
+- `_mdl_score(n, L, transforms)` — module-level function. MDL saving = `n*(L-1) - L - transp_cost`. Sequence bonus: if ≥3 occurrences have constant ∆transposition (nonzero), `transp_cost = log2(n+1)` instead of `n * log2(n_distinct+1)`.
 
 ### File sort order
 
 `find_kern_files` uses a custom sort key: WTC files sorted by `(wtc_set, piece_number, p_before_f)` so prelude and fugue of the same number appear consecutively (wtc1p01 → wtc1f01 → wtc1p02 → wtc1f02 → …); all other files sorted alphabetically by path after WTC.
+
+### MDL column and sort
+
+- Dictionary table has 5 columns: Мотив / Паттерн / Вхожд. / Нот / MDL
+- Click "Вхожд." header → sort by count; click "MDL" header → sort by MDL score
+- MDL value bold if positive, grey if ≤ 0
+- `data-count` and `data-mdl` attributes on each `<tr>` for JS sort
+
+### Inversion filter clicks
+
+Three-way count `×N_dir ⇅N_inv ⊕N_all` — each span is individually clickable:
+- Click `×N_dir` → show only direct occurrences (boxes + scroll)
+- Click `⇅N_inv` → show only inverted occurrences
+- Click `⊕N_all` → show all (default row-click behavior)
+- Active filter underlined/bold; repeat click deactivates; row click always resets to 'all'
+
+### Note coloring
+
+- **Initially all notes black** — no coloring on page load
+- **Click a motif → colors its notes** (persists even after deactivating boxes)
+- Colors accumulate: each newly clicked motif adds its color on top of previous
+- `colorMotif(m)` function sets `fill` attribute on all note elements of a motif
+
+### Motif length
+
+- `max_pat_len=None` — no upper limit on pattern length
 
 ## Known issues
 
