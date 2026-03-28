@@ -19,7 +19,7 @@ from datetime import datetime
 
 # ── import shared functions from kern_reader ──────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
-import kern_reader as kr   # initialises verovio _vtk at import
+import kern_mdl as kr   # initialises verovio _vtk at import
 
 
 # ── subprocess worker (isolated from verovio segfaults) ──────────────────────
@@ -29,7 +29,7 @@ def _worker_func(path, q):
     try:
         import sys as _sys, os as _os
         _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-        import kern_reader as _kr
+        import kern_mdl as _kr
         _kr.check_file(path)
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
@@ -110,9 +110,23 @@ def analyze_file(ctx, path):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    files = kr.find_kern_files(kr.KERN_DIR)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--filter', default=None,
+                        help='Only analyse files whose rel path contains this substring')
+    parser.add_argument('--output', default=None,
+                        help='Output report file path (default: meta_report.txt)')
+    args = parser.parse_args()
+
+    all_files = kr.find_kern_files(kr.KERN_DIR)
+    if args.filter:
+        files = [(r, f) for r, f in all_files if args.filter.lower() in r.lower()]
+    else:
+        files = all_files
+    report_path_override = args.output
+
     total = len(files)
-    print(f"Found {total} kern files. Starting analysis…")
+    print(f"Found {total} kern files{f' matching {args.filter!r}' if args.filter else ''}. Starting analysis…")
 
     results = {}          # path → list of motif dicts (or None)
     n_ok = 0
@@ -197,7 +211,7 @@ def main():
                          if any(c >= 8 and _is_smooth(c) for c in counts)}
 
     # ── write report ──────────────────────────────────────────────────────────
-    report_path = os.path.join(os.path.dirname(__file__), "meta_report.txt")
+    report_path = report_path_override or os.path.join(os.path.dirname(__file__), "meta_report.txt")
     lines = []
     W = 72
 

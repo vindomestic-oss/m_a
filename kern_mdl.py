@@ -42,6 +42,15 @@ KERN_ALLOWED = (
     os.path.join("users", "craig", "classical", "bach", "violin"), # Violin sonatas & partitas
     os.path.join("users", "craig", "classical", "bach", "cello"),  # Cello suites
     "permut",                                                       # Permuted files
+    # Baroque (non-Bach)
+    os.path.join("musedata", "corelli"),                            # Corelli Op.1,3,4,5,6
+    os.path.join("musedata", "vivaldi"),                            # Vivaldi Op.1,2
+    os.path.join("ccarh", "vivaldi"),                               # Vivaldi Op.8
+    os.path.join("users", "craig", "classical", "scarlatti"),      # D. Scarlatti sonatas
+    os.path.join("users", "craig", "classical", "buxtehude"),      # Buxtehude
+    os.path.join("users", "craig", "classical", "frescobaldi"),    # Frescobaldi
+    os.path.join("users", "craig", "classical", "handel"),         # Handel
+    os.path.join("users", "craig", "classical", "monteverdi"),     # Monteverdi
 )
 
 _vtk = verovio.toolkit()
@@ -204,9 +213,91 @@ def find_kern_files(root: str):
     files.sort(key=lambda x: _sort_key(x[0]))
     return files
 
+
+_COMPOSER_MAP = {
+    'bach':           'Bach',
+    'palestrina':     'Palestrina',
+    'beethoven':      'Beethoven',
+    'mozart':         'Mozart',
+    'haydn':          'Haydn',
+    'monteverdi':     'Monteverdi',
+    'josquin':        'Josquin',
+    'schumann_robert':'Schumann R.',
+    'schumann_clara': 'Schumann C.',
+    'chopin':         'Chopin',
+    'corelli':        'Corelli',
+    'handel':         'Handel',
+    'schubert':       'Schubert',
+    'webern':         'Webern',
+    'weber':          'Weber',
+    'schoenberg':     'Schoenberg',
+    'verdi':          'Verdi',
+    'joplin':         'Joplin',
+    'cpebach':        'C.P.E. Bach',
+    'trecento':       'Trecento',
+    'ciconia':        'Ciconia',
+    'beach':          'Beach',
+    'luca':           'Luca',
+    'lusitano':       'Lusitano',
+    'liliuokalani':   'Liliuokalani',
+    'johnson_j_r':    'Johnson J.R.',
+}
+
+
+_KERN_COMPOSER = {
+    'corelli':     'Corelli',
+    'vivaldi':     'Vivaldi',
+    'scarlatti':   'Scarlatti D.',
+    'buxtehude':   'Buxtehude',
+    'frescobaldi': 'Frescobaldi',
+    'handel':      'Handel',
+    'monteverdi':  'Monteverdi',
+}
+
+
+def _composer_from_rel(rel: str) -> str:
+    parts = rel.replace('\\', '/').split('/')
+    if parts[0] == 'music21' and len(parts) > 1:
+        return _COMPOSER_MAP.get(parts[1].lower(), parts[1].capitalize())
+    # kern/ files — check for non-Bach composers by path segment
+    for part in parts:
+        if part.lower() in _KERN_COMPOSER:
+            return _KERN_COMPOSER[part.lower()]
+    return 'Bach'
+
+
+def find_music21_files():
+    """Return [(rel, full), ...] for music21 corpus files verovio can render (.krn, .mxl, .xml)."""
+    try:
+        from music21 import corpus as m21corpus
+        paths = m21corpus.getCorePaths()
+    except Exception:
+        return []
+    files = []
+    for p in sorted(paths, key=lambda x: str(x).lower()):
+        s = str(p)
+        ext = s.rsplit('.', 1)[-1].lower()
+        if ext not in ('krn', 'mxl', 'xml'):
+            continue
+        norm = s.replace('\\', '/')
+        parts = norm.split('/')
+        try:
+            idx = next(i for i, part in enumerate(parts) if part == 'corpus')
+            rel = 'music21/' + '/'.join(parts[idx + 1:])
+        except StopIteration:
+            rel = 'music21/' + os.path.basename(s)
+        files.append((rel, s))
+    return files
+
+
 # ── validation ────────────────────────────────────────────────────────────────
 
 def check_file(path: str):
+    if path.lower().endswith('.mxl'):
+        import zipfile as _zf
+        if not _zf.is_zipfile(path):
+            raise RuntimeError("Invalid .mxl file")
+        return
     with open(path, "rb") as f:
         head = f.read(256)
     if not head.strip():
@@ -540,6 +631,17 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
     # Step 3: merge inversions
     # body_inv = tuple((-iv, dur) for iv, dur in body) — absorb into body as inversion=True.
     # Entries are 4-tuples: (nids, dp0, is_inv, onset_q).
+    # After merging, remove same-voice overlaps (shared nids) greedily by onset.
+    def _deoverlap(occs):
+        kept = []
+        used_nids = set()
+        for occ in sorted(occs, key=lambda x: x[3]):
+            nset = set(occ[0])
+            if not nset & used_nids:
+                kept.append(occ)
+                used_nids |= nset
+        return kept
+
     absorbed = set()
     for key in list(pat_occs.keys()):
         body, phase = key
@@ -553,7 +655,7 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
             absorbed.add(inv_key)
             direct = [(n, d, False, oq) for n, d, oq in pat_occs[key]]
             inv    = [(n, d, True,  oq) for n, d, oq in pat_occs[inv_key]]
-            pat_occs[key] = direct + inv
+            pat_occs[key] = _deoverlap(direct + inv)
 
     # Normalize non-merged entries to 4-tuples
     for key in pat_occs:
@@ -563,6 +665,7 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
     candidates = [
         (key, occs) for key, occs in pat_occs.items()
         if key not in absorbed and len(occs) >= min_count
+        and not all(iv == 0 for iv, _dur in key[0])
     ]
     # sort key uses total occurrence count (len) and body length
     if not candidates:
@@ -737,10 +840,17 @@ def _search_motif(query):
             n = len(contour)
         else:
             contour = None
-            iv_parts = re.findall(r'[+-]\d+', ivs_str)
+            iv_parts = re.findall(r'[+-]\d+(?:\|\d+)*', ivs_str)
             if not iv_parts:
                 raise ValueError("Интервалы не найдены (ожидается +N/-N или контур +-=)")
-            intervals = [int(p) for p in iv_parts]
+            def _parse_iv_token(tok):
+                m2 = re.match(r'([+-])(\d+)((?:\|\d+)*)', tok)
+                sign = 1 if m2.group(1) == '+' else -1
+                alts = [sign * int(m2.group(2))]
+                for v in re.findall(r'\d+', m2.group(3)):
+                    alts.append(sign * int(v))
+                return alts
+            intervals = [_parse_iv_token(p) for p in iv_parts]
             n = len(intervals)
         last_dur = None
         if len(durs) == 1:
@@ -757,6 +867,8 @@ def _search_motif(query):
         def _inv_key(k):
             if isinstance(k, str):
                 return '-' if k == '+' else ('+' if k == '-' else '=')
+            if isinstance(k, list):
+                return [-x for x in k]
             return -k
         pattern_inv = [(_inv_key(k), d) for k, d in pattern]
     else:
@@ -820,7 +932,8 @@ def _search_motif(query):
                     continue
             else:
                 def _match_pat(pat):
-                    return all(seq[i + k][0] == pat[k][0] and
+                    return all((seq[i + k][0] in pat[k][0] if isinstance(pat[k][0], list)
+                                else seq[i + k][0] == pat[k][0]) and
                                _dur_matches(seq[i + k][1], pat[k][1])
                                for k in range(n))
                 if not (_match_pat(pattern) or
@@ -1185,11 +1298,26 @@ def render_score(path: str, version: str = "1") -> tuple:
         "scale":            35,
         "font":             "Leipzig",
     })
+    ext = path.rsplit('.', 1)[-1].lower()
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-        content = prepare_grand_staff(content)
-        content = add_beam_markers(content)
+        if ext == 'mxl':
+            import zipfile as _zf
+            with _zf.ZipFile(path) as z:
+                xml_name = next(n for n in z.namelist()
+                                if n.lower().endswith('.xml') and 'META' not in n)
+                raw = z.read(xml_name)
+                if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+                    content = raw.decode('utf-16')
+                elif raw[:3] == b'\xef\xbb\xbf':
+                    content = raw.decode('utf-8-sig')
+                else:
+                    content = raw.decode('utf-8', errors='replace')
+        else:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        if ext == 'krn':
+            content = prepare_grand_staff(content)
+            content = add_beam_markers(content)
         ok = _vtk.loadData(content)
         if not ok:
             raise RuntimeError("verovio could not parse this file")
@@ -1302,7 +1430,7 @@ def render_score(path: str, version: str = "1") -> tuple:
         f'<span style="font-weight:normal;font-size:10px;color:#999">'
         f'(кликни по строке чтобы выделить вхождения)</span></div>'
         f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
-        f'<input id="motif-search-input" type="text" placeholder="1/16,1/8;0;+2-1  или  1/16,1/8,1/4;2" '
+        f'<input id="motif-search-input" type="text" placeholder="1/16;0;+2-1  или  1/16;0;+2|3-1|2" '
         f'style="font:12px monospace;padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:200px" '
         f'onkeydown="if(event.key===\'Enter\')window.searchMotif()">'
         f'<button onclick="window.searchMotif()" '
@@ -1788,7 +1916,7 @@ class FileBrowser(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
 
-        self._files        = find_kern_files(KERN_DIR)
+        self._files        = find_kern_files(KERN_DIR) + find_music21_files()
         self._current_path = None
 
         self._build_ui()
@@ -1804,6 +1932,10 @@ class FileBrowser(tk.Tk):
                      font=("Segoe UI", 10, "bold"))
         s.configure("TEntry",    fieldbackground="#313244", foreground="#cdd6f4",
                      insertcolor="#cdd6f4")
+        s.configure("TCombobox", fieldbackground="#313244", foreground="#cdd6f4",
+                     selectbackground="#45475a", selectforeground="#cdd6f4")
+        s.map("TCombobox", fieldbackground=[("readonly", "#313244")],
+              foreground=[("readonly", "#cdd6f4")])
         s.configure("Treeview",  background="#252535", foreground="#cdd6f4",
                      fieldbackground="#252535", rowheight=22,
                      font=("Segoe UI", 9))
@@ -1828,12 +1960,21 @@ class FileBrowser(tk.Tk):
         outer = ttk.Frame(self, style="S.TFrame")
         outer.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
 
-        ttk.Label(outer, text="KERN FILES", style="H.TLabel").pack(
+        ttk.Label(outer, text="SCORES", style="H.TLabel").pack(
             pady=(8, 4), padx=8, anchor="w")
 
-        sv = tk.StringVar()
-        sv.trace_add("write", lambda *_: self._filter(sv.get()))
-        search_entry = ttk.Entry(outer, textvariable=sv)
+        # composer selector
+        composers = ['All'] + sorted({_composer_from_rel(r) for r, _ in self._files})
+        self._composer_var = tk.StringVar(value='All')
+        composer_box = ttk.Combobox(outer, textvariable=self._composer_var,
+                                    values=composers, state='readonly')
+        composer_box.pack(fill=tk.X, padx=8, pady=(0, 4))
+        composer_box.bind('<<ComboboxSelected>>', lambda *_: self._apply_filter())
+
+        # text search
+        self._search_var = tk.StringVar()
+        self._search_var.trace_add("write", lambda *_: self._apply_filter())
+        search_entry = ttk.Entry(outer, textvariable=self._search_var)
         search_entry.pack(fill=tk.X, padx=8, pady=(0, 6))
         self.after(100, search_entry.focus_set)
 
@@ -1862,9 +2003,15 @@ class FileBrowser(tk.Tk):
         n = len(files) if files is not None else len(self._files)
         self._count_var.set(f"{n} file{'s' if n != 1 else ''}")
 
-    def _filter(self, q: str):
-        q = q.lower()
-        self._populate_list([(r, f) for r, f in self._files if q in r.lower()])
+    def _apply_filter(self):
+        q = self._search_var.get().lower()
+        composer = self._composer_var.get()
+        result = self._files
+        if composer and composer != 'All':
+            result = [(r, f) for r, f in result if _composer_from_rel(r) == composer]
+        if q:
+            result = [(r, f) for r, f in result if q in r.lower()]
+        self._populate_list(result)
 
     def _on_select(self, _=None):
         sel = self._tree.selection()
