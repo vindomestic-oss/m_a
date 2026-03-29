@@ -128,17 +128,23 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--filter', default=None,
-                        help='Only analyse files whose rel path contains this substring')
+                        help='Only analyse files whose rel path contains this substring '
+                             '(comma-separated → OR logic, e.g. "wtc,inventions")')
     parser.add_argument('--output', default=None,
                         help='Output report file path (default: meta_report.txt)')
+    parser.add_argument('--lo', type=int, default=8,
+                        help='Lower bound for smooth-count analysis (default: 8)')
     args = parser.parse_args()
 
     all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files()
     if args.filter:
-        files = [(r, f) for r, f in all_files if args.filter.lower() in r.lower()]
+        terms = [t.strip().lower() for t in args.filter.split(',')]
+        files = [(r, f) for r, f in all_files
+                 if any(t in r.lower() for t in terms)]
     else:
         files = [(r, f) for r, f in all_files if not r.startswith('music21/')]
     report_path_override = args.output
+    lo = args.lo
 
     total = len(files)
     print(f"Found {total} kern files{f' matching {args.filter!r}' if args.filter else ''}. Starting analysis…")
@@ -173,7 +179,7 @@ def main():
         return
 
     all_counts_sorted = sorted(all_counts)
-    counts_ge8 = [c for c in all_counts if c >= 8]
+    counts_ge8 = [c for c in all_counts if c >= lo]
     smooth_ge8  = [c for c in counts_ge8 if _is_smooth(c)]
 
     # frequency table of all counts
@@ -194,8 +200,7 @@ def main():
     # then the expected smooth fraction among integers in [8, M] under 1/k weighting
     # is  sum(1/k for k smooth in [8,M]) / sum(1/k for k in [8,M]).
 
-    max_c = max(counts_ge8) if counts_ge8 else 8
-    lo = 8
+    max_c = max(counts_ge8) if counts_ge8 else lo
 
     smooth_in_range = smooth_numbers_in_range(lo, max_c)
     n_integers_in_range = max_c - lo + 1
@@ -221,9 +226,9 @@ def main():
     ratio_log        = n_obs_smooth / expected_log     if expected_log     > 0 else float('inf')
 
     # ── per-file smooth hits ──────────────────────────────────────────────────
-    files_with_smooth = {rel: [c for c in counts if c >= 8 and _is_smooth(c)]
+    files_with_smooth = {rel: [c for c in counts if c >= lo and _is_smooth(c)]
                          for rel, counts in file_counts.items()
-                         if any(c >= 8 and _is_smooth(c) for c in counts)}
+                         if any(c >= lo and _is_smooth(c) for c in counts)}
 
     # ── write report ──────────────────────────────────────────────────────────
     report_path = report_path_override or os.path.join(os.path.dirname(__file__), "meta_report.txt")
@@ -257,7 +262,7 @@ def main():
     mean_c = sum(all_counts) / len(all_counts)
     med_c  = sorted(all_counts)[len(all_counts) // 2]
     lines.append(f"Mean / Median                     : {mean_c:.1f} / {med_c}")
-    lines.append(f"Counts >= 8                       : {n_obs_ge8}")
+    lines.append(f"Counts >= {lo}                       : {n_obs_ge8}")
     lines.append("")
 
     lines.append("Frequency table of ALL occurrence counts (count : frequency):")
@@ -308,7 +313,59 @@ def main():
         lines.append("  >> No notable enrichment. Smooth counts close to random expectation.")
     lines.append("")
 
-    h("5. per-file breakdown (files where any motif count is smooth >= 8)")
+    # ── shift test ────────────────────────────────────────────────────────────
+    # Verify enrichment by comparing smooth density of real counts vs shifted
+    # counts (+1 and -1).  If smooth numbers are genuinely over-represented,
+    # shifting the distribution should reduce their density.
+    # Start from lo_shift=10 to avoid 8↔9 boundary effects.
+    lo_shift = max(lo, 10)
+    counts_shift = [c for c in all_counts if c >= lo_shift]
+    n_shift = len(counts_shift)
+    def _smooth_density(values):
+        return sum(1 for v in values if _is_smooth(v)) / len(values) if values else 0
+    dens_real   = _smooth_density(counts_shift)
+    dens_plus1  = _smooth_density([c + 1 for c in counts_shift])
+    dens_minus1 = _smooth_density([c - 1 for c in counts_shift])
+    n_real   = sum(1 for c in counts_shift if _is_smooth(c))
+    n_plus1  = sum(1 for c in counts_shift if _is_smooth(c + 1))
+    n_minus1 = sum(1 for c in counts_shift if _is_smooth(c - 1))
+
+    h(f"5. shift test – smooth density vs ±1 shifted counts (threshold {lo_shift})")
+    lines.append(f"Counts >= {lo_shift}: {n_shift} observations")
+    lines.append("")
+    lines.append(f"  {'':20s}  {'n_smooth':>8s}  {'density':>8s}  {'ratio vs real':>13s}")
+    lines.append(f"  {'-'*20}  {'-'*8}  {'-'*8}  {'-'*13}")
+    lines.append(f"  {'Real counts':20s}  {n_real:8d}  {dens_real:8.4f}  {'(baseline)':>13s}")
+    r_p1 = dens_real / dens_plus1 if dens_plus1 > 0 else float('inf')
+    r_m1 = dens_real / dens_minus1 if dens_minus1 > 0 else float('inf')
+    lines.append(f"  {'Shifted +1 (c+1)':20s}  {n_plus1:8d}  {dens_plus1:8.4f}  {r_p1:>12.2f}x")
+    lines.append(f"  {'Shifted -1 (c-1)':20s}  {n_minus1:8d}  {dens_minus1:8.4f}  {r_m1:>12.2f}x")
+    lines.append("")
+
+    # Also show for larger thresholds
+    lines.append("  Breakdown by threshold (real density / +1 density / -1 density):")
+    for thr in [10, 12, 16, 18, 24, 32, 36, 48]:
+        cc = [c for c in all_counts if c >= thr]
+        if len(cc) < 5:
+            break
+        dr  = _smooth_density(cc)
+        dp  = _smooth_density([c + 1 for c in cc])
+        dm  = _smooth_density([c - 1 for c in cc])
+        rp  = dr / dp  if dp  > 0 else float('inf')
+        rm  = dr / dm  if dm  > 0 else float('inf')
+        lines.append(f"  >= {thr:3d}  n={len(cc):5d}  real={dr:.4f}  +1={dp:.4f}({rp:.2f}x)  -1={dm:.4f}({rm:.2f}x)")
+    lines.append("")
+
+    if dens_real > dens_plus1 and dens_real > dens_minus1:
+        lines.append("  >> Real counts have HIGHER smooth density than both shifted versions.")
+        lines.append("     This supports genuine over-representation of smooth numbers.")
+    elif dens_real > max(dens_plus1, dens_minus1):
+        lines.append("  >> Real counts have higher smooth density than one shifted version.")
+    else:
+        lines.append("  >> No clear enrichment vs shifted counts.")
+    lines.append("")
+
+    h(f"6. per-file breakdown (files where any motif count is smooth >= {lo})")
     if files_with_smooth:
         for rel in sorted(files_with_smooth):
             vals = sorted(files_with_smooth[rel])
@@ -318,7 +375,7 @@ def main():
         lines.append("  (none found)")
     lines.append("")
 
-    h("6. reference: all smooth numbers 2^a·3^b in [1, 256]")
+    h("7. reference: all smooth numbers 2^a·3^b in [1, 256]")
     ref = smooth_numbers_in_range(1, 256)
     # format in rows of 12
     for i in range(0, len(ref), 12):

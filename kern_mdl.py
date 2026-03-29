@@ -347,6 +347,13 @@ def _dur_q_to_str(d):
     return f"{f.numerator}/{f.denominator}"
 
 
+def _dur_q_label(d):
+    """Fraction string in quarter-note units for display (e.g. 1/3 for triplet eighth)."""
+    from fractions import Fraction
+    f = Fraction(d).limit_denominator(100)
+    return f"{f.numerator}/{f.denominator}"
+
+
 def _pattern_to_query(pattern, phase):
     """Convert a motif pattern tuple ((interval, dur), ...) to a search query string."""
     durs = [_dur_q_to_str(p[1]) for p in pattern]
@@ -364,7 +371,7 @@ def _interval_label(dsteps, dur_q):
     if octaves:
         iname += f'+{octaves}о'
     arrow = '&uarr;' if dsteps > 0 else ('&darr;' if dsteps < 0 else '&mdash;')
-    dname = _DUR_NAMES.get(dur_q, f'{dur_q}q')
+    dname = _DUR_NAMES.get(dur_q, _dur_q_to_str(dur_q))
     return f'{arrow}{iname}<sub>{dname}</sub>'
 
 
@@ -399,6 +406,7 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
       8th in 4/4  (beat=1.0): n_per_beat=2 → phase 0 or 1
       8th in 9/8  (beat=1.5): n_per_beat=3 → phase 0, 1, or 2
       triplet 1/3 in 4/4:     n_per_beat=3 → phase 0, 1, or 2
+      triplet 1/6 in 4/4:     n_per_beat=6 → phase % 3 (0,1,2) — groups of 3
     """
     if dur_q <= 0 or beat_dur_q <= 0:
         return 0
@@ -406,7 +414,13 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
     if n_per_beat <= 1:
         return 0
     pos_in_beat = onset_q % beat_dur_q
-    return int(round(pos_in_beat / dur_q)) % n_per_beat
+    phase = int(round(pos_in_beat / dur_q)) % n_per_beat
+    # For triplet notes (n_per_beat divisible by 3), phase within the triplet
+    # group is what matters rhythmically: phase 0 and phase 3 are both
+    # "first of triplet group" → collapse to phase % 3.
+    if n_per_beat % 3 == 0:
+        phase = phase % 3
+    return phase
 
 
 
@@ -445,7 +459,7 @@ def _voice_notes_from_mei(mei_str):
             beats_per_measure, beat_dur_q = _parse_meter(c, u)
             break
 
-    def proc_note(n, dur_override=None, dots_override=None, onset=0.0):
+    def proc_note(n, dur_override=None, dots_override=None, onset=0.0, scale=1.0):
         nid   = n.get(_XML_ID)
         pname = n.get('pname', '')
         if not pname or not nid:
@@ -457,17 +471,22 @@ def _voice_notes_from_mei(mei_str):
         dur     = dur_override if dur_override is not None else n.get('dur', '4')
         dots    = dots_override if dots_override is not None else int(n.get('dots', 0))
         accid   = n.get('accid') or n.get('accid.ges')
-        return (nid, pname, int(oct_str), _to_quarters(dur, dots),
+        return (nid, pname, int(oct_str), _to_quarters(dur, dots) * scale,
                 _to_midi(pname, oct_str, accid), onset)
 
-    def iter_events(el):
-        """Yield all events in order, recursing into beam/tuplet containers."""
+    def iter_events(el, scale=1.0):
+        """Yield (event_element, scale) pairs, recursing into beam/tuplet containers.
+        Tuplet ratio num/numbase is applied as a multiplier to note durations."""
         for child in el:
             t = child.tag.split('}')[-1]
-            if t in ('beam', 'tuplet', 'ligature', 'ftrem', 'btrem'):
-                yield from iter_events(child)
+            if t == 'tuplet':
+                num     = int(child.get('num', 1))
+                numbase = int(child.get('numbase', 1))
+                yield from iter_events(child, scale * numbase / num)
+            elif t in ('beam', 'ligature', 'ftrem', 'btrem'):
+                yield from iter_events(child, scale)
             else:
-                yield child
+                yield child, scale
 
     voices        = defaultdict(list)
     measure_onset = 0.0
@@ -487,34 +506,34 @@ def _voice_notes_from_mei(mei_str):
                 key = (sn, ln)
                 pos = 0.0   # position within measure
 
-                for child in iter_events(layer_el):
+                for child, scale in iter_events(layer_el):
                     t = child.tag.split('}')[-1]
                     onset = measure_onset + pos
                     if t == 'note':
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0)))
+                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         if child.get('grace'):   # grace note (q/Q in kern) — skip, no pos advance
                             pass
                         else:
-                            e = proc_note(child, onset=onset)
+                            e = proc_note(child, onset=onset, scale=scale)
                             if e:
                                 voices[key].append(e)
                             pos += dur
                     elif t == 'chord':
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0)))
+                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         if child.get('grace'):   # grace chord — skip
                             pass
                         else:
                             cands = [proc_note(n,
                                                dur_override=child.get('dur', '4'),
                                                dots_override=int(child.get('dots', 0)),
-                                               onset=onset)
+                                               onset=onset, scale=scale)
                                      for n in child.findall(tag_pfx + 'note')]
                             cands = [c for c in cands if c]
                             if cands:
                                 voices[key].append(max(cands, key=lambda x: x[4]))
                             pos += dur
                     elif t in ('rest', 'space'):
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0)))
+                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         pos += dur
                     elif t == 'mRest':
                         pos += beats_per_measure
@@ -798,9 +817,9 @@ def _parse_dur(s):
             break
     if '/' in s:
         num, den = s.split('/', 1)
-        val = round(float(num) * 4.0 / float(den) * 16) / 16
+        val = float(num) * 4.0 / float(den)
     else:
-        val = round(float(s) * 16) / 16
+        val = float(s)
     return (op, val)
 
 
