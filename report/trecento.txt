@@ -1,0 +1,286 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 13:00
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 103
+Successfully analysed  : 76
+Errors / empty         : 27
+Files with motifs      : 76
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 3282
+Min / Max count                   : 1 / 105
+Mean / Median                     : 6.4 / 4
+Counts >= 8                       : 730
+
+Frequency table of ALL occurrence counts (count : frequency):
+     1 : 26
+     2 : 745
+     3 : 650
+     4 : 470
+     5 : 294
+     6 : 208
+     7 : 159
+     8 : 108  <-- smooth (2^a·3^b)
+     9 : 89  <-- smooth (2^a·3^b)
+    10 : 65
+    11 : 55
+    12 : 59  <-- smooth (2^a·3^b)
+    13 : 46
+    14 : 28
+    15 : 31
+    16 : 28  <-- smooth (2^a·3^b)
+    17 : 19
+    18 : 23  <-- smooth (2^a·3^b)
+    19 : 9
+    20 : 15
+    21 : 16
+    22 : 12
+    23 : 10
+    24 : 5  <-- smooth (2^a·3^b)
+    25 : 12
+    26 : 8
+    27 : 8  <-- smooth (2^a·3^b)
+    28 : 6
+    29 : 7
+    30 : 8
+    31 : 6
+    32 : 5  <-- smooth (2^a·3^b)
+    33 : 4
+    34 : 1
+    35 : 1
+    36 : 6  <-- smooth (2^a·3^b)
+    37 : 4
+    38 : 2
+    39 : 1
+    40 : 2
+    41 : 1
+    42 : 3
+    43 : 1
+    44 : 2
+    45 : 1
+    46 : 1
+    47 : 3
+    48 : 2  <-- smooth (2^a·3^b)
+    50 : 1
+    51 : 1
+    52 : 1
+    53 : 2
+    54 : 1  <-- smooth (2^a·3^b)
+    57 : 1
+    58 : 1
+    59 : 1
+    60 : 1
+    63 : 3
+    65 : 1
+    68 : 1
+    77 : 1
+   105 : 1
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 105]
+Smooth numbers in range: 15  (out of 98 integers)
+  [8, 9, 12, 16, 18, 24, 27, 32, 36, 48, 54, 64, 72, 81, 96]
+
+Observed smooth counts (>= 8): 334
+  8 × 108
+  9 × 89
+  12 × 59
+  16 × 28
+  18 × 23
+  24 × 5
+  27 × 8
+  32 × 5
+  36 × 6
+  48 × 2
+  54 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 15 / 98 = 0.1531  (15.31%)
+     Expected smooth counts: 111.7
+     Observed smooth counts: 334
+     Enrichment ratio       : 2.99x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.2523  (25.23%)
+     Expected smooth counts : 184.2
+     Observed smooth counts : 334
+     Enrichment ratio       : 1.81x
+
+  >> Modest enrichment. Smooth counts slightly over-represented.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  music21/trecento/Fava_Dicant_nunc_iudei.xml
+    smooth counts: [9, 9, 12]
+  music21/trecento/PMFC_01-Lugentium siccentur.xml
+    smooth counts: [8, 8, 8, 9, 12, 12, 27, 48, 48]
+  music21/trecento/PMFC_01-Rex quem metrorum.xml
+    smooth counts: [8, 9, 12, 12, 12, 12, 18]
+  music21/trecento/PMFC_01-Virtutibus laudabilis.xml
+    smooth counts: [9, 12, 16]
+  music21/trecento/PMFC_01-Vos Qui Admiramini Gratissima virginis species.xml
+    smooth counts: [12, 12, 18, 24]
+  music21/trecento/PMFC_04-A lle s_andra lo spirt.xml
+    smooth counts: [8, 9, 12]
+  music21/trecento/PMFC_04-Cara mi donna.xml
+    smooth counts: [8, 9, 9]
+  music21/trecento/PMFC_04-Quanto piu caro.xml
+    smooth counts: [12]
+  music21/trecento/PMFC_04-Si dolce non sono.xml
+    smooth counts: [8, 8, 12, 12, 12, 16, 36]
+  music21/trecento/PMFC_06-Jacopo-01-Aquila-Altera.xml
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/trecento/PMFC_06-Jacopo-02-Con-Gran-Furor.xml
+    smooth counts: [12]
+  music21/trecento/PMFC_06-Jacopo-03a-Di_Novo.xml
+    smooth counts: [9, 9, 9]
+  music21/trecento/PMFC_06-Jacopo-03b-Di_Novo.xml
+    smooth counts: [8, 8, 9]
+  music21/trecento/PMFC_06_10-I senti gia come l_arco.xml
+    smooth counts: [12, 18]
+  music21/trecento/PMFC_06_8-In Verde Prato.xml
+    smooth counts: [9, 9, 9, 12]
+  music21/trecento/PMFC_06_Giovanni-01-Angnel_son_biancho.xml
+    smooth counts: [8, 9]
+  music21/trecento/PMFC_06_Giovanni-02-Apress_un_fiume_a.xml
+    smooth counts: [8, 12, 12]
+  music21/trecento/PMFC_06_Giovanni-03-Chon_brachi_assai.xml
+    smooth counts: [8, 8]
+  music21/trecento/PMFC_06_Giovanni-04_De_Come_Dolce_Mente.xml
+    smooth counts: [8, 12, 12, 16, 16]
+  music21/trecento/PMFC_06_Giovanni-05_Donna_Gia_Fu_Leggiadra.xml
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/trecento/PMFC_06_Giovanni-06_Fra_Mille_Corvi.xml
+    smooth counts: [8, 8, 12, 12, 18]
+  music21/trecento/PMFC_06_Giovanni-07_In_Sulla_Ripa.xml
+    smooth counts: [8, 9, 9, 16]
+  music21/trecento/PMFC_06_Giovanni-09_Nascoso_El_Viso.xml
+    smooth counts: [8, 9, 16, 18]
+  music21/trecento/PMFC_06_Piero_1-All_onbra d_un perlato.xml
+    smooth counts: [8, 8, 9, 9, 12, 18]
+  music21/trecento/PMFC_06_Piero_2-Chavalcando.xml
+    smooth counts: [8, 8, 9, 12, 16]
+  music21/trecento/PMFC_06_Piero_6a-Quando_laire_comenca.xml
+    smooth counts: [8, 9]
+  music21/trecento/PMFC_13_01-Kyrie-Summe-Clementissime.mxl
+    smooth counts: [8, 9, 16]
+  music21/trecento/PMFC_13_01-Kyrie-Summe-Clementissime.xml
+    smooth counts: [8, 9, 16]
+  music21/trecento/PMFC_13_02-Kyrie-Questa-fanciulla.mxl
+    smooth counts: [9, 18]
+  music21/trecento/PMFC_13_03-Gloria Micinella.xml
+    smooth counts: [8, 8, 8, 8, 9]
+  music21/trecento/PMFC_13_04-Credo Cursor.xml
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 16, 18, 27]
+  music21/trecento/PMFC_13_05-Gloria Rosetta.xml
+    smooth counts: [8, 8, 8, 9, 12, 12, 16]
+  music21/trecento/PMFC_13_06-Gloria Fior Gentil.xml
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 16, 18]
+  music21/trecento/PMFC_13_07-Gloria Laus Honor.xml
+    smooth counts: [8, 8, 8, 9, 12, 12, 12, 32]
+  music21/trecento/PMFC_13_08-Gloria (Ad Ongni Vento).xml
+    smooth counts: [8, 8, 8, 9, 9, 18, 32]
+  music21/trecento/PMFC_13_09-Gloria Anglicana.xml
+    smooth counts: [8, 9, 9, 12, 18]
+  music21/trecento/PMFC_13_10-Gloria.xml
+    smooth counts: [8, 9, 9, 16]
+  music21/trecento/PMFC_13_12-Gloria.xml
+    smooth counts: [8, 8, 8, 16]
+  music21/trecento/PMFC_13_13-Gloria.xml
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 18, 36]
+  music21/trecento/PMFC_13_14-Gloria.xml
+    smooth counts: [8]
+  music21/trecento/PMFC_13_15-Gloria.xml
+    smooth counts: [8, 9, 9, 16, 32]
+  music21/trecento/PMFC_13_16-Gloria.xml
+    smooth counts: [8, 12, 16]
+  music21/trecento/PMFC_13_17-Gloria Spiritus et Alme.xml
+    smooth counts: [8, 8, 9, 12, 18]
+  music21/trecento/PMFC_13_18-Gloria Spiritus et Alme.xml
+    smooth counts: [8, 8, 9, 9, 16, 16]
+  music21/trecento/PMFC_13_19-Credo Scabroso.xml
+    smooth counts: [8, 9, 9, 9, 16, 27, 36, 36]
+  music21/trecento/PMFC_23_15a-Kyrie Humano Generi a.xml
+    smooth counts: [9]
+  music21/trecento/PMFC_23_15b-Kyrie Humano Generi b.xml
+    smooth counts: [9]
+  music21/trecento/PMFC_23_17-Kyrie Principum Effectivum.xml
+    smooth counts: [9]
+  music21/trecento/PMFC_23_18-Kyrie Chipre.xml
+    smooth counts: [8, 9, 9, 12, 24, 32]
+  music21/trecento/PMFC_23_19-Kyrie Perrinet.xml
+    smooth counts: [8, 8, 12, 16]
+  music21/trecento/PMFC_23_20-Kyrie O Sacra Virgo Beata.xml
+    smooth counts: [8, 9, 9]
+  music21/trecento/PMFC_23_21-Kyrie Guymont.xml
+    smooth counts: [9, 16]
+  music21/trecento/PMFC_23_22-Kyrie Summe Clementissime.xml
+    smooth counts: [9]
+  music21/trecento/PMFC_23_23-Kyrie Rex Inmense Maiestasis.xml
+    smooth counts: [8, 9, 9, 9, 18, 27]
+  music21/trecento/PMFC_23_24-Kyrie Ave Desiderii.xml
+    smooth counts: [8, 9]
+  music21/trecento/PMFC_23_25-Kyrie Barcelona 853.xml
+    smooth counts: [8, 8]
+  music21/trecento/PMFC_24_1-Gloria Ciconia 1.xml
+    smooth counts: [8, 8, 8, 9, 12, 12, 18]
+  music21/trecento/PMFC_24_10-Credo Ciconia 10.xml
+    smooth counts: [8, 8, 16, 16, 16, 18]
+  music21/trecento/PMFC_24_11-Credo Ciconia 11.xml
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16, 54]
+  music21/trecento/PMFC_24_15-O virum omnimoda.xml
+    smooth counts: [8, 8, 12, 24, 36]
+  music21/trecento/PMFC_24_16-Albane misse celitus.xml
+    smooth counts: [8, 8, 8, 12, 24]
+  music21/trecento/PMFC_24_17-Doctorum principem-Melodia suavissima-Vir mitis.xml
+    smooth counts: [8, 9, 9, 27, 27]
+  music21/trecento/PMFC_24_19-Ut te per omnes celitus- Ingens alumnus padue.xml
+    smooth counts: [8, 8, 9, 12, 12, 12, 16, 18]
+  music21/trecento/PMFC_24_2-Credo Ciconia 2.xml
+    smooth counts: [8, 9, 12, 12, 24, 27, 36]
+  music21/trecento/PMFC_24_20-Padu... serenans.xml
+    smooth counts: [8]
+  music21/trecento/PMFC_24_22-O beatum incendium.xml
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/trecento/PMFC_24_3-Gloria Ciconia 3.xml
+    smooth counts: [8, 9, 9, 12, 12]
+  music21/trecento/PMFC_24_4-Credo Ciconia 4.xml
+    smooth counts: [9, 9, 9, 12, 12, 27]
+  music21/trecento/PMFC_24_5-Gloria_Spiritus_et_alme.xml
+    smooth counts: [12, 16, 18]
+  music21/trecento/PMFC_24_6-Gloria_Spiritus_et_alme.xml
+    smooth counts: [8, 8, 8, 8, 8, 9, 16, 18, 18]
+  music21/trecento/PMFC_24_7-Gloria_Suscipe_trinitas.xml
+    smooth counts: [8, 8, 9, 18, 18, 18]
+  music21/trecento/PMFC_24_8-Gloria Ciconia 8.xml
+    smooth counts: [8, 9, 9, 9, 12, 12, 12, 32]
+  music21/trecento/PMFC_24_9-Gloria Ciconia 9.xml
+    smooth counts: [9, 9]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================

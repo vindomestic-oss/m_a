@@ -1,0 +1,415 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 19:31
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 103
+Successfully analysed  : 102
+Errors / empty         : 1
+Files with motifs      : 102
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 4974
+Min / Max count                   : 1 / 192
+Mean / Median                     : 11.9 / 7
+Counts >= 10                       : 1797
+
+Frequency table of ALL occurrence counts (count : frequency):
+     1 : 1
+     2 : 452
+     3 : 588
+     4 : 539
+     5 : 424
+     6 : 413
+     7 : 298
+     8 : 258  <-- smooth (2^a·3^b)
+     9 : 204  <-- smooth (2^a·3^b)
+    10 : 184
+    11 : 150
+    12 : 141  <-- smooth (2^a·3^b)
+    13 : 110
+    14 : 95
+    15 : 77
+    16 : 77  <-- smooth (2^a·3^b)
+    17 : 79
+    18 : 71  <-- smooth (2^a·3^b)
+    19 : 63
+    20 : 42
+    21 : 37
+    22 : 43
+    23 : 35
+    24 : 40  <-- smooth (2^a·3^b)
+    25 : 32
+    26 : 29
+    27 : 21  <-- smooth (2^a·3^b)
+    28 : 29
+    29 : 19
+    30 : 21
+    31 : 25
+    32 : 21  <-- smooth (2^a·3^b)
+    33 : 16
+    34 : 20
+    35 : 10
+    36 : 13  <-- smooth (2^a·3^b)
+    37 : 15
+    38 : 13
+    39 : 9
+    40 : 13
+    41 : 15
+    42 : 14
+    43 : 9
+    44 : 6
+    45 : 9
+    46 : 8
+    47 : 7
+    48 : 11  <-- smooth (2^a·3^b)
+    49 : 9
+    50 : 6
+    51 : 4
+    52 : 6
+    53 : 3
+    54 : 5  <-- smooth (2^a·3^b)
+    55 : 5
+    56 : 6
+    57 : 7
+    58 : 1
+    59 : 6
+    60 : 9
+    61 : 8
+    62 : 2
+    63 : 1
+    64 : 4  <-- smooth (2^a·3^b)
+    65 : 3
+    66 : 2
+    67 : 5
+    68 : 4
+    69 : 1
+    70 : 3
+    71 : 2
+    72 : 2  <-- smooth (2^a·3^b)
+    73 : 3
+    74 : 3
+    75 : 2
+    76 : 4
+    77 : 2
+    78 : 2
+    79 : 1
+    80 : 4
+    81 : 2  <-- smooth (2^a·3^b)
+    82 : 2
+    83 : 3
+    84 : 2
+    85 : 1
+    86 : 3
+    88 : 1
+    90 : 1
+    91 : 1
+    94 : 1
+    95 : 1
+    96 : 1  <-- smooth (2^a·3^b)
+    98 : 1
+    99 : 2
+   100 : 1
+   101 : 1
+   102 : 1
+   103 : 1
+   105 : 1
+   114 : 1
+   116 : 1
+   124 : 1
+   125 : 1
+   126 : 2
+   127 : 1
+   129 : 1
+   131 : 1
+   137 : 1
+   142 : 1
+   145 : 2
+   160 : 1
+   184 : 1
+   192 : 1  <-- smooth (2^a·3^b)
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [10, 192]
+Smooth numbers in range: 18  (out of 183 integers)
+  [12, 16, 18, 24, 27, 32, 36, 48, 54, 64, 72, 81, 96, 108, 128, 144, 162, 192]
+
+Observed smooth counts (>= 8): 410
+  12 × 141
+  16 × 77
+  18 × 71
+  24 × 40
+  27 × 21
+  32 × 21
+  36 × 13
+  48 × 11
+  54 × 5
+  64 × 4
+  72 × 2
+  81 × 2
+  96 × 1
+  192 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 18 / 183 = 0.0984  (9.84%)
+     Expected smooth counts: 176.8
+     Observed smooth counts: 410
+     Enrichment ratio       : 2.32x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.1550  (15.50%)
+     Expected smooth counts : 278.4
+     Observed smooth counts : 410
+     Enrichment ratio       : 1.47x
+
+  >> Modest enrichment. Smooth counts slightly over-represented.
+
+========================================================================
+5. SHIFT TEST – SMOOTH DENSITY VS ±1 SHIFTED COUNTS (THRESHOLD 14)
+========================================================================
+Counts >= 14: 1212 observations
+
+                        n_smooth   density  ratio vs real
+  --------------------  --------  --------  -------------
+  Real counts                269    0.2219     (baseline)
+  Shifted +1 (c+1)           274    0.2261          0.98x
+  Shifted -1 (c-1)           259    0.2137          1.04x
+
+  Breakdown by threshold (real density / +1 density / -1 density):
+  >=  14  n= 1212  real=0.2219  +1=0.2261(0.98x)  -1=0.2137(1.04x)
+  >=  16  n= 1040  real=0.2587  +1=0.1894(1.37x)  -1=0.2490(1.04x)
+  >=  18  n=  884  real=0.2172  +1=0.1335(1.63x)  -1=0.2036(1.07x)
+  >=  24  n=  593  real=0.2040  +1=0.1400(1.46x)  -1=0.1973(1.03x)
+  >=  32  n=  377  real=0.1592  +1=0.0769(2.07x)  -1=0.1485(1.07x)
+  >=  36  n=  310  real=0.1258  +1=0.0613(2.05x)  -1=0.1290(0.97x)
+  >=  48  n=  179  real=0.1453  +1=0.0670(2.17x)  -1=0.1397(1.04x)
+  >=  64  n=   90  real=0.1111  +1=0.0889(1.25x)  -1=0.1222(0.91x)
+  >=  96  n=   25  real=0.0800  +1=0.0400(2.00x)  -1=0.1200(0.67x)
+
+  >> Real > shifted+1 at 4/4 higher thresholds.
+     Effect vs +1 shift is consistent at larger counts.
+
+========================================================================
+6. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 10)
+========================================================================
+  musedata/bach/keyboard/wtc-1/wtc1p01.krn
+    smooth counts: [12, 12, 18]
+  musedata/bach/keyboard/wtc-1/wtc1p02.krn
+    smooth counts: [16, 16, 18, 18, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p03.krn
+    smooth counts: [12, 12, 12, 18, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p04.krn
+    smooth counts: [12, 12, 27]
+  musedata/bach/keyboard/wtc-1/wtc1p05.krn
+    smooth counts: [12, 16, 36]
+  musedata/bach/keyboard/wtc-1/wtc1p06.krn
+    smooth counts: [12, 12, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p07.krn
+    smooth counts: [12, 12, 12, 16, 192]
+  musedata/bach/keyboard/wtc-1/wtc1p09.krn
+    smooth counts: [12, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p10.krn
+    smooth counts: [18, 18, 18, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p11.krn
+    smooth counts: [12, 16, 18, 27, 36]
+  musedata/bach/keyboard/wtc-1/wtc1p12.krn
+    smooth counts: [12]
+  musedata/bach/keyboard/wtc-1/wtc1p13.krn
+    smooth counts: [12]
+  musedata/bach/keyboard/wtc-1/wtc1p14.krn
+    smooth counts: [18, 64]
+  musedata/bach/keyboard/wtc-1/wtc1p15.krn
+    smooth counts: [12, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p16.krn
+    smooth counts: [12]
+  musedata/bach/keyboard/wtc-1/wtc1p17.krn
+    smooth counts: [12, 12, 36]
+  musedata/bach/keyboard/wtc-1/wtc1p18.krn
+    smooth counts: [16, 16, 18]
+  musedata/bach/keyboard/wtc-1/wtc1p19.krn
+    smooth counts: [12, 12, 32, 36, 64]
+  musedata/bach/keyboard/wtc-1/wtc1p20.krn
+    smooth counts: [12, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p22.krn
+    smooth counts: [27]
+  musedata/bach/keyboard/wtc-1/wtc1p23.krn
+    smooth counts: [32]
+  musedata/bach/keyboard/wtc-1/wtc1p24.krn
+    smooth counts: [12, 16, 16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p01.krn
+    smooth counts: [12, 12, 32]
+  musedata/bach/keyboard/wtc-2/wtc2p02.krn
+    smooth counts: [12, 12]
+  musedata/bach/keyboard/wtc-2/wtc2p03.krn
+    smooth counts: [16]
+  musedata/bach/keyboard/wtc-2/wtc2p04.krn
+    smooth counts: [36]
+  musedata/bach/keyboard/wtc-2/wtc2p06.krn
+    smooth counts: [12]
+  musedata/bach/keyboard/wtc-2/wtc2p08.krn
+    smooth counts: [16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p09.krn
+    smooth counts: [16, 16]
+  musedata/bach/keyboard/wtc-2/wtc2p10.krn
+    smooth counts: [12, 12, 12, 27]
+  musedata/bach/keyboard/wtc-2/wtc2p15.krn
+    smooth counts: [12, 12, 12, 12, 16]
+  musedata/bach/keyboard/wtc-2/wtc2p16.krn
+    smooth counts: [12, 24, 24]
+  musedata/bach/keyboard/wtc-2/wtc2p18.krn
+    smooth counts: [12, 12, 12, 16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p19.krn
+    smooth counts: [12, 48]
+  musedata/bach/keyboard/wtc-2/wtc2p20.krn
+    smooth counts: [12, 12, 16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p22.krn
+    smooth counts: [12, 12, 12, 16, 16, 18, 24, 27, 32, 48, 81]
+  musedata/bach/keyboard/wtc-2/wtc2p23.krn
+    smooth counts: [12, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p24.krn
+    smooth counts: [12, 16, 16, 27]
+  osu/classical/bach/inventions/inven01.krn
+    smooth counts: [12, 27, 32]
+  osu/classical/bach/inventions/inven02.krn
+    smooth counts: [12, 12, 16, 36]
+  osu/classical/bach/inventions/inven03.krn
+    smooth counts: [12, 16]
+  osu/classical/bach/inventions/inven04.krn
+    smooth counts: [12, 16]
+  osu/classical/bach/inventions/inven05.krn
+    smooth counts: [12, 12, 18, 36]
+  osu/classical/bach/inventions/inven06.krn
+    smooth counts: [12, 12, 16, 16, 16, 27, 32]
+  osu/classical/bach/inventions/inven07.krn
+    smooth counts: [18, 32]
+  osu/classical/bach/inventions/inven08.krn
+    smooth counts: [12, 16, 16, 16, 18, 24]
+  osu/classical/bach/inventions/inven09.krn
+    smooth counts: [12, 12, 18, 18, 48]
+  osu/classical/bach/inventions/inven10.krn
+    smooth counts: [16]
+  osu/classical/bach/inventions/inven11.krn
+    smooth counts: [12, 12, 12, 12, 27, 48]
+  osu/classical/bach/inventions/inven12.krn
+    smooth counts: [12, 18, 18, 24, 24, 27, 32, 54]
+  osu/classical/bach/inventions/inven13.krn
+    smooth counts: [12]
+  osu/classical/bach/inventions/inven14.krn
+    smooth counts: [18]
+  osu/classical/bach/wtc-1/wtc1f01.krn
+    smooth counts: [16, 24, 24, 24]
+  osu/classical/bach/wtc-1/wtc1f02.krn
+    smooth counts: [16, 16, 18]
+  osu/classical/bach/wtc-1/wtc1f03.krn
+    smooth counts: [12, 12, 16, 16, 18, 18, 18, 24]
+  osu/classical/bach/wtc-1/wtc1f04.krn
+    smooth counts: [12, 16, 16, 18, 18, 24, 24, 32, 48]
+  osu/classical/bach/wtc-1/wtc1f05.krn
+    smooth counts: [12, 12, 12, 12, 12, 16, 18, 18, 32]
+  osu/classical/bach/wtc-1/wtc1f06.krn
+    smooth counts: [12, 16, 16, 18, 24, 27, 27, 32]
+  osu/classical/bach/wtc-1/wtc1f07.krn
+    smooth counts: [12, 16, 16, 27]
+  osu/classical/bach/wtc-1/wtc1f08.krn
+    smooth counts: [24, 32]
+  osu/classical/bach/wtc-1/wtc1f09.krn
+    smooth counts: [12, 12, 16, 18, 24, 24, 27, 72]
+  osu/classical/bach/wtc-1/wtc1f10.krn
+    smooth counts: [12, 12, 16, 18]
+  osu/classical/bach/wtc-1/wtc1f11.krn
+    smooth counts: [16, 16, 24, 36]
+  osu/classical/bach/wtc-1/wtc1f12.krn
+    smooth counts: [24, 96]
+  osu/classical/bach/wtc-1/wtc1f13.krn
+    smooth counts: [12, 16]
+  osu/classical/bach/wtc-1/wtc1f14.krn
+    smooth counts: [12, 12, 16, 16, 18, 32, 54]
+  osu/classical/bach/wtc-1/wtc1f15.krn
+    smooth counts: [12, 12, 16, 16, 24, 24, 27, 32, 64]
+  osu/classical/bach/wtc-1/wtc1f16.krn
+    smooth counts: [12, 16, 24]
+  osu/classical/bach/wtc-1/wtc1f17.krn
+    smooth counts: [16, 48, 54]
+  osu/classical/bach/wtc-1/wtc1f18.krn
+    smooth counts: [12, 12, 18]
+  osu/classical/bach/wtc-1/wtc1f19.krn
+    smooth counts: [12, 18, 32]
+  osu/classical/bach/wtc-1/wtc1f21.krn
+    smooth counts: [18, 18, 18, 18, 18, 24, 27, 48]
+  osu/classical/bach/wtc-1/wtc1f23.krn
+    smooth counts: [12, 12, 16, 18]
+  osu/classical/bach/wtc-1/wtc1f24.krn
+    smooth counts: [12, 12, 12, 12, 12, 16, 16, 16, 16, 18, 18, 18, 24, 32, 32, 48]
+  osu/classical/bach/wtc-2/wtc2f01.krn
+    smooth counts: [12, 12, 12, 27]
+  osu/classical/bach/wtc-2/wtc2f02.krn
+    smooth counts: [12, 18, 24, 24]
+  osu/classical/bach/wtc-2/wtc2f03.krn
+    smooth counts: [12, 16, 27, 36]
+  osu/classical/bach/wtc-2/wtc2f04.krn
+    smooth counts: [12, 12, 16, 16, 16, 48, 64]
+  osu/classical/bach/wtc-2/wtc2f05.krn
+    smooth counts: [18, 18]
+  osu/classical/bach/wtc-2/wtc2f06.krn
+    smooth counts: [16, 16, 18]
+  osu/classical/bach/wtc-2/wtc2f07.krn
+    smooth counts: [12, 24, 27, 32]
+  osu/classical/bach/wtc-2/wtc2f08.krn
+    smooth counts: [12, 12, 16, 24, 48]
+  osu/classical/bach/wtc-2/wtc2f09.krn
+    smooth counts: [12, 12, 18, 18]
+  osu/classical/bach/wtc-2/wtc2f10.krn
+    smooth counts: [12, 16, 18, 18, 18, 18, 18]
+  osu/classical/bach/wtc-2/wtc2f11.krn
+    smooth counts: [12, 12, 12, 16, 72]
+  osu/classical/bach/wtc-2/wtc2f12.krn
+    smooth counts: [12, 12, 18, 32]
+  osu/classical/bach/wtc-2/wtc2f13.krn
+    smooth counts: [12, 12, 12, 16, 32]
+  osu/classical/bach/wtc-2/wtc2f14.krn
+    smooth counts: [12, 16, 16, 18, 18, 24, 36, 36, 54]
+  osu/classical/bach/wtc-2/wtc2f15.krn
+    smooth counts: [12, 12, 12, 12, 12, 18, 18, 18, 24]
+  osu/classical/bach/wtc-2/wtc2f16.krn
+    smooth counts: [12, 12, 12, 16, 18, 27, 36]
+  osu/classical/bach/wtc-2/wtc2f17.krn
+    smooth counts: [16, 16, 18, 24]
+  osu/classical/bach/wtc-2/wtc2f18.krn
+    smooth counts: [12, 12, 12, 16, 18, 24, 27, 48]
+  osu/classical/bach/wtc-2/wtc2f19.krn
+    smooth counts: [24, 36, 81]
+  osu/classical/bach/wtc-2/wtc2f20.krn
+    smooth counts: [12, 12, 12, 16, 18]
+  osu/classical/bach/wtc-2/wtc2f21.krn
+    smooth counts: [12, 18, 32]
+  osu/classical/bach/wtc-2/wtc2f22.krn
+    smooth counts: [12, 16, 24, 24, 24]
+  osu/classical/bach/wtc-2/wtc2f23.krn
+    smooth counts: [12, 12, 12, 18, 24, 54]
+  osu/classical/bach/wtc-2/wtc2f24.krn
+    smooth counts: [16, 18]
+
+========================================================================
+7. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================

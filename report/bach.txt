@@ -1,0 +1,789 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 13:07
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 413
+Successfully analysed  : 413
+Errors / empty         : 0
+Files with motifs      : 413
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 11468
+Min / Max count                   : 1 / 160
+Mean / Median                     : 4.2 / 3
+Counts >= 8                       : 1388
+
+Frequency table of ALL occurrence counts (count : frequency):
+     1 : 111
+     2 : 4849
+     3 : 2252
+     4 : 1273
+     5 : 728
+     6 : 508
+     7 : 359
+     8 : 259  <-- smooth (2^a·3^b)
+     9 : 229  <-- smooth (2^a·3^b)
+    10 : 156
+    11 : 127
+    12 : 108  <-- smooth (2^a·3^b)
+    13 : 100
+    14 : 70
+    15 : 54
+    16 : 39  <-- smooth (2^a·3^b)
+    17 : 50
+    18 : 32  <-- smooth (2^a·3^b)
+    19 : 22
+    20 : 22
+    21 : 17
+    22 : 16
+    23 : 10
+    24 : 11  <-- smooth (2^a·3^b)
+    25 : 10
+    26 : 8
+    27 : 12  <-- smooth (2^a·3^b)
+    28 : 6
+    29 : 5
+    30 : 3
+    31 : 1
+    32 : 1  <-- smooth (2^a·3^b)
+    33 : 2
+    34 : 4
+    36 : 1  <-- smooth (2^a·3^b)
+    37 : 1
+    38 : 1
+    39 : 1
+    44 : 2
+    48 : 1  <-- smooth (2^a·3^b)
+    49 : 1
+    51 : 2
+    57 : 1
+    70 : 1
+    87 : 1
+   160 : 1
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 160]
+Smooth numbers in range: 18  (out of 153 integers)
+  [8, 9, 12, 16, 18, 24, 27, 32, 36, 48, 54, 64, 72, 81, 96, 108, 128, 144]
+
+Observed smooth counts (>= 8): 693
+  8 × 259
+  9 × 229
+  12 × 108
+  16 × 39
+  18 × 32
+  24 × 11
+  27 × 12
+  32 × 1
+  36 × 1
+  48 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 18 / 153 = 0.1176  (11.76%)
+     Expected smooth counts: 163.3
+     Observed smooth counts: 693
+     Enrichment ratio       : 4.24x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.2256  (22.56%)
+     Expected smooth counts : 313.1
+     Observed smooth counts : 693
+     Enrichment ratio       : 2.21x
+
+  >> Smooth counts appear MORE than 2x as often as random expectation.
+     This suggests a non-trivial alignment between motif repetition
+     structure and binary/ternary metric organisation.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  music21/bach/bwv1.6.mxl
+    smooth counts: [8, 8, 8, 9]
+  music21/bach/bwv101.7.mxl
+    smooth counts: [9, 12]
+  music21/bach/bwv102.7.mxl
+    smooth counts: [8, 8, 9, 12]
+  music21/bach/bwv103.6.mxl
+    smooth counts: [8, 9, 9, 18]
+  music21/bach/bwv104.6.mxl
+    smooth counts: [9, 16]
+  music21/bach/bwv108.6.mxl
+    smooth counts: [8, 8, 27]
+  music21/bach/bwv11.6.mxl
+    smooth counts: [8, 18]
+  music21/bach/bwv110.7.mxl
+    smooth counts: [8, 8, 9, 9]
+  music21/bach/bwv111.6.mxl
+    smooth counts: [9, 12, 12]
+  music21/bach/bwv112.5-sc.mxl
+    smooth counts: [8]
+  music21/bach/bwv112.5.mxl
+    smooth counts: [8, 24]
+  music21/bach/bwv113.8.mxl
+    smooth counts: [8]
+  music21/bach/bwv114.7.mxl
+    smooth counts: [9]
+  music21/bach/bwv115.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv116.6.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv117.4.mxl
+    smooth counts: [8]
+  music21/bach/bwv12.7.mxl
+    smooth counts: [12, 18]
+  music21/bach/bwv120.6.mxl
+    smooth counts: [8, 9, 18]
+  music21/bach/bwv120.8-a.mxl
+    smooth counts: [9]
+  music21/bach/bwv121.6.mxl
+    smooth counts: [8, 24]
+  music21/bach/bwv123.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv124.6.mxl
+    smooth counts: [8, 18]
+  music21/bach/bwv125.6.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv126.6.mxl
+    smooth counts: [8, 12, 16, 36]
+  music21/bach/bwv127.5.mxl
+    smooth counts: [9]
+  music21/bach/bwv128.5.mxl
+    smooth counts: [8, 8, 8, 12]
+  music21/bach/bwv13.6.mxl
+    smooth counts: [8]
+  music21/bach/bwv133.6.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv135.6.mxl
+    smooth counts: [18]
+  music21/bach/bwv137.5.mxl
+    smooth counts: [8]
+  music21/bach/bwv139.6.mxl
+    smooth counts: [8]
+  music21/bach/bwv14.5.mxl
+    smooth counts: [8, 8, 8]
+  music21/bach/bwv140.7.mxl
+    smooth counts: [8]
+  music21/bach/bwv144.3.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv145-a.mxl
+    smooth counts: [8, 8, 8]
+  music21/bach/bwv145.5.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv146.8.mxl
+    smooth counts: [12, 18]
+  music21/bach/bwv148.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv149.7.mxl
+    smooth counts: [9, 12, 16]
+  music21/bach/bwv151.5.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv153.1.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv154.3.mxl
+    smooth counts: [9]
+  music21/bach/bwv154.8.mxl
+    smooth counts: [9, 16, 16]
+  music21/bach/bwv155.5.mxl
+    smooth counts: [8, 9, 9]
+  music21/bach/bwv156.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv157.5.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv158.4.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv16.6.mxl
+    smooth counts: [9, 9, 9, 9, 12]
+  music21/bach/bwv162.6-lpz.mxl
+    smooth counts: [8, 9, 24]
+  music21/bach/bwv164.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv168.6.mxl
+    smooth counts: [9, 9, 16]
+  music21/bach/bwv169.7.mxl
+    smooth counts: [8, 8, 9]
+  music21/bach/bwv17.7.mxl
+    smooth counts: [18]
+  music21/bach/bwv171.6.mxl
+    smooth counts: [9, 9, 24]
+  music21/bach/bwv172.6.mxl
+    smooth counts: [8, 8, 8, 12]
+  music21/bach/bwv174.5.mxl
+    smooth counts: [9, 18, 18]
+  music21/bach/bwv175.7.mxl
+    smooth counts: [8, 12, 18, 27]
+  music21/bach/bwv176.6.mxl
+    smooth counts: [8, 8, 12, 27]
+  music21/bach/bwv177.4.mxl
+    smooth counts: [8]
+  music21/bach/bwv177.5.mxl
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/bach/bwv178.7.mxl
+    smooth counts: [8, 9, 9]
+  music21/bach/bwv179.6.mxl
+    smooth counts: [8]
+  music21/bach/bwv18.5-lz.mxl
+    smooth counts: [9, 9, 9]
+  music21/bach/bwv18.5-w.mxl
+    smooth counts: [9, 9, 9]
+  music21/bach/bwv180.7.mxl
+    smooth counts: [8]
+  music21/bach/bwv183.5.mxl
+    smooth counts: [8]
+  music21/bach/bwv185.6.mxl
+    smooth counts: [8, 8, 9, 9, 12, 16]
+  music21/bach/bwv187.7.mxl
+    smooth counts: [12]
+  music21/bach/bwv188.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv19.7.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv190.7-inst.mxl
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 12, 18, 24, 27]
+  music21/bach/bwv190.7.mxl
+    smooth counts: [8, 12, 12, 27]
+  music21/bach/bwv194.12.mxl
+    smooth counts: [8]
+  music21/bach/bwv197.5.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv197.7-a.mxl
+    smooth counts: [8, 9, 12]
+  music21/bach/bwv2.6.mxl
+    smooth counts: [12]
+  music21/bach/bwv20.11.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv20.7.mxl
+    smooth counts: [9, 12, 24]
+  music21/bach/bwv226.2.mxl
+    smooth counts: [9, 12, 16, 48]
+  music21/bach/bwv227.1.mxl
+    smooth counts: [18]
+  music21/bach/bwv227.11.mxl
+    smooth counts: [12]
+  music21/bach/bwv227.3.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv227.7.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv229.2.mxl
+    smooth counts: [8, 9, 9]
+  music21/bach/bwv24.6.mxl
+    smooth counts: [8, 8, 12]
+  music21/bach/bwv244.10.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv244.15.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv244.17.mxl
+    smooth counts: [9, 12, 12, 12]
+  music21/bach/bwv244.25.mxl
+    smooth counts: [12, 16]
+  music21/bach/bwv244.29-a.mxl
+    smooth counts: [8, 8, 9]
+  music21/bach/bwv244.3.mxl
+    smooth counts: [9]
+  music21/bach/bwv244.32.mxl
+    smooth counts: [9, 12]
+  music21/bach/bwv244.37.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv244.44.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv244.46.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv244.54.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv244.62.mxl
+    smooth counts: [9]
+  music21/bach/bwv245.11.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv245.14.mxl
+    smooth counts: [9]
+  music21/bach/bwv245.15.mxl
+    smooth counts: [8, 9, 12, 12]
+  music21/bach/bwv245.17.mxl
+    smooth counts: [8, 9, 12]
+  music21/bach/bwv245.22.mxl
+    smooth counts: [9]
+  music21/bach/bwv245.26.mxl
+    smooth counts: [9]
+  music21/bach/bwv245.28.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv245.3.mxl
+    smooth counts: [9]
+  music21/bach/bwv245.37.mxl
+    smooth counts: [9, 18]
+  music21/bach/bwv245.40.mxl
+    smooth counts: [8, 8, 9, 9, 9, 12, 24]
+  music21/bach/bwv245.5.mxl
+    smooth counts: [8, 16]
+  music21/bach/bwv248.12-2.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv248.17.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv248.23-2.mxl
+    smooth counts: [8, 8, 8, 12, 12]
+  music21/bach/bwv248.35-3.mxl
+    smooth counts: [8, 8, 9, 12]
+  music21/bach/bwv248.35-3c.mxl
+    smooth counts: [8]
+  music21/bach/bwv248.42-4.mxl
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 16, 16, 16, 27]
+  music21/bach/bwv248.42-s.mxl
+    smooth counts: [9]
+  music21/bach/bwv248.46-5.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv248.53-5.mxl
+    smooth counts: [8, 8, 9]
+  music21/bach/bwv248.59-6.mxl
+    smooth counts: [8]
+  music21/bach/bwv248.64-6.mxl
+    smooth counts: [9, 9, 9, 12, 12, 12, 12, 12, 12, 12, 12, 16, 16, 16, 16, 16, 18, 24, 24, 27]
+  music21/bach/bwv248.64-s.mxl
+    smooth counts: [8, 9, 9]
+  music21/bach/bwv248.9-1.mxl
+    smooth counts: [8, 8, 12]
+  music21/bach/bwv248.9-s.mxl
+    smooth counts: [9]
+  music21/bach/bwv25.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv250.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv251.mxl
+    smooth counts: [8]
+  music21/bach/bwv253.mxl
+    smooth counts: [9, 12]
+  music21/bach/bwv256.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv257.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv259.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv26.6.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv260.mxl
+    smooth counts: [9]
+  music21/bach/bwv261.mxl
+    smooth counts: [12]
+  music21/bach/bwv262.mxl
+    smooth counts: [8]
+  music21/bach/bwv263.mxl
+    smooth counts: [8, 9, 9]
+  music21/bach/bwv265.mxl
+    smooth counts: [8]
+  music21/bach/bwv267.mxl
+    smooth counts: [8, 9, 12, 27]
+  music21/bach/bwv268.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv269.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv27.6.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv274.mxl
+    smooth counts: [12]
+  music21/bach/bwv275.mxl
+    smooth counts: [8]
+  music21/bach/bwv276.mxl
+    smooth counts: [8, 16, 16]
+  music21/bach/bwv277.krn
+    smooth counts: [9]
+  music21/bach/bwv277.mxl
+    smooth counts: [8, 8, 9]
+  music21/bach/bwv278.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv279.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv280.mxl
+    smooth counts: [8, 8, 9, 9]
+  music21/bach/bwv281.krn
+    smooth counts: [8]
+  music21/bach/bwv281.mxl
+    smooth counts: [8]
+  music21/bach/bwv283.mxl
+    smooth counts: [9, 18]
+  music21/bach/bwv284.mxl
+    smooth counts: [16]
+  music21/bach/bwv285.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv287.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv288.mxl
+    smooth counts: [9, 12]
+  music21/bach/bwv289.mxl
+    smooth counts: [8, 9, 16]
+  music21/bach/bwv29.8.mxl
+    smooth counts: [8, 8, 9]
+  music21/bach/bwv294.mxl
+    smooth counts: [9]
+  music21/bach/bwv296.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv297.mxl
+    smooth counts: [8]
+  music21/bach/bwv298.mxl
+    smooth counts: [9]
+  music21/bach/bwv299.mxl
+    smooth counts: [8]
+  music21/bach/bwv3.6.mxl
+    smooth counts: [18]
+  music21/bach/bwv30.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv300.mxl
+    smooth counts: [12]
+  music21/bach/bwv301.mxl
+    smooth counts: [9, 9, 12]
+  music21/bach/bwv302.mxl
+    smooth counts: [8, 9, 9]
+  music21/bach/bwv303.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv304.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv305.mxl
+    smooth counts: [9]
+  music21/bach/bwv306.mxl
+    smooth counts: [9]
+  music21/bach/bwv307.mxl
+    smooth counts: [8, 9, 16]
+  music21/bach/bwv308.mxl
+    smooth counts: [12]
+  music21/bach/bwv31.9.mxl
+    smooth counts: [8, 12, 27]
+  music21/bach/bwv311.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv312.mxl
+    smooth counts: [8]
+  music21/bach/bwv315.mxl
+    smooth counts: [9]
+  music21/bach/bwv316.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv317.mxl
+    smooth counts: [8, 8, 24]
+  music21/bach/bwv319.mxl
+    smooth counts: [8]
+  music21/bach/bwv32.6.mxl
+    smooth counts: [12]
+  music21/bach/bwv320.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv322.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv325.mxl
+    smooth counts: [8, 9, 12, 18]
+  music21/bach/bwv326.mxl
+    smooth counts: [9]
+  music21/bach/bwv327.mxl
+    smooth counts: [8]
+  music21/bach/bwv328.mxl
+    smooth counts: [8, 8, 8, 9, 9, 9, 12]
+  music21/bach/bwv329.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv331.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv332.mxl
+    smooth counts: [9]
+  music21/bach/bwv334.mxl
+    smooth counts: [9]
+  music21/bach/bwv335.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv336.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv337.mxl
+    smooth counts: [8]
+  music21/bach/bwv338.mxl
+    smooth counts: [8]
+  music21/bach/bwv339.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv340.mxl
+    smooth counts: [8, 9, 12, 32]
+  music21/bach/bwv341.mxl
+    smooth counts: [8]
+  music21/bach/bwv342.mxl
+    smooth counts: [8, 16]
+  music21/bach/bwv343.mxl
+    smooth counts: [8]
+  music21/bach/bwv344.mxl
+    smooth counts: [8]
+  music21/bach/bwv345.mxl
+    smooth counts: [9]
+  music21/bach/bwv346.mxl
+    smooth counts: [8, 8, 12]
+  music21/bach/bwv347.mxl
+    smooth counts: [12]
+  music21/bach/bwv348.mxl
+    smooth counts: [9, 12, 16]
+  music21/bach/bwv350.mxl
+    smooth counts: [8]
+  music21/bach/bwv351.mxl
+    smooth counts: [12]
+  music21/bach/bwv352.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv353.mxl
+    smooth counts: [9, 18]
+  music21/bach/bwv354.mxl
+    smooth counts: [8, 9, 27]
+  music21/bach/bwv356.mxl
+    smooth counts: [12, 12]
+  music21/bach/bwv357.mxl
+    smooth counts: [9, 12]
+  music21/bach/bwv358.mxl
+    smooth counts: [9, 16]
+  music21/bach/bwv359.mxl
+    smooth counts: [8]
+  music21/bach/bwv36.8-2.mxl
+    smooth counts: [9]
+  music21/bach/bwv362.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv363.mxl
+    smooth counts: [8]
+  music21/bach/bwv366.krn
+    smooth counts: [9]
+  music21/bach/bwv366.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv368.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv369.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv37.6.mxl
+    smooth counts: [16]
+  music21/bach/bwv370.mxl
+    smooth counts: [9]
+  music21/bach/bwv371.mxl
+    smooth counts: [8, 8, 9, 9, 12, 16, 18]
+  music21/bach/bwv372.mxl
+    smooth counts: [8]
+  music21/bach/bwv373.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv374.mxl
+    smooth counts: [18]
+  music21/bach/bwv375.mxl
+    smooth counts: [8]
+  music21/bach/bwv376.mxl
+    smooth counts: [9, 18]
+  music21/bach/bwv377.mxl
+    smooth counts: [8]
+  music21/bach/bwv379.mxl
+    smooth counts: [9]
+  music21/bach/bwv38.6.mxl
+    smooth counts: [12, 16]
+  music21/bach/bwv380.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv381.mxl
+    smooth counts: [8, 16]
+  music21/bach/bwv382.mxl
+    smooth counts: [8]
+  music21/bach/bwv383.mxl
+    smooth counts: [9]
+  music21/bach/bwv384.mxl
+    smooth counts: [8]
+  music21/bach/bwv385.mxl
+    smooth counts: [12, 18]
+  music21/bach/bwv386.mxl
+    smooth counts: [8]
+  music21/bach/bwv388.mxl
+    smooth counts: [9]
+  music21/bach/bwv389.mxl
+    smooth counts: [8, 8, 9]
+  music21/bach/bwv39.7.mxl
+    smooth counts: [8, 9, 16]
+  music21/bach/bwv390.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv391.mxl
+    smooth counts: [12]
+  music21/bach/bwv392.mxl
+    smooth counts: [8]
+  music21/bach/bwv393.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv394.mxl
+    smooth counts: [8, 8, 9]
+  music21/bach/bwv396.mxl
+    smooth counts: [8]
+  music21/bach/bwv397.mxl
+    smooth counts: [9]
+  music21/bach/bwv398.mxl
+    smooth counts: [8, 9, 12]
+  music21/bach/bwv4.8.mxl
+    smooth counts: [8, 12, 18]
+  music21/bach/bwv40.6.mxl
+    smooth counts: [12]
+  music21/bach/bwv40.8.mxl
+    smooth counts: [8, 8, 9, 9]
+  music21/bach/bwv400.mxl
+    smooth counts: [8]
+  music21/bach/bwv403.mxl
+    smooth counts: [8, 16]
+  music21/bach/bwv404.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv405.mxl
+    smooth counts: [9, 9, 9]
+  music21/bach/bwv406.mxl
+    smooth counts: [8]
+  music21/bach/bwv407.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv408.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv409.mxl
+    smooth counts: [9]
+  music21/bach/bwv41.6.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv410.mxl
+    smooth counts: [9]
+  music21/bach/bwv411.mxl
+    smooth counts: [12]
+  music21/bach/bwv412.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv413.mxl
+    smooth counts: [8, 9, 9, 18]
+  music21/bach/bwv414.mxl
+    smooth counts: [8]
+  music21/bach/bwv416.mxl
+    smooth counts: [12]
+  music21/bach/bwv417.mxl
+    smooth counts: [8]
+  music21/bach/bwv419.mxl
+    smooth counts: [9, 9, 12]
+  music21/bach/bwv42.7.mxl
+    smooth counts: [8, 9, 16, 18]
+  music21/bach/bwv420.mxl
+    smooth counts: [8, 8, 8, 16]
+  music21/bach/bwv421.mxl
+    smooth counts: [9]
+  music21/bach/bwv423.mxl
+    smooth counts: [9]
+  music21/bach/bwv425.mxl
+    smooth counts: [8]
+  music21/bach/bwv426.mxl
+    smooth counts: [8]
+  music21/bach/bwv427.mxl
+    smooth counts: [8]
+  music21/bach/bwv428.mxl
+    smooth counts: [9]
+  music21/bach/bwv429.mxl
+    smooth counts: [9]
+  music21/bach/bwv430.mxl
+    smooth counts: [9, 18]
+  music21/bach/bwv432.mxl
+    smooth counts: [12]
+  music21/bach/bwv433.mxl
+    smooth counts: [8]
+  music21/bach/bwv434.mxl
+    smooth counts: [12]
+  music21/bach/bwv435.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv436.mxl
+    smooth counts: [12]
+  music21/bach/bwv437.mxl
+    smooth counts: [8, 8, 12, 16]
+  music21/bach/bwv438.mxl
+    smooth counts: [12]
+  music21/bach/bwv46.6.mxl
+    smooth counts: [12]
+  music21/bach/bwv47.5.mxl
+    smooth counts: [8]
+  music21/bach/bwv48.3.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv48.7.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv52.6.mxl
+    smooth counts: [9, 12]
+  music21/bach/bwv55.5.mxl
+    smooth counts: [8]
+  music21/bach/bwv56.5.mxl
+    smooth counts: [12]
+  music21/bach/bwv59.3.mxl
+    smooth counts: [8, 12, 12, 16, 27]
+  music21/bach/bwv6.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv60.5.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv64.2.mxl
+    smooth counts: [8]
+  music21/bach/bwv64.8.mxl
+    smooth counts: [9]
+  music21/bach/bwv65.2.mxl
+    smooth counts: [8]
+  music21/bach/bwv65.7.mxl
+    smooth counts: [9, 16]
+  music21/bach/bwv66.6.mxl
+    smooth counts: [8]
+  music21/bach/bwv67.4.xml
+    smooth counts: [9]
+  music21/bach/bwv67.7.mxl
+    smooth counts: [8]
+  music21/bach/bwv69.6-a.mxl
+    smooth counts: [8]
+  music21/bach/bwv69.6.xml
+    smooth counts: [8, 8, 9, 12]
+  music21/bach/bwv7.7.mxl
+    smooth counts: [9, 12]
+  music21/bach/bwv70.11.mxl
+    smooth counts: [8, 8, 27]
+  music21/bach/bwv70.7.mxl
+    smooth counts: [8, 8]
+  music21/bach/bwv72.6.mxl
+    smooth counts: [8, 9, 24]
+  music21/bach/bwv73.5.mxl
+    smooth counts: [12]
+  music21/bach/bwv74.8.mxl
+    smooth counts: [18]
+  music21/bach/bwv78.7.mxl
+    smooth counts: [12]
+  music21/bach/bwv79.3.mxl
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/bach/bwv79.6.mxl
+    smooth counts: [8]
+  music21/bach/bwv8.6.mxl
+    smooth counts: [8]
+  music21/bach/bwv80.8.mxl
+    smooth counts: [9]
+  music21/bach/bwv83.5.mxl
+    smooth counts: [8]
+  music21/bach/bwv84.5.mxl
+    smooth counts: [8]
+  music21/bach/bwv846.mxl
+    smooth counts: [8, 8, 12, 12, 18]
+  music21/bach/bwv85.6.mxl
+    smooth counts: [9]
+  music21/bach/bwv86.6.mxl
+    smooth counts: [8, 12]
+  music21/bach/bwv87.7.mxl
+    smooth counts: [8]
+  music21/bach/bwv88.7.mxl
+    smooth counts: [16]
+  music21/bach/bwv90.5.mxl
+    smooth counts: [9, 18]
+  music21/bach/bwv91.6.mxl
+    smooth counts: [18]
+  music21/bach/bwv92.9.mxl
+    smooth counts: [8, 16, 18]
+  music21/bach/bwv93.7.mxl
+    smooth counts: [9]
+  music21/bach/bwv94.8.mxl
+    smooth counts: [8, 9]
+  music21/bach/bwv95.7.mxl
+    smooth counts: [9, 9]
+  music21/bach/bwv96.6.mxl
+    smooth counts: [8]
+  music21/bach/bwv97.9.mxl
+    smooth counts: [8, 8, 8, 9]
+  music21/bach/bwv99.6.mxl
+    smooth counts: [9]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================

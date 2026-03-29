@@ -317,8 +317,8 @@ def main():
     # Verify enrichment by comparing smooth density of real counts vs shifted
     # counts (+1 and -1).  If smooth numbers are genuinely over-represented,
     # shifting the distribution should reduce their density.
-    # Start from lo_shift=10 to avoid 8↔9 boundary effects.
-    lo_shift = max(lo, 10)
+    # Start from lo_shift=14 to avoid boundary effects near smooth numbers 9,12.
+    lo_shift = max(lo, 14)
     counts_shift = [c for c in all_counts if c >= lo_shift]
     n_shift = len(counts_shift)
     def _smooth_density(values):
@@ -344,7 +344,7 @@ def main():
 
     # Also show for larger thresholds
     lines.append("  Breakdown by threshold (real density / +1 density / -1 density):")
-    for thr in [10, 12, 16, 18, 24, 32, 36, 48]:
+    for thr in [14, 16, 18, 24, 32, 36, 48, 64, 96]:
         cc = [c for c in all_counts if c >= thr]
         if len(cc) < 5:
             break
@@ -356,11 +356,22 @@ def main():
         lines.append(f"  >= {thr:3d}  n={len(cc):5d}  real={dr:.4f}  +1={dp:.4f}({rp:.2f}x)  -1={dm:.4f}({rm:.2f}x)")
     lines.append("")
 
+    # Verdict: also check larger thresholds for robustness
+    higher_thrs = [t for t in [16, 24, 32, 48] if len([c for c in all_counts if c >= t]) >= 5]
+    wins_p1 = sum(1 for t in higher_thrs
+                  for cc in [[c for c in all_counts if c >= t]]
+                  if _smooth_density(cc) > _smooth_density([c+1 for c in cc]))
+    wins_m1 = sum(1 for t in higher_thrs
+                  for cc in [[c for c in all_counts if c >= t]]
+                  if _smooth_density(cc) > _smooth_density([c-1 for c in cc]))
     if dens_real > dens_plus1 and dens_real > dens_minus1:
-        lines.append("  >> Real counts have HIGHER smooth density than both shifted versions.")
+        lines.append(f"  >> Real counts have HIGHER smooth density than both shifted versions.")
+        lines.append(f"     Confirmed at {wins_p1}/{len(higher_thrs)} higher thresholds vs +1, "
+                     f"{wins_m1}/{len(higher_thrs)} vs -1.")
         lines.append("     This supports genuine over-representation of smooth numbers.")
-    elif dens_real > max(dens_plus1, dens_minus1):
-        lines.append("  >> Real counts have higher smooth density than one shifted version.")
+    elif wins_p1 >= len(higher_thrs) * 0.75:
+        lines.append(f"  >> Real > shifted+1 at {wins_p1}/{len(higher_thrs)} higher thresholds.")
+        lines.append("     Effect vs +1 shift is consistent at larger counts.")
     else:
         lines.append("  >> No clear enrichment vs shifted counts.")
     lines.append("")

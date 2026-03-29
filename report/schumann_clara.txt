@@ -1,0 +1,100 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 12:58
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 5
+Successfully analysed  : 5
+Errors / empty         : 0
+Files with motifs      : 5
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 209
+Min / Max count                   : 1 / 20
+Mean / Median                     : 4.9 / 4
+Counts >= 8                       : 35
+
+Frequency table of ALL occurrence counts (count : frequency):
+     1 : 1
+     2 : 49
+     3 : 46
+     4 : 39
+     5 : 18
+     6 : 13
+     7 : 8
+     8 : 8  <-- smooth (2^a·3^b)
+     9 : 7  <-- smooth (2^a·3^b)
+    10 : 4
+    11 : 1
+    12 : 4  <-- smooth (2^a·3^b)
+    13 : 4
+    15 : 1
+    16 : 3  <-- smooth (2^a·3^b)
+    18 : 1  <-- smooth (2^a·3^b)
+    19 : 1
+    20 : 1
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 20]
+Smooth numbers in range: 5  (out of 13 integers)
+  [8, 9, 12, 16, 18]
+
+Observed smooth counts (>= 8): 23
+  8 × 8
+  9 × 7
+  12 × 4
+  16 × 3
+  18 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 5 / 13 = 0.3846  (38.46%)
+     Expected smooth counts: 13.5
+     Observed smooth counts: 23
+     Enrichment ratio       : 1.71x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.4354  (43.54%)
+     Expected smooth counts : 15.2
+     Observed smooth counts : 23
+     Enrichment ratio       : 1.51x
+
+  >> Modest enrichment. Smooth counts slightly over-represented.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  music21/schumann_clara/opus17/movement3.xml
+    smooth counts: [8, 8, 9, 9, 9, 16, 18]
+  music21/schumann_clara/polonaise_op1n1.mxl
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 16]
+  music21/schumann_clara/polonaise_op1n2.mxl
+    smooth counts: [8, 8, 9, 16]
+  music21/schumann_clara/polonaise_op1n3.mxl
+    smooth counts: [8, 12]
+  music21/schumann_clara/polonaise_op1n4.mxl
+    smooth counts: [9]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================

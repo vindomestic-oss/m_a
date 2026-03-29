@@ -1,0 +1,88 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 12:58
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 3
+Successfully analysed  : 3
+Errors / empty         : 0
+Files with motifs      : 3
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 78
+Min / Max count                   : 2 / 22
+Mean / Median                     : 3.9 / 3
+Counts >= 8                       : 8
+
+Frequency table of ALL occurrence counts (count : frequency):
+     2 : 35
+     3 : 17
+     4 : 8
+     5 : 7
+     6 : 1
+     7 : 2
+     8 : 3  <-- smooth (2^a·3^b)
+     9 : 1  <-- smooth (2^a·3^b)
+    10 : 1
+    11 : 1
+    18 : 1  <-- smooth (2^a·3^b)
+    22 : 1
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 22]
+Smooth numbers in range: 5  (out of 15 integers)
+  [8, 9, 12, 16, 18]
+
+Observed smooth counts (>= 8): 5
+  8 × 3
+  9 × 1
+  18 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 5 / 15 = 0.3333  (33.33%)
+     Expected smooth counts: 2.7
+     Observed smooth counts: 5
+     Enrichment ratio       : 1.88x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.3985  (39.85%)
+     Expected smooth counts : 3.2
+     Observed smooth counts : 5
+     Enrichment ratio       : 1.57x
+
+  >> Modest enrichment. Smooth counts slightly over-represented.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  music21/handel/rinaldo/Lascia_chio_pianga.mxl
+    smooth counts: [8, 8]
+  users/craig/classical/handel/anthem.krn
+    smooth counts: [9]
+  users/craig/classical/handel/largo.krn
+    smooth counts: [8, 18]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================

@@ -1,0 +1,2466 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 13:27
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 1318
+Successfully analysed  : 1318
+Errors / empty         : 0
+Files with motifs      : 1318
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 52220
+Min / Max count                   : 1 / 107
+Mean / Median                     : 6.3 / 4
+Counts >= 8                       : 12175
+
+Frequency table of ALL occurrence counts (count : frequency):
+     1 : 145
+     2 : 12354
+     3 : 9308
+     4 : 6791
+     5 : 4986
+     6 : 3705
+     7 : 2756
+     8 : 2075  <-- smooth (2^a·3^b)
+     9 : 1580  <-- smooth (2^a·3^b)
+    10 : 1282
+    11 : 1046
+    12 : 834  <-- smooth (2^a·3^b)
+    13 : 706
+    14 : 560
+    15 : 457
+    16 : 404  <-- smooth (2^a·3^b)
+    17 : 349
+    18 : 292  <-- smooth (2^a·3^b)
+    19 : 271
+    20 : 246
+    21 : 237
+    22 : 191
+    23 : 144
+    24 : 148  <-- smooth (2^a·3^b)
+    25 : 123
+    26 : 124
+    27 : 102  <-- smooth (2^a·3^b)
+    28 : 99
+    29 : 77
+    30 : 78
+    31 : 65
+    32 : 63  <-- smooth (2^a·3^b)
+    33 : 58
+    34 : 40
+    35 : 39
+    36 : 27  <-- smooth (2^a·3^b)
+    37 : 51
+    38 : 29
+    39 : 42
+    40 : 33
+    41 : 21
+    42 : 27
+    43 : 22
+    44 : 18
+    45 : 19
+    46 : 18
+    47 : 14
+    48 : 13  <-- smooth (2^a·3^b)
+    49 : 20
+    50 : 14
+    51 : 6
+    52 : 12
+    53 : 7
+    54 : 3  <-- smooth (2^a·3^b)
+    55 : 3
+    56 : 8
+    57 : 6
+    58 : 12
+    59 : 2
+    60 : 6
+    61 : 4
+    62 : 3
+    63 : 1
+    64 : 3  <-- smooth (2^a·3^b)
+    65 : 7
+    66 : 2
+    67 : 2
+    68 : 3
+    70 : 1
+    71 : 5
+    72 : 2  <-- smooth (2^a·3^b)
+    73 : 2
+    74 : 2
+    75 : 1
+    77 : 2
+    78 : 1
+    79 : 3
+    84 : 1
+    87 : 3
+    93 : 2
+   101 : 1
+   107 : 1
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 107]
+Smooth numbers in range: 15  (out of 100 integers)
+  [8, 9, 12, 16, 18, 24, 27, 32, 36, 48, 54, 64, 72, 81, 96]
+
+Observed smooth counts (>= 8): 5546
+  8 × 2075
+  9 × 1580
+  12 × 834
+  16 × 404
+  18 × 292
+  24 × 148
+  27 × 102
+  32 × 63
+  36 × 27
+  48 × 13
+  54 × 3
+  64 × 3
+  72 × 2
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 15 / 100 = 0.1500  (15.00%)
+     Expected smooth counts: 1826.2
+     Observed smooth counts: 5546
+     Enrichment ratio       : 3.04x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.2505  (25.05%)
+     Expected smooth counts : 3050.1
+     Observed smooth counts : 5546
+     Enrichment ratio       : 1.82x
+
+  >> Modest enrichment. Smooth counts slightly over-represented.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  music21/palestrina/Agnus.krn
+    smooth counts: [9]
+  music21/palestrina/Agnus_00.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12]
+  music21/palestrina/Agnus_01.krn
+    smooth counts: [8, 9, 9, 12, 18]
+  music21/palestrina/Agnus_02.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Agnus_04.krn
+    smooth counts: [8, 9, 12, 16, 18]
+  music21/palestrina/Agnus_05.krn
+    smooth counts: [8, 8, 9, 9, 9, 9]
+  music21/palestrina/Agnus_06.krn
+    smooth counts: [8, 8, 9, 9, 12, 12]
+  music21/palestrina/Agnus_07.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Agnus_08.krn
+    smooth counts: [8, 8, 8, 9]
+  music21/palestrina/Agnus_09.krn
+    smooth counts: [8, 8, 9, 12, 27]
+  music21/palestrina/Agnus_10.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Agnus_11.krn
+    smooth counts: [9]
+  music21/palestrina/Agnus_12.krn
+    smooth counts: [8, 8, 8, 12, 16]
+  music21/palestrina/Agnus_13.krn
+    smooth counts: [8, 18]
+  music21/palestrina/Agnus_14.krn
+    smooth counts: [8, 8, 9, 16, 32]
+  music21/palestrina/Agnus_15.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Agnus_16.krn
+    smooth counts: [8, 8, 12, 16, 16, 18]
+  music21/palestrina/Agnus_17.krn
+    smooth counts: [8, 9, 9, 9, 12, 18]
+  music21/palestrina/Agnus_I.krn
+    smooth counts: [8, 8, 8, 16]
+  music21/palestrina/Agnus_II.krn
+    smooth counts: [8, 8, 9, 12, 16, 24]
+  music21/palestrina/Agnus_III_00.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_III_a.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_III_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Agnus_II_00.krn
+    smooth counts: [8, 9, 12, 18, 24]
+  music21/palestrina/Agnus_II_01.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Agnus_II_02.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Agnus_II_03_a.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Agnus_II_04.krn
+    smooth counts: [8, 9, 9, 12, 24]
+  music21/palestrina/Agnus_II_05.krn
+    smooth counts: [8, 8, 8, 9, 12, 18]
+  music21/palestrina/Agnus_II_06.krn
+    smooth counts: [8, 12, 24]
+  music21/palestrina/Agnus_II_07.krn
+    smooth counts: [12, 24]
+  music21/palestrina/Agnus_II_08.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Agnus_II_09.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Agnus_II_10_a.krn
+    smooth counts: [8, 8, 8, 12]
+  music21/palestrina/Agnus_II_10_b.krn
+    smooth counts: [9]
+  music21/palestrina/Agnus_II_11.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 18]
+  music21/palestrina/Agnus_II_12_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 16]
+  music21/palestrina/Agnus_II_13.krn
+    smooth counts: [8, 9, 9, 9]
+  music21/palestrina/Agnus_II_14.krn
+    smooth counts: [8, 8, 8, 9, 12, 16]
+  music21/palestrina/Agnus_II_15.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Agnus_II_16.krn
+    smooth counts: [8, 9, 9, 12, 12, 12]
+  music21/palestrina/Agnus_II_17_a.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Agnus_II_17_b.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_II_18.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Agnus_II_19.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 18]
+  music21/palestrina/Agnus_II_20.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Agnus_II_21.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 24]
+  music21/palestrina/Agnus_II_22.krn
+    smooth counts: [8, 8, 9, 9, 12, 12]
+  music21/palestrina/Agnus_II_23.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Agnus_II_24.krn
+    smooth counts: [8, 8, 9, 9, 12, 18]
+  music21/palestrina/Agnus_II_25.krn
+    smooth counts: [8, 8, 8, 9, 12, 16]
+  music21/palestrina/Agnus_II_26.krn
+    smooth counts: [8, 8, 8, 8, 16, 18]
+  music21/palestrina/Agnus_II_27.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Agnus_II_28.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Agnus_II_29.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Agnus_II_30.krn
+    smooth counts: [8, 8, 8, 8]
+  music21/palestrina/Agnus_II_32.krn
+    smooth counts: [8, 12, 18, 24, 32]
+  music21/palestrina/Agnus_II_33.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12]
+  music21/palestrina/Agnus_II_34.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Agnus_II_35.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Agnus_II_36.krn
+    smooth counts: [8, 8, 8, 9, 18]
+  music21/palestrina/Agnus_II_37.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/palestrina/Agnus_II_38.krn
+    smooth counts: [8, 8, 9, 16, 18]
+  music21/palestrina/Agnus_II_39.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Agnus_II_40.krn
+    smooth counts: [8, 8, 9, 9, 12, 16]
+  music21/palestrina/Agnus_II_41.krn
+    smooth counts: [8, 9, 9, 9, 9, 24]
+  music21/palestrina/Agnus_II_42.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12, 12]
+  music21/palestrina/Agnus_II_43.krn
+    smooth counts: [8, 9, 12, 16]
+  music21/palestrina/Agnus_II_44.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 16, 27]
+  music21/palestrina/Agnus_II_45.krn
+    smooth counts: [8, 16, 18]
+  music21/palestrina/Agnus_II_46.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_II_47.krn
+    smooth counts: [8, 8, 9, 9, 12, 16, 16]
+  music21/palestrina/Agnus_II_48.krn
+    smooth counts: [9, 12, 16, 18]
+  music21/palestrina/Agnus_II_49.krn
+    smooth counts: [8, 8, 9, 9, 9, 16]
+  music21/palestrina/Agnus_II_50.krn
+    smooth counts: [8, 8, 9, 24, 24]
+  music21/palestrina/Agnus_II_51.krn
+    smooth counts: [8, 8, 8, 9, 9, 24]
+  music21/palestrina/Agnus_II_52.krn
+    smooth counts: [8, 8, 9, 9, 18]
+  music21/palestrina/Agnus_II_53.krn
+    smooth counts: [8, 8, 9, 9, 18]
+  music21/palestrina/Agnus_II_54.krn
+    smooth counts: [8, 9, 16, 18, 18]
+  music21/palestrina/Agnus_II_55.krn
+    smooth counts: [8, 9, 12, 24]
+  music21/palestrina/Agnus_II_56.krn
+    smooth counts: [9, 9, 9, 16]
+  music21/palestrina/Agnus_II_57.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Agnus_II_58.krn
+    smooth counts: [9, 12, 18]
+  music21/palestrina/Agnus_II_59.krn
+    smooth counts: [8, 9, 9, 12, 12, 16, 16, 18]
+  music21/palestrina/Agnus_II_60.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12, 18]
+  music21/palestrina/Agnus_II_61.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Agnus_II_62.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12]
+  music21/palestrina/Agnus_II_63.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Agnus_II_64.krn
+    smooth counts: [8, 8, 9, 12, 16, 16]
+  music21/palestrina/Agnus_II_65.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Agnus_II_66_a.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_II_66_b.krn
+    smooth counts: [9]
+  music21/palestrina/Agnus_II_66_c.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_II_67.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Agnus_II_68.krn
+    smooth counts: [8, 8, 9, 12, 12]
+  music21/palestrina/Agnus_II_69.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Agnus_II_70.krn
+    smooth counts: [8, 8, 8, 8, 9, 12]
+  music21/palestrina/Agnus_II_71.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Agnus_II_72.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Agnus_II_73.krn
+    smooth counts: [8, 8, 12, 12]
+  music21/palestrina/Agnus_II_74.krn
+    smooth counts: [9, 9, 9, 12, 12, 12, 18, 24]
+  music21/palestrina/Agnus_II_75.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Agnus_II_76.krn
+    smooth counts: [8, 8, 9, 9, 16]
+  music21/palestrina/Agnus_II_77.krn
+    smooth counts: [8, 8, 8, 12, 18]
+  music21/palestrina/Agnus_II_78.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Agnus_II_79.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Agnus_II_80.krn
+    smooth counts: [8, 8, 8, 8, 12, 12, 16, 24]
+  music21/palestrina/Agnus_I_00.krn
+    smooth counts: [8, 12, 12]
+  music21/palestrina/Agnus_I_01.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Agnus_I_02.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Agnus_I_03.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 16, 18]
+  music21/palestrina/Agnus_I_04.krn
+    smooth counts: [9, 9, 9, 9, 18]
+  music21/palestrina/Agnus_I_05.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  music21/palestrina/Agnus_I_06.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_I_07.krn
+    smooth counts: [8, 9, 9, 9, 12, 18]
+  music21/palestrina/Agnus_I_08.krn
+    smooth counts: [12, 16]
+  music21/palestrina/Agnus_I_09.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Agnus_I_10.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Agnus_I_11.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 16]
+  music21/palestrina/Agnus_I_12.krn
+    smooth counts: [9, 9, 16]
+  music21/palestrina/Agnus_I_13.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Agnus_I_14.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Agnus_I_15.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Agnus_I_16.krn
+    smooth counts: [8, 8, 8, 9, 12, 12]
+  music21/palestrina/Agnus_I_17.krn
+    smooth counts: [8, 12, 12, 16]
+  music21/palestrina/Agnus_I_18.krn
+    smooth counts: [8, 8, 16, 16]
+  music21/palestrina/Agnus_I_19.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Agnus_I_20.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Agnus_I_21.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 24]
+  music21/palestrina/Agnus_I_22.krn
+    smooth counts: [8, 8, 8, 9]
+  music21/palestrina/Agnus_I_23.krn
+    smooth counts: [9, 9, 9, 16, 18, 18]
+  music21/palestrina/Agnus_I_24.krn
+    smooth counts: [8, 9, 12, 12, 18]
+  music21/palestrina/Agnus_I_25.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9]
+  music21/palestrina/Agnus_I_26.krn
+    smooth counts: [9, 9, 9]
+  music21/palestrina/Agnus_I_27.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 16, 18]
+  music21/palestrina/Agnus_I_28.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Agnus_I_29.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Agnus_I_30.krn
+    smooth counts: [8, 9, 12, 16]
+  music21/palestrina/Agnus_I_31.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_I_32.krn
+    smooth counts: [12, 16, 16]
+  music21/palestrina/Agnus_I_33.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 18]
+  music21/palestrina/Agnus_I_34.krn
+    smooth counts: [8, 9, 16, 24]
+  music21/palestrina/Agnus_I_35.krn
+    smooth counts: [9, 9]
+  music21/palestrina/Agnus_I_36.krn
+    smooth counts: [8, 8, 9, 9, 16, 24, 27]
+  music21/palestrina/Agnus_I_37.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Agnus_I_38.krn
+    smooth counts: [8, 8, 9, 9, 12, 16]
+  music21/palestrina/Agnus_I_39.krn
+    smooth counts: [8, 8, 9, 12, 12]
+  music21/palestrina/Agnus_I_40.krn
+    smooth counts: [8, 8, 8, 9, 12, 16]
+  music21/palestrina/Agnus_I_41.krn
+    smooth counts: [8, 8, 8, 9, 16, 18, 18]
+  music21/palestrina/Agnus_I_42.krn
+    smooth counts: [12, 16]
+  music21/palestrina/Agnus_I_43.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 18, 18]
+  music21/palestrina/Agnus_I_44.krn
+    smooth counts: [8, 12, 12]
+  music21/palestrina/Agnus_I_45.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Agnus_I_46.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Agnus_I_47.krn
+    smooth counts: [8, 8, 8, 8, 18, 27]
+  music21/palestrina/Agnus_I_48.krn
+    smooth counts: [8]
+  music21/palestrina/Agnus_I_49.krn
+    smooth counts: [8, 9, 12, 12, 12]
+  music21/palestrina/Agnus_I_50.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12]
+  music21/palestrina/Agnus_I_51.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12, 12, 16]
+  music21/palestrina/Agnus_I_52.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Agnus_I_53.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Agnus_I_54.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Agnus_I_55.krn
+    smooth counts: [9, 9, 9, 12]
+  music21/palestrina/Agnus_I_56.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Agnus_I_57.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 16, 18]
+  music21/palestrina/Agnus_I_58.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 18]
+  music21/palestrina/Agnus_I_59.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Agnus_I_60.krn
+    smooth counts: [8, 8, 9, 16]
+  music21/palestrina/Agnus_I_61.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Agnus_I_62.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 18, 24]
+  music21/palestrina/Agnus_I_63.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12]
+  music21/palestrina/Agnus_I_65.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Agnus_I_66.krn
+    smooth counts: [8, 9, 9, 9, 12, 16, 18]
+  music21/palestrina/Agnus_I_67.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Agnus_I_68.krn
+    smooth counts: [8, 9, 9, 12, 16, 24]
+  music21/palestrina/Agnus_I_69.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 16]
+  music21/palestrina/Agnus_I_70.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Agnus_I_71.krn
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/palestrina/Agnus_I_72.krn
+    smooth counts: [8, 8, 9, 12, 27]
+  music21/palestrina/Agnus_I_73.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Agnus_I_74.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 18, 18]
+  music21/palestrina/Agnus_I_75.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/palestrina/Agnus_I_76.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Agnus_I_77.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12]
+  music21/palestrina/Agnus_I_78.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Agnus_I_79.krn
+    smooth counts: [16]
+  music21/palestrina/Agnus_I_80.krn
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/palestrina/Agnus_I_81.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_00.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_01_a.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Benedictus_01_b.krn
+    smooth counts: [8, 8, 18]
+  music21/palestrina/Benedictus_02.krn
+    smooth counts: [8, 8, 9, 16, 27]
+  music21/palestrina/Benedictus_03_a.krn
+    smooth counts: [8, 8, 9, 9, 16]
+  music21/palestrina/Benedictus_04.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Benedictus_05_a.krn
+    smooth counts: [9, 12, 12, 16, 32]
+  music21/palestrina/Benedictus_05_b.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Benedictus_06.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9]
+  music21/palestrina/Benedictus_07.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 27]
+  music21/palestrina/Benedictus_08_a.krn
+    smooth counts: [8, 9, 9, 16, 18]
+  music21/palestrina/Benedictus_08_b.krn
+    smooth counts: [8, 8, 12, 18]
+  music21/palestrina/Benedictus_09_a.krn
+    smooth counts: [8, 9, 9, 9, 12, 12, 16]
+  music21/palestrina/Benedictus_09_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_10.krn
+    smooth counts: [9, 9, 12, 12, 24]
+  music21/palestrina/Benedictus_11_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 18]
+  music21/palestrina/Benedictus_12.krn
+    smooth counts: [16]
+  music21/palestrina/Benedictus_13_a.krn
+    smooth counts: [8, 9, 24]
+  music21/palestrina/Benedictus_13_b.krn
+    smooth counts: [9, 12, 16]
+  music21/palestrina/Benedictus_14_a.krn
+    smooth counts: [9, 12, 27]
+  music21/palestrina/Benedictus_14_b.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_15_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_15_b.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_16.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Benedictus_17.krn
+    smooth counts: [8, 9, 27]
+  music21/palestrina/Benedictus_18_a.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Benedictus_18_b.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Benedictus_19_a.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Benedictus_19_b.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_20_a.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Benedictus_20_b.krn
+    smooth counts: [12]
+  music21/palestrina/Benedictus_21_a.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Benedictus_21_b.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/palestrina/Benedictus_22.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 16, 18]
+  music21/palestrina/Benedictus_23_a.krn
+    smooth counts: [8, 9, 9, 27]
+  music21/palestrina/Benedictus_23_b.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Benedictus_24_a.krn
+    smooth counts: [8, 16, 16]
+  music21/palestrina/Benedictus_24_b.krn
+    smooth counts: [8, 8, 8, 8, 16]
+  music21/palestrina/Benedictus_25_a.krn
+    smooth counts: [8, 8, 8, 9, 16]
+  music21/palestrina/Benedictus_25_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Benedictus_26_a.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Benedictus_27.krn
+    smooth counts: [8, 8, 12, 27]
+  music21/palestrina/Benedictus_28_a.krn
+    smooth counts: [8, 9, 9, 9]
+  music21/palestrina/Benedictus_28_b.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_29_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 16, 18]
+  music21/palestrina/Benedictus_29_b.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_30.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Benedictus_31_a.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_31_b.krn
+    smooth counts: [8, 9, 16, 27]
+  music21/palestrina/Benedictus_32_b.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Benedictus_33.krn
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/palestrina/Benedictus_34_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_35_a.krn
+    smooth counts: [9, 27]
+  music21/palestrina/Benedictus_35_b.krn
+    smooth counts: [9, 12, 18]
+  music21/palestrina/Benedictus_36_a.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Benedictus_36_b.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_37.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Benedictus_38_a.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Benedictus_38_b.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_39_a.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Benedictus_39_b.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Benedictus_40_a.krn
+    smooth counts: [8, 8, 9, 12, 12]
+  music21/palestrina/Benedictus_41_a.krn
+    smooth counts: [8, 9, 9, 16, 18]
+  music21/palestrina/Benedictus_41_b.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_42_a.krn
+    smooth counts: [9, 9, 12, 12]
+  music21/palestrina/Benedictus_42_b.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Benedictus_43_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 12, 16]
+  music21/palestrina/Benedictus_43_b.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Benedictus_44_b.krn
+    smooth counts: [9, 18]
+  music21/palestrina/Benedictus_45.krn
+    smooth counts: [8, 8, 8, 8, 8, 27]
+  music21/palestrina/Benedictus_46_a.krn
+    smooth counts: [9, 9, 12, 12]
+  music21/palestrina/Benedictus_46_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_47.krn
+    smooth counts: [8, 9, 12, 12, 12, 16, 18]
+  music21/palestrina/Benedictus_48.krn
+    smooth counts: [8, 8, 8, 9, 12, 12]
+  music21/palestrina/Benedictus_49.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_50.krn
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/palestrina/Benedictus_51_a.krn
+    smooth counts: [8, 8, 9, 12, 16, 18]
+  music21/palestrina/Benedictus_51_b.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Benedictus_52_a.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Benedictus_52_b.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Benedictus_53_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_53_b.krn
+    smooth counts: [9, 9]
+  music21/palestrina/Benedictus_54_a.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Benedictus_54_b.krn
+    smooth counts: [8, 8, 8, 9, 12, 12]
+  music21/palestrina/Benedictus_55.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Benedictus_56.krn
+    smooth counts: [8, 8, 9, 9, 16, 18, 18]
+  music21/palestrina/Benedictus_57_a.krn
+    smooth counts: [8, 9, 9, 9, 9, 24, 27]
+  music21/palestrina/Benedictus_57_b.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Benedictus_58.krn
+    smooth counts: [8, 8, 8, 9, 12, 27]
+  music21/palestrina/Benedictus_59_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 18]
+  music21/palestrina/Benedictus_59_b.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_60.krn
+    smooth counts: [8, 9, 9, 9, 12, 12, 12, 12]
+  music21/palestrina/Benedictus_61_a.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Benedictus_61_b.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12]
+  music21/palestrina/Benedictus_62.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_63.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_64_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 27]
+  music21/palestrina/Benedictus_64_b.krn
+    smooth counts: [12, 16]
+  music21/palestrina/Benedictus_65.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_66_a.krn
+    smooth counts: [8, 9, 16, 24]
+  music21/palestrina/Benedictus_66_b.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Benedictus_67.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16, 16]
+  music21/palestrina/Benedictus_68_a.krn
+    smooth counts: [8, 8, 8, 9, 12, 16]
+  music21/palestrina/Benedictus_69_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Benedictus_70_a.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_70_b.krn
+    smooth counts: [9, 9, 16]
+  music21/palestrina/Benedictus_71_a.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Benedictus_72_a.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Benedictus_72_b.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Benedictus_73_a.krn
+    smooth counts: [8, 8, 8, 9, 12, 18]
+  music21/palestrina/Benedictus_73_b.krn
+    smooth counts: [9, 9, 9, 16]
+  music21/palestrina/Benedictus_74.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 16, 16]
+  music21/palestrina/Benedictus_75.krn
+    smooth counts: [8, 8, 8, 12, 12, 12]
+  music21/palestrina/Benedictus_76.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_77_a.krn
+    smooth counts: [8, 8, 16]
+  music21/palestrina/Benedictus_77_b.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_78.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Benedictus_79_a.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Benedictus_79_b.krn
+    smooth counts: [8, 8, 8, 16]
+  music21/palestrina/Benedictus_80_a.krn
+    smooth counts: [12]
+  music21/palestrina/Benedictus_80_b.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Benedictus_81.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 18, 18, 24]
+  music21/palestrina/Benedictus_82.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_83_a.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Benedictus_83_b.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Benedictus_84_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 18, 24]
+  music21/palestrina/Benedictus_84_b.krn
+    smooth counts: [12]
+  music21/palestrina/Benedictus_85_a.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/palestrina/Benedictus_85_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Benedictus_86.krn
+    smooth counts: [8, 9, 9, 12, 12, 12, 16, 32]
+  music21/palestrina/Benedictus_87_a.krn
+    smooth counts: [8, 8, 8, 9]
+  music21/palestrina/Benedictus_87_b.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_88_a.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  music21/palestrina/Benedictus_88_b.krn
+    smooth counts: [12, 16]
+  music21/palestrina/Benedictus_89_a.krn
+    smooth counts: [9, 12, 12, 12, 16, 18, 18]
+  music21/palestrina/Benedictus_89_b.krn
+    smooth counts: [8]
+  music21/palestrina/Benedictus_90_b.krn
+    smooth counts: [9]
+  music21/palestrina/Benedictus_91.krn
+    smooth counts: [8, 8, 12, 12, 16, 18, 24]
+  music21/palestrina/Benedictus_92_b.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Benedictus_93_b.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Benedictus_94_a.krn
+    smooth counts: [8, 9, 16, 24]
+  music21/palestrina/Benedictus_94_b.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Benedictus_95.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Benedictus_96.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 18]
+  music21/palestrina/Benedictus_97.krn
+    smooth counts: [8, 8, 18]
+  music21/palestrina/Benedictus_a.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_00.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 12, 12, 12, 12, 12, 16, 16, 16, 18, 24]
+  music21/palestrina/Credo_02_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/palestrina/Credo_02_c.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_03_a.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Credo_03_b.krn
+    smooth counts: [8, 8, 8, 18]
+  music21/palestrina/Credo_03_c.krn
+    smooth counts: [8, 18]
+  music21/palestrina/Credo_03_d.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Credo_04_a.krn
+    smooth counts: [8, 8, 9, 18]
+  music21/palestrina/Credo_04_b.krn
+    smooth counts: [8, 8, 8, 9, 16, 18]
+  music21/palestrina/Credo_05_a.krn
+    smooth counts: [9, 18]
+  music21/palestrina/Credo_05_b.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Credo_05_c.krn
+    smooth counts: [8, 8, 8, 9]
+  music21/palestrina/Credo_06_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_06_g.krn
+    smooth counts: [8, 8, 9, 16]
+  music21/palestrina/Credo_06_h.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_06_i.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_07_a.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Credo_07_b.krn
+    smooth counts: [8, 16, 24]
+  music21/palestrina/Credo_07_c.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Credo_08_a.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_08_b.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Credo_08_c.krn
+    smooth counts: [8, 8, 18]
+  music21/palestrina/Credo_09_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 18]
+  music21/palestrina/Credo_09_b.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 18]
+  music21/palestrina/Credo_09_c.krn
+    smooth counts: [8, 8, 8, 16, 24]
+  music21/palestrina/Credo_10_a.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Credo_10_c.krn
+    smooth counts: [9, 9, 9, 12]
+  music21/palestrina/Credo_10_f.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_10_g.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Credo_10_h.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_10_i.krn
+    smooth counts: [12, 12]
+  music21/palestrina/Credo_11_a.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 16, 16]
+  music21/palestrina/Credo_11_c.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_11_e.krn
+    smooth counts: [8, 9, 9, 16, 16, 16, 24, 27, 32]
+  music21/palestrina/Credo_12_a.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Credo_12_b.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Credo_13_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 12, 16, 18, 27, 27]
+  music21/palestrina/Credo_13_b.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Credo_13_c.krn
+    smooth counts: [8, 8, 9, 16, 18, 27]
+  music21/palestrina/Credo_14.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16, 18, 32, 72]
+  music21/palestrina/Credo_15_a.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_15_c.krn
+    smooth counts: [12, 16]
+  music21/palestrina/Credo_15_d.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Credo_15_e.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12, 16, 24]
+  music21/palestrina/Credo_15_f.krn
+    smooth counts: [8, 8, 8, 9, 24, 24, 32]
+  music21/palestrina/Credo_16_a.krn
+    smooth counts: [8, 8, 9, 9, 16, 16]
+  music21/palestrina/Credo_16_b.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_16_d.krn
+    smooth counts: [8, 9, 9, 12, 12]
+  music21/palestrina/Credo_16_e.krn
+    smooth counts: [9, 18]
+  music21/palestrina/Credo_16_g.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_17_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 24, 27]
+  music21/palestrina/Credo_17_b.krn
+    smooth counts: [9, 9, 9]
+  music21/palestrina/Credo_17_c.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Credo_18_a.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Credo_18_b.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_18_c.krn
+    smooth counts: [8, 8, 16]
+  music21/palestrina/Credo_19_a.krn
+    smooth counts: [8, 8, 8, 8, 12, 24]
+  music21/palestrina/Credo_19_b.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Credo_19_d.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Credo_20_a.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Credo_20_b.krn
+    smooth counts: [8, 8, 8, 16, 18, 24, 27]
+  music21/palestrina/Credo_20_c.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/palestrina/Credo_21.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 12, 18, 24]
+  music21/palestrina/Credo_22_a.krn
+    smooth counts: [24]
+  music21/palestrina/Credo_22_b.krn
+    smooth counts: [8, 9, 9, 18]
+  music21/palestrina/Credo_22_c.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_22_d.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_23_a.krn
+    smooth counts: [8, 8, 9, 16, 18]
+  music21/palestrina/Credo_23_b.krn
+    smooth counts: [8, 8, 8, 9, 12, 16, 18, 24]
+  music21/palestrina/Credo_23_c.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 18, 48]
+  music21/palestrina/Credo_24_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 18]
+  music21/palestrina/Credo_24_b.krn
+    smooth counts: [8, 8, 8, 8]
+  music21/palestrina/Credo_24_c.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 18]
+  music21/palestrina/Credo_25_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 12]
+  music21/palestrina/Credo_25_b.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 16, 27]
+  music21/palestrina/Credo_25_c.krn
+    smooth counts: [8, 8, 8, 32]
+  music21/palestrina/Credo_26.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 12, 12, 12, 12, 16, 18]
+  music21/palestrina/Credo_27.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 12, 12, 12, 12, 16, 18]
+  music21/palestrina/Credo_28_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 16, 24, 24]
+  music21/palestrina/Credo_28_b.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Credo_28_c.krn
+    smooth counts: [8, 9, 9, 12, 16]
+  music21/palestrina/Credo_29_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 16]
+  music21/palestrina/Credo_29_d.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_29_e.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Credo_30_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 18]
+  music21/palestrina/Credo_30_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_30_e.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_30_f.krn
+    smooth counts: [8, 8, 8, 8, 12, 16, 18]
+  music21/palestrina/Credo_30_h.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_31_a.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_31_e.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Credo_31_f.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Credo_31_h.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_31_i.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Credo_32_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_32_e.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_32_f.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_32_g.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_32_h.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Credo_32_i.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_33_a.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Credo_33_c.krn
+    smooth counts: [8, 8, 16, 18]
+  music21/palestrina/Credo_34.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12, 12, 12, 12, 12, 16, 32, 32]
+  music21/palestrina/Credo_35_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 12, 12, 16, 32]
+  music21/palestrina/Credo_35_b.krn
+    smooth counts: [8, 9, 9, 9, 16]
+  music21/palestrina/Credo_35_c.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Credo_36.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 16]
+  music21/palestrina/Credo_37_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 24]
+  music21/palestrina/Credo_37_c.krn
+    smooth counts: [8, 12, 12, 12]
+  music21/palestrina/Credo_38_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 18, 18]
+  music21/palestrina/Credo_38_b.krn
+    smooth counts: [8, 9, 9, 12, 12, 24]
+  music21/palestrina/Credo_38_c.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 16, 24, 27, 32]
+  music21/palestrina/Credo_39_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 24, 24]
+  music21/palestrina/Credo_39_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_39_e.krn
+    smooth counts: [8, 9, 9, 12, 24]
+  music21/palestrina/Credo_39_f.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  music21/palestrina/Credo_40_a.krn
+    smooth counts: [8, 8, 9, 9, 16, 16]
+  music21/palestrina/Credo_40_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_40_c.krn
+    smooth counts: [8, 9, 9, 9, 9, 27]
+  music21/palestrina/Credo_41_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 16, 18]
+  music21/palestrina/Credo_41_b.krn
+    smooth counts: [9, 9, 9, 9, 9, 12, 12, 12, 18]
+  music21/palestrina/Credo_41_c.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Credo_42_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 18, 18, 24]
+  music21/palestrina/Credo_42_b.krn
+    smooth counts: [8, 9, 9, 9, 32]
+  music21/palestrina/Credo_42_c.krn
+    smooth counts: [8, 8, 24]
+  music21/palestrina/Credo_43_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 18, 18]
+  music21/palestrina/Credo_43_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Credo_43_c.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Credo_44_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 16, 18]
+  music21/palestrina/Credo_44_b.krn
+    smooth counts: [18, 24]
+  music21/palestrina/Credo_44_c.krn
+    smooth counts: [8, 8, 9, 12, 18, 36]
+  music21/palestrina/Credo_45_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_45_d.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_45_e.krn
+    smooth counts: [9, 9, 12, 18]
+  music21/palestrina/Credo_46_a.krn
+    smooth counts: [8, 8, 9, 12, 16, 18, 36]
+  music21/palestrina/Credo_46_b.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  music21/palestrina/Credo_46_c.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Credo_46_d.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 16]
+  music21/palestrina/Credo_47_a.krn
+    smooth counts: [8, 8, 9, 16, 16, 24, 27]
+  music21/palestrina/Credo_47_b.krn
+    smooth counts: [8, 12, 16, 18]
+  music21/palestrina/Credo_47_c.krn
+    smooth counts: [12, 16, 16]
+  music21/palestrina/Credo_47_d.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_47_e.krn
+    smooth counts: [8, 9, 12, 16]
+  music21/palestrina/Credo_48_a.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 16, 16]
+  music21/palestrina/Credo_48_b.krn
+    smooth counts: [8, 8, 9, 12, 16, 24]
+  music21/palestrina/Credo_48_c.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 16, 18, 24, 27]
+  music21/palestrina/Credo_49_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 16, 16, 24, 27, 32]
+  music21/palestrina/Credo_49_b.krn
+    smooth counts: [9, 9, 9, 32]
+  music21/palestrina/Credo_49_c.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 18, 24]
+  music21/palestrina/Credo_50_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 18]
+  music21/palestrina/Credo_50_b.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 24]
+  music21/palestrina/Credo_50_c.krn
+    smooth counts: [9, 9, 9, 18, 27]
+  music21/palestrina/Credo_51_a.krn
+    smooth counts: [8, 9, 9, 16, 18, 24]
+  music21/palestrina/Credo_51_b.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Credo_51_c.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Credo_51_d.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_52_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 12]
+  music21/palestrina/Credo_52_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_52_c.krn
+    smooth counts: [8, 8, 9, 9, 16, 18]
+  music21/palestrina/Credo_53_a.krn
+    smooth counts: [8, 8, 9, 12, 24]
+  music21/palestrina/Credo_53_b.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Credo_53_c.krn
+    smooth counts: [9, 9, 12, 12]
+  music21/palestrina/Credo_54_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12]
+  music21/palestrina/Credo_54_b.krn
+    smooth counts: [8, 8, 9, 9, 12, 16, 18]
+  music21/palestrina/Credo_54_c.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 24]
+  music21/palestrina/Credo_54_d.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_55_a.krn
+    smooth counts: [8, 8, 8, 9, 16, 32]
+  music21/palestrina/Credo_55_b.krn
+    smooth counts: [8, 8, 9, 12, 16]
+  music21/palestrina/Credo_55_c.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_55_f.krn
+    smooth counts: [8, 9, 9, 12, 12, 27]
+  music21/palestrina/Credo_56_a.krn
+    smooth counts: [9, 9]
+  music21/palestrina/Credo_56_b.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Credo_56_d.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Credo_57_a.krn
+    smooth counts: [9, 9, 16]
+  music21/palestrina/Credo_57_b.krn
+    smooth counts: [8, 8, 8, 9]
+  music21/palestrina/Credo_57_c.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Credo_58_a.krn
+    smooth counts: [8, 9, 9, 9]
+  music21/palestrina/Credo_58_b.krn
+    smooth counts: [8, 9, 16, 18]
+  music21/palestrina/Credo_58_c.krn
+    smooth counts: [9, 12, 18]
+  music21/palestrina/Credo_59_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/palestrina/Credo_59_b.krn
+    smooth counts: [8, 9, 9, 12, 12, 16]
+  music21/palestrina/Credo_59_c.krn
+    smooth counts: [8, 8, 9, 12, 12, 12, 16]
+  music21/palestrina/Credo_60_a.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Credo_60_b.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Credo_60_d.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Credo_60_e.krn
+    smooth counts: [9, 9, 16, 16]
+  music21/palestrina/Credo_61_a.krn
+    smooth counts: [8, 8, 9, 16, 16, 16, 24]
+  music21/palestrina/Credo_61_b.krn
+    smooth counts: [8, 8, 8, 8, 9, 9]
+  music21/palestrina/Credo_61_c.krn
+    smooth counts: [8, 8, 9, 9, 16, 32]
+  music21/palestrina/Credo_62_a.krn
+    smooth counts: [8, 8, 9, 16, 16, 16, 24]
+  music21/palestrina/Credo_62_b.krn
+    smooth counts: [8, 8, 8, 8, 9, 9]
+  music21/palestrina/Credo_62_c.krn
+    smooth counts: [8, 8, 9, 9, 16, 32]
+  music21/palestrina/Credo_63_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 16, 16, 18]
+  music21/palestrina/Credo_63_b.krn
+    smooth counts: [9, 27]
+  music21/palestrina/Credo_63_c.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Credo_63_d.krn
+    smooth counts: [9, 9, 18, 24]
+  music21/palestrina/Credo_64_a.krn
+    smooth counts: [8, 8, 9, 9, 27, 36]
+  music21/palestrina/Credo_64_b.krn
+    smooth counts: [12, 12]
+  music21/palestrina/Credo_64_c.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 16, 18, 27]
+  music21/palestrina/Credo_65_a.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_65_b.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_65_c.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_65_e.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_65_f.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_65_g.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Credo_65_h.krn
+    smooth counts: [9, 9]
+  music21/palestrina/Credo_65_i.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Credo_66_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_66_c.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Credo_66_f.krn
+    smooth counts: [9, 9, 9, 16, 18]
+  music21/palestrina/Credo_66_h.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_67_a.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Credo_67_b.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Credo_67_d.krn
+    smooth counts: [8, 8, 9, 9, 16, 16, 24]
+  music21/palestrina/Credo_67_f.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_68_a.krn
+    smooth counts: [8, 8, 9, 12, 16, 24, 27]
+  music21/palestrina/Credo_68_b.krn
+    smooth counts: [8, 9, 9, 12, 16, 16]
+  music21/palestrina/Credo_68_c.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_68_e.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Credo_69_a.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/palestrina/Credo_69_b.krn
+    smooth counts: [8, 8, 16, 32]
+  music21/palestrina/Credo_69_c.krn
+    smooth counts: [8, 8, 9, 12, 16]
+  music21/palestrina/Credo_70_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_70_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_70_c.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_70_f.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Credo_70_g.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_70_i.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_71_a.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_71_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_71_c.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_71_e.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Credo_71_g.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_71_h.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_71_i.krn
+    smooth counts: [8, 9, 9, 18]
+  music21/palestrina/Credo_72_a.krn
+    smooth counts: [8, 8, 12, 12]
+  music21/palestrina/Credo_72_b.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Credo_72_c.krn
+    smooth counts: [8, 8, 12, 12, 16, 18]
+  music21/palestrina/Credo_73_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 16, 24, 32, 36]
+  music21/palestrina/Credo_73_b.krn
+    smooth counts: [8, 8, 9, 18]
+  music21/palestrina/Credo_73_c.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 16, 18, 24, 24]
+  music21/palestrina/Credo_74_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9]
+  music21/palestrina/Credo_74_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Credo_74_c.krn
+    smooth counts: [8, 9, 9, 9, 12, 27]
+  music21/palestrina/Credo_75_a.krn
+    smooth counts: [8, 9, 9, 12, 12, 16, 27]
+  music21/palestrina/Credo_75_b.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_75_c.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Credo_76.krn
+    smooth counts: [8, 9, 12, 18, 32]
+  music21/palestrina/Credo_77_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 12]
+  music21/palestrina/Credo_77_b.krn
+    smooth counts: [8, 8, 8, 12, 12, 18]
+  music21/palestrina/Credo_77_c.krn
+    smooth counts: [8, 8, 8, 12, 12, 32]
+  music21/palestrina/Credo_78_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 24]
+  music21/palestrina/Credo_78_c.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_79_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 9]
+  music21/palestrina/Credo_80_a.krn
+    smooth counts: [9, 9, 12, 16, 24, 32]
+  music21/palestrina/Credo_80_d.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Credo_80_e.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Credo_80_f.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Credo_81_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 16]
+  music21/palestrina/Credo_81_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_81_d.krn
+    smooth counts: [8, 8, 8, 12]
+  music21/palestrina/Credo_81_e.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_81_f.krn
+    smooth counts: [9, 12, 12]
+  music21/palestrina/Credo_82.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 12, 12, 24, 32]
+  music21/palestrina/Credo_83_a.krn
+    smooth counts: [8, 8, 9, 9, 12, 12]
+  music21/palestrina/Credo_83_b.krn
+    smooth counts: [8, 8, 12, 18]
+  music21/palestrina/Credo_83_c.krn
+    smooth counts: [9, 9, 32]
+  music21/palestrina/Credo_84_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 12, 16, 18]
+  music21/palestrina/Credo_84_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_84_c.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_85_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 18, 27, 32]
+  music21/palestrina/Credo_85_b.krn
+    smooth counts: [8, 18]
+  music21/palestrina/Credo_85_c.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_85_d.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_85_e.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_86_a.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Credo_86_b.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_86_d.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Credo_87_a.krn
+    smooth counts: [8, 9, 12, 16]
+  music21/palestrina/Credo_87_b.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_87_c.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_87_d.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Credo_87_e.krn
+    smooth counts: [9, 9, 16]
+  music21/palestrina/Credo_87_f.krn
+    smooth counts: [8]
+  music21/palestrina/Credo_87_g.krn
+    smooth counts: [8, 8, 9, 16]
+  music21/palestrina/Credo_88_a.krn
+    smooth counts: [9, 9, 27]
+  music21/palestrina/Credo_88_b.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12, 12, 24]
+  music21/palestrina/Credo_88_c.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 18, 18]
+  music21/palestrina/Credo_89_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 16]
+  music21/palestrina/Credo_89_b.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Credo_89_c.krn
+    smooth counts: [8, 8, 8, 16, 27]
+  music21/palestrina/Credo_90_a.krn
+    smooth counts: [8, 8, 9, 9, 12, 18]
+  music21/palestrina/Credo_90_b.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 18]
+  music21/palestrina/Credo_90_c.krn
+    smooth counts: [9]
+  music21/palestrina/Credo_90_d.krn
+    smooth counts: [8, 12, 16]
+  music21/palestrina/Credo_91_a.krn
+    smooth counts: [9, 9, 12, 16, 18, 24]
+  music21/palestrina/Credo_91_b.krn
+    smooth counts: [8, 9, 9, 12, 12, 18]
+  music21/palestrina/Credo_91_c.krn
+    smooth counts: [8, 8, 8, 9, 16, 16, 16]
+  music21/palestrina/Credo_92_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 27]
+  music21/palestrina/Credo_92_b.krn
+    smooth counts: [8, 8, 8, 9, 24, 32]
+  music21/palestrina/Credo_92_d.krn
+    smooth counts: [9, 9]
+  music21/palestrina/Credo_93_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 18, 24]
+  music21/palestrina/Credo_93_b.krn
+    smooth counts: [12]
+  music21/palestrina/Credo_93_c.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 16]
+  music21/palestrina/Credo_94_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 16, 24]
+  music21/palestrina/Credo_94_b.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12]
+  music21/palestrina/Credo_94_c.krn
+    smooth counts: [8, 8, 12, 16, 18]
+  music21/palestrina/Credo_95_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 16, 18]
+  music21/palestrina/Credo_95_b.krn
+    smooth counts: [9, 18]
+  music21/palestrina/Credo_95_c.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 16, 16, 27]
+  music21/palestrina/Credo_96_a.krn
+    smooth counts: [8, 8, 8, 9, 16]
+  music21/palestrina/Credo_96_b.krn
+    smooth counts: [8, 8, 8, 24]
+  music21/palestrina/Credo_96_c.krn
+    smooth counts: [8, 8, 8, 8, 16, 18]
+  music21/palestrina/Credo_97_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Credo_97_b.krn
+    smooth counts: [8, 8, 8, 9, 12, 16]
+  music21/palestrina/Credo_97_c.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 27]
+  music21/palestrina/Credo_97_d.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Credo_97_f.krn
+    smooth counts: [12, 18]
+  music21/palestrina/Credo_a.krn
+    smooth counts: [8, 8, 8, 9, 12, 18, 27]
+  music21/palestrina/Credo_b.krn
+    smooth counts: [9, 12, 27, 27]
+  music21/palestrina/Credo_c.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 16, 18, 18, 36]
+  music21/palestrina/Gloria.krn
+    smooth counts: [8, 8, 8, 8, 8, 12, 16, 18, 27, 27]
+  music21/palestrina/Gloria_00.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 12, 16, 16]
+  music21/palestrina/Gloria_02.krn
+    smooth counts: [8, 9, 9, 12, 16, 24]
+  music21/palestrina/Gloria_03.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 16, 24]
+  music21/palestrina/Gloria_04.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 18, 27]
+  music21/palestrina/Gloria_05.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 24]
+  music21/palestrina/Gloria_06_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 16, 18, 32, 54]
+  music21/palestrina/Gloria_06_c.krn
+    smooth counts: [9, 12, 16]
+  music21/palestrina/Gloria_07.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 12, 16, 16, 18, 27, 36]
+  music21/palestrina/Gloria_08.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 16]
+  music21/palestrina/Gloria_09.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 18, 24, 32]
+  music21/palestrina/Gloria_10.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9]
+  music21/palestrina/Gloria_11.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 12, 16, 16, 16, 27, 48]
+  music21/palestrina/Gloria_12.krn
+    smooth counts: [8, 8, 9, 9, 9, 12]
+  music21/palestrina/Gloria_13_a.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Gloria_13_b.krn
+    smooth counts: [8, 9, 18, 18, 18, 18]
+  music21/palestrina/Gloria_14_d.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_14_e.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_14_f.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Gloria_14_h.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_14_i.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_15_d.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_15_e.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_15_f.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Gloria_15_h.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_15_i.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_16_d.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Gloria_16_f.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_17_c.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_17_d.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_17_e.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Gloria_17_f.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Gloria_17_h.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_17_i.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_18.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 12, 24]
+  music21/palestrina/Gloria_19_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 16, 16, 27]
+  music21/palestrina/Gloria_20_a.krn
+    smooth counts: [8, 9, 16, 24]
+  music21/palestrina/Gloria_20_b.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_21.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 16]
+  music21/palestrina/Gloria_22.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 12, 27, 27, 27]
+  music21/palestrina/Gloria_23.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 16, 24]
+  music21/palestrina/Gloria_24.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 24]
+  music21/palestrina/Gloria_25.krn
+    smooth counts: [8, 8, 8, 9, 16, 18, 18, 24, 36]
+  music21/palestrina/Gloria_26.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/palestrina/Gloria_27.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16, 18, 24, 48]
+  music21/palestrina/Gloria_28_a.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Gloria_28_b.krn
+    smooth counts: [8, 12, 12, 27]
+  music21/palestrina/Gloria_29.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 16, 24, 27, 32]
+  music21/palestrina/Gloria_30.krn
+    smooth counts: [8, 8, 9, 9, 12, 18, 24]
+  music21/palestrina/Gloria_31_a.krn
+    smooth counts: [8, 9, 18, 24, 32, 36]
+  music21/palestrina/Gloria_31_b.krn
+    smooth counts: [8, 8, 24, 27]
+  music21/palestrina/Gloria_32.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 16, 24]
+  music21/palestrina/Gloria_33_d.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Gloria_33_e.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_33_i.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_34_e.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Gloria_34_f.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_35.krn
+    smooth counts: [8, 9, 9, 12, 16, 18]
+  music21/palestrina/Gloria_36.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 36]
+  music21/palestrina/Gloria_37.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 16, 18, 48]
+  music21/palestrina/Gloria_38.krn
+    smooth counts: [12, 16]
+  music21/palestrina/Gloria_39.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 16]
+  music21/palestrina/Gloria_40.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 16, 16, 16, 18, 18, 32]
+  music21/palestrina/Gloria_41.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 16, 18]
+  music21/palestrina/Gloria_42.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 18, 24, 32, 36, 72]
+  music21/palestrina/Gloria_43_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  music21/palestrina/Gloria_43_b.krn
+    smooth counts: [8, 9, 9, 9, 16, 18]
+  music21/palestrina/Gloria_44_a.krn
+    smooth counts: [8, 8, 9, 12, 12, 16, 18]
+  music21/palestrina/Gloria_44_b.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 16]
+  music21/palestrina/Gloria_45.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 27, 32]
+  music21/palestrina/Gloria_46.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 16, 24, 24, 24]
+  music21/palestrina/Gloria_47.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 16, 16, 32]
+  music21/palestrina/Gloria_48.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 16, 18, 54]
+  music21/palestrina/Gloria_49_a.krn
+    smooth counts: [8, 8, 12, 12, 12]
+  music21/palestrina/Gloria_49_b.krn
+    smooth counts: [8, 8, 9, 18]
+  music21/palestrina/Gloria_49_c.krn
+    smooth counts: [8, 12, 18]
+  music21/palestrina/Gloria_49_d.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Gloria_50.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 12, 12, 12, 16, 18, 18, 64]
+  music21/palestrina/Gloria_51.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 12, 16, 16, 24]
+  music21/palestrina/Gloria_52.krn
+    smooth counts: [8, 8, 8, 12, 12, 18, 18, 24]
+  music21/palestrina/Gloria_53.krn
+    smooth counts: [8, 8, 8, 8, 9, 16]
+  music21/palestrina/Gloria_54.krn
+    smooth counts: [8, 8, 8, 8, 12, 12, 12, 12, 16, 18, 32, 32, 36]
+  music21/palestrina/Gloria_55.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Gloria_56_a.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 12, 36]
+  music21/palestrina/Gloria_57.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 18, 18, 24, 32, 48]
+  music21/palestrina/Gloria_58.krn
+    smooth counts: [8, 8, 8, 12, 16, 18, 24]
+  music21/palestrina/Gloria_59.krn
+    smooth counts: [8, 8, 8, 8, 12, 12, 12, 12, 16, 48]
+  music21/palestrina/Gloria_60.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 36]
+  music21/palestrina/Gloria_61_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 16]
+  music21/palestrina/Gloria_62_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 24]
+  music21/palestrina/Gloria_63.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 24, 32, 36]
+  music21/palestrina/Gloria_64.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 24, 32, 36]
+  music21/palestrina/Gloria_65_a.krn
+    smooth counts: [8, 8, 8, 8, 12, 12, 18, 27]
+  music21/palestrina/Gloria_65_b.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 18]
+  music21/palestrina/Gloria_66_a.krn
+    smooth counts: [9, 9, 9, 12, 12, 12, 12, 16, 16]
+  music21/palestrina/Gloria_66_b.krn
+    smooth counts: [9, 12, 18, 27]
+  music21/palestrina/Gloria_66_c.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Gloria_67.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 12, 16, 18, 48]
+  music21/palestrina/Gloria_68_d.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_68_e.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Gloria_68_f.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Gloria_68_g.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_68_i.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_69_a.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_69_c.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_69_e.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Gloria_69_g.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_69_h.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_69_i.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_70_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9]
+  music21/palestrina/Gloria_70_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Gloria_71.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 12, 16, 16, 18, 18]
+  music21/palestrina/Gloria_72.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 16, 18]
+  music21/palestrina/Gloria_73_d.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_73_e.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_73_f.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Gloria_73_i.krn
+    smooth counts: [9]
+  music21/palestrina/Gloria_74_d.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_74_f.krn
+    smooth counts: [16]
+  music21/palestrina/Gloria_75.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12]
+  music21/palestrina/Gloria_76.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 16, 18, 18, 36]
+  music21/palestrina/Gloria_77_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9]
+  music21/palestrina/Gloria_77_b.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Gloria_78_a.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Gloria_78_b.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 16]
+  music21/palestrina/Gloria_78_c.krn
+    smooth counts: [8, 8, 12, 12, 12, 16]
+  music21/palestrina/Gloria_79.krn
+    smooth counts: [8, 9, 12, 24, 27]
+  music21/palestrina/Gloria_80.krn
+    smooth counts: [8, 9, 9, 9, 12, 12]
+  music21/palestrina/Gloria_81_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  music21/palestrina/Gloria_81_c.krn
+    smooth counts: [8]
+  music21/palestrina/Gloria_82_a.krn
+    smooth counts: [9, 12, 12, 16]
+  music21/palestrina/Gloria_83.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 27, 48]
+  music21/palestrina/Gloria_84.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 12, 24]
+  music21/palestrina/Gloria_85.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 12, 18, 24, 27]
+  music21/palestrina/Gloria_86.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 16, 32, 36, 48]
+  music21/palestrina/Gloria_87.krn
+    smooth counts: [8, 8, 8, 12, 16, 16]
+  music21/palestrina/Gloria_88.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 12, 12, 18, 27]
+  music21/palestrina/Gloria_89.krn
+    smooth counts: [8, 8, 8, 18, 18, 18, 27]
+  music21/palestrina/Gloria_90_a.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 16, 16, 18]
+  music21/palestrina/Gloria_90_c.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Gloria_91.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 12]
+  music21/palestrina/Gloria_92.krn
+    smooth counts: [9, 12, 12, 12, 16, 32]
+  music21/palestrina/Gloria_93_a.krn
+    smooth counts: [9, 9, 12, 16, 27]
+  music21/palestrina/Gloria_93_b.krn
+    smooth counts: [8, 9, 9, 12, 16, 16, 18, 36]
+  music21/palestrina/Gloria_94.krn
+    smooth counts: [8, 9, 9, 12, 24, 32, 32]
+  music21/palestrina/Gloria_95_a.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 12]
+  music21/palestrina/Gloria_95_b.krn
+    smooth counts: [12]
+  music21/palestrina/Gloria_96.krn
+    smooth counts: [8, 8, 8, 12, 12, 18, 27, 27]
+  music21/palestrina/Gloria_97.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 18]
+  music21/palestrina/Gloria_98.krn
+    smooth counts: [8, 8, 8, 8, 12, 16, 27, 36]
+  music21/palestrina/Gloria_99.krn
+    smooth counts: [8, 8, 8, 9, 18, 27]
+  music21/palestrina/Gloria_of_1600.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 36, 64]
+  music21/palestrina/Kyrie_00.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Kyrie_02.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 16, 16, 32]
+  music21/palestrina/Kyrie_03_a.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Kyrie_03_b.krn
+    smooth counts: [8, 8, 9, 12, 18]
+  music21/palestrina/Kyrie_04.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 12, 27, 32]
+  music21/palestrina/Kyrie_05_a.krn
+    smooth counts: [9, 12, 12]
+  music21/palestrina/Kyrie_05_b.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/palestrina/Kyrie_06_a.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Kyrie_06_b.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Kyrie_06_c.krn
+    smooth counts: [9, 12, 16, 24]
+  music21/palestrina/Kyrie_07.krn
+    smooth counts: [8, 8, 9, 9, 12, 18, 27, 32, 36]
+  music21/palestrina/Kyrie_09.krn
+    smooth counts: [8, 8, 9, 12, 12, 12, 16, 16, 27]
+  music21/palestrina/Kyrie_10.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 16, 27]
+  music21/palestrina/Kyrie_100.krn
+    smooth counts: [8, 9, 12, 16, 18, 24, 27]
+  music21/palestrina/Kyrie_101.krn
+    smooth counts: [8, 8, 9, 12, 12, 18, 24, 27, 27, 36]
+  music21/palestrina/Kyrie_102.krn
+    smooth counts: [8, 8, 9, 9, 9, 18, 18]
+  music21/palestrina/Kyrie_103.krn
+    smooth counts: [8, 8, 8, 8, 8, 9]
+  music21/palestrina/Kyrie_104.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  music21/palestrina/Kyrie_11.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16, 16, 18, 18]
+  music21/palestrina/Kyrie_12.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  music21/palestrina/Kyrie_13.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 18, 18, 36]
+  music21/palestrina/Kyrie_14.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 12, 12, 12, 16, 18]
+  music21/palestrina/Kyrie_15.krn
+    smooth counts: [9, 9, 12, 16]
+  music21/palestrina/Kyrie_16_a.krn
+    smooth counts: [16]
+  music21/palestrina/Kyrie_16_b.krn
+    smooth counts: [18]
+  music21/palestrina/Kyrie_17.krn
+    smooth counts: [8, 8, 8, 9, 9, 18, 27]
+  music21/palestrina/Kyrie_18.krn
+    smooth counts: [9, 12, 24]
+  music21/palestrina/Kyrie_19_a.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Kyrie_19_b.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Kyrie_20.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 16]
+  music21/palestrina/Kyrie_21.krn
+    smooth counts: [8, 8, 9, 9, 12, 16, 18]
+  music21/palestrina/Kyrie_22.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 27, 27]
+  music21/palestrina/Kyrie_23.krn
+    smooth counts: [8, 8, 8, 9, 12, 18]
+  music21/palestrina/Kyrie_25.krn
+    smooth counts: [8, 9, 12, 12, 18, 24, 32]
+  music21/palestrina/Kyrie_26_a.krn
+    smooth counts: [9, 9, 9, 12, 24]
+  music21/palestrina/Kyrie_26_b.krn
+    smooth counts: [8, 12, 18, 18]
+  music21/palestrina/Kyrie_27_a.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/palestrina/Kyrie_27_b.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Kyrie_28.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12]
+  music21/palestrina/Kyrie_29.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Kyrie_30.krn
+    smooth counts: [8, 8, 8, 9, 16, 18, 18]
+  music21/palestrina/Kyrie_31_a.krn
+    smooth counts: [9]
+  music21/palestrina/Kyrie_31_b.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Kyrie_32.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 16]
+  music21/palestrina/Kyrie_33.krn
+    smooth counts: [8, 9, 12, 12, 16, 16, 24]
+  music21/palestrina/Kyrie_34_b.krn
+    smooth counts: [9, 9, 16]
+  music21/palestrina/Kyrie_35_a.krn
+    smooth counts: [8, 8, 12, 12, 12]
+  music21/palestrina/Kyrie_35_b.krn
+    smooth counts: [8, 8, 8, 12, 16]
+  music21/palestrina/Kyrie_36.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 27, 27]
+  music21/palestrina/Kyrie_37.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 24, 36]
+  music21/palestrina/Kyrie_38.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Kyrie_39.krn
+    smooth counts: [8, 8, 12, 16]
+  music21/palestrina/Kyrie_40.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 24]
+  music21/palestrina/Kyrie_41.krn
+    smooth counts: [8, 8, 9, 12, 12]
+  music21/palestrina/Kyrie_42_a.krn
+    smooth counts: [8, 8, 12, 12, 12]
+  music21/palestrina/Kyrie_42_b.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 16, 36]
+  music21/palestrina/Kyrie_43.krn
+    smooth counts: [8, 8, 9, 9, 24, 54]
+  music21/palestrina/Kyrie_44.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 12, 18, 24]
+  music21/palestrina/Kyrie_45_a.krn
+    smooth counts: [8, 9, 9, 9]
+  music21/palestrina/Kyrie_45_b.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 16]
+  music21/palestrina/Kyrie_46.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12]
+  music21/palestrina/Kyrie_47.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 12, 16, 18]
+  music21/palestrina/Kyrie_48.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 12, 18, 27]
+  music21/palestrina/Kyrie_49.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 16, 27, 36]
+  music21/palestrina/Kyrie_50.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12, 16, 64]
+  music21/palestrina/Kyrie_51.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 12, 18, 32]
+  music21/palestrina/Kyrie_52.krn
+    smooth counts: [8, 8, 9, 9, 9, 16]
+  music21/palestrina/Kyrie_53_a.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/palestrina/Kyrie_53_b.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Kyrie_54_a.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Kyrie_54_b.krn
+    smooth counts: [8, 8, 8, 12, 12, 18]
+  music21/palestrina/Kyrie_55.krn
+    smooth counts: [8, 8, 9, 12, 12]
+  music21/palestrina/Kyrie_56.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12]
+  music21/palestrina/Kyrie_57_a.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Kyrie_57_b.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Kyrie_58.krn
+    smooth counts: [8, 8, 8, 9, 48, 48]
+  music21/palestrina/Kyrie_59.krn
+    smooth counts: [9, 9, 24]
+  music21/palestrina/Kyrie_60.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16]
+  music21/palestrina/Kyrie_61_a.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Kyrie_61_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Kyrie_62_b.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Kyrie_63.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 16]
+  music21/palestrina/Kyrie_64_a.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Kyrie_64_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Kyrie_65.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 12, 18]
+  music21/palestrina/Kyrie_66_a.krn
+    smooth counts: [12]
+  music21/palestrina/Kyrie_66_b.krn
+    smooth counts: [8]
+  music21/palestrina/Kyrie_67.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 24]
+  music21/palestrina/Kyrie_68.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 24]
+  music21/palestrina/Kyrie_70_a.krn
+    smooth counts: [9, 12, 12, 18]
+  music21/palestrina/Kyrie_70_b.krn
+    smooth counts: [8, 8, 9, 16]
+  music21/palestrina/Kyrie_71.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 16, 32]
+  music21/palestrina/Kyrie_72.krn
+    smooth counts: [8, 9, 9, 12, 16, 18, 48]
+  music21/palestrina/Kyrie_73.krn
+    smooth counts: [8, 8, 9, 32]
+  music21/palestrina/Kyrie_74.krn
+    smooth counts: [8, 9, 12, 12, 24]
+  music21/palestrina/Kyrie_75.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 18, 24]
+  music21/palestrina/Kyrie_76.krn
+    smooth counts: [8, 9, 12, 12, 32]
+  music21/palestrina/Kyrie_77.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 12, 18, 24]
+  music21/palestrina/Kyrie_78.krn
+    smooth counts: [8, 8, 9, 9, 16, 27, 32]
+  music21/palestrina/Kyrie_79.krn
+    smooth counts: [8, 9, 9, 18]
+  music21/palestrina/Kyrie_80.krn
+    smooth counts: [8, 8, 8, 9, 16, 27, 27]
+  music21/palestrina/Kyrie_81_a.krn
+    smooth counts: [8, 8, 9, 9, 12, 18]
+  music21/palestrina/Kyrie_81_b.krn
+    smooth counts: [8, 8, 9, 12, 12, 27]
+  music21/palestrina/Kyrie_82.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 16, 18, 27, 32]
+  music21/palestrina/Kyrie_83.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 27, 27]
+  music21/palestrina/Kyrie_84.krn
+    smooth counts: [8, 9, 12, 12, 16]
+  music21/palestrina/Kyrie_85.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 18, 18]
+  music21/palestrina/Kyrie_86.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12]
+  music21/palestrina/Kyrie_87.krn
+    smooth counts: [8, 8, 8, 8, 9, 16, 16]
+  music21/palestrina/Kyrie_88_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 18]
+  music21/palestrina/Kyrie_88_b.krn
+    smooth counts: [8, 8, 9, 12, 18]
+  music21/palestrina/Kyrie_89.krn
+    smooth counts: [8, 9, 9, 12, 12, 18, 27, 32]
+  music21/palestrina/Kyrie_90.krn
+    smooth counts: [8, 9, 24]
+  music21/palestrina/Kyrie_91.krn
+    smooth counts: [8, 8, 9, 12, 12, 18, 18]
+  music21/palestrina/Kyrie_92_a.krn
+    smooth counts: [8]
+  music21/palestrina/Kyrie_92_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Kyrie_93.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 16, 18, 24]
+  music21/palestrina/Kyrie_94.krn
+    smooth counts: [8, 9, 24, 24, 27]
+  music21/palestrina/Kyrie_95_b.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Kyrie_96.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 16, 16]
+  music21/palestrina/Kyrie_97.krn
+    smooth counts: [8, 8, 8, 16, 18, 18]
+  music21/palestrina/Kyrie_98_a.krn
+    smooth counts: [9]
+  music21/palestrina/Kyrie_98_b.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/palestrina/Kyrie_99.krn
+    smooth counts: [8, 8, 8, 9, 12, 27, 32]
+  music21/palestrina/Kyrie_II.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Kyrie_II_00.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Kyrie_II_01.krn
+    smooth counts: [8, 18, 18]
+  music21/palestrina/Kyrie_II_02.krn
+    smooth counts: [8, 8, 12, 12, 12]
+  music21/palestrina/Kyrie_II_03.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Kyrie_II_04.krn
+    smooth counts: [8, 9, 9, 12, 16, 24]
+  music21/palestrina/Kyrie_II_05.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Kyrie_II_06.krn
+    smooth counts: [8]
+  music21/palestrina/Kyrie_II_07.krn
+    smooth counts: [9, 18]
+  music21/palestrina/Kyrie_II_08.krn
+    smooth counts: [8, 9, 16, 16]
+  music21/palestrina/Kyrie_II_09.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Kyrie_II_10.krn
+    smooth counts: [9, 32]
+  music21/palestrina/Kyrie_II_11_a.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Kyrie_II_11_b.krn
+    smooth counts: [8]
+  music21/palestrina/Kyrie_II_12.krn
+    smooth counts: [8, 8, 8, 9]
+  music21/palestrina/Kyrie_II_13.krn
+    smooth counts: [16, 18]
+  music21/palestrina/Kyrie_II_14.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 18, 27]
+  music21/palestrina/Kyrie_II_15.krn
+    smooth counts: [8, 8, 9, 9, 12, 24, 27]
+  music21/palestrina/Kyrie_II_16.krn
+    smooth counts: [8, 8, 9, 16]
+  music21/palestrina/Kyrie_II_17.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Kyrie_II_18.krn
+    smooth counts: [9, 12, 16]
+  music21/palestrina/Kyrie_II_19.krn
+    smooth counts: [9]
+  music21/palestrina/Kyrie_II_20.krn
+    smooth counts: [8, 9, 9, 12, 12]
+  music21/palestrina/Kyrie_II_21.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Kyrie_II_22.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Kyrie_II_23.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Kyrie_II_24_a.krn
+    smooth counts: [12, 16]
+  music21/palestrina/Kyrie_II_24_b.krn
+    smooth counts: [9, 9, 18]
+  music21/palestrina/Kyrie_II_25.krn
+    smooth counts: [8, 12, 12]
+  music21/palestrina/Kyrie_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 18]
+  music21/palestrina/Kyrie_b.krn
+    smooth counts: [8, 8, 9, 12]
+  music21/palestrina/Sanctus_00_a.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Sanctus_00_b.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Sanctus_00_c.krn
+    smooth counts: [9]
+  music21/palestrina/Sanctus_01_a.krn
+    smooth counts: [8, 9, 12, 16]
+  music21/palestrina/Sanctus_01_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_01_c.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_02_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 16]
+  music21/palestrina/Sanctus_03_a.krn
+    smooth counts: [9, 9]
+  music21/palestrina/Sanctus_03_b.krn
+    smooth counts: [8, 8, 8, 9]
+  music21/palestrina/Sanctus_03_c.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_04.krn
+    smooth counts: [9, 12, 24, 36]
+  music21/palestrina/Sanctus_05_a.krn
+    smooth counts: [8, 12, 16]
+  music21/palestrina/Sanctus_05_b.krn
+    smooth counts: [8, 16]
+  music21/palestrina/Sanctus_05_c.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Sanctus_06_a.krn
+    smooth counts: [8, 8, 12, 16, 16, 18]
+  music21/palestrina/Sanctus_06_b.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Sanctus_06_c.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 16, 32]
+  music21/palestrina/Sanctus_07.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 18, 18]
+  music21/palestrina/Sanctus_08.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Sanctus_09_a.krn
+    smooth counts: [8, 9, 9, 18]
+  music21/palestrina/Sanctus_09_b.krn
+    smooth counts: [8, 8, 8, 9, 16]
+  music21/palestrina/Sanctus_09_c.krn
+    smooth counts: [8, 8, 9, 12, 12, 27]
+  music21/palestrina/Sanctus_10.krn
+    smooth counts: [8, 8, 8, 8, 9, 16, 16, 32]
+  music21/palestrina/Sanctus_11_a.krn
+    smooth counts: [8, 16, 24]
+  music21/palestrina/Sanctus_11_b.krn
+    smooth counts: [8, 8, 8, 8, 9, 12]
+  music21/palestrina/Sanctus_11_c.krn
+    smooth counts: [8, 8, 9, 12, 12, 18, 18]
+  music21/palestrina/Sanctus_12_b.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Sanctus_14.krn
+    smooth counts: [9]
+  music21/palestrina/Sanctus_15_a.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Sanctus_15_b.krn
+    smooth counts: [8, 8, 12, 12]
+  music21/palestrina/Sanctus_15_c.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Sanctus_16_a.krn
+    smooth counts: [8, 9, 9, 16, 24, 48]
+  music21/palestrina/Sanctus_16_b.krn
+    smooth counts: [9, 16, 18]
+  music21/palestrina/Sanctus_17.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Sanctus_18.krn
+    smooth counts: [8, 9, 9, 12, 16, 18]
+  music21/palestrina/Sanctus_19.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 18]
+  music21/palestrina/Sanctus_20.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 18, 18]
+  music21/palestrina/Sanctus_21.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  music21/palestrina/Sanctus_22_a.krn
+    smooth counts: [8, 8, 9, 9, 16, 32]
+  music21/palestrina/Sanctus_22_b.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Sanctus_23.krn
+    smooth counts: [8, 8, 8, 24]
+  music21/palestrina/Sanctus_24_a.krn
+    smooth counts: [8, 8, 9, 9, 12, 12]
+  music21/palestrina/Sanctus_24_b.krn
+    smooth counts: [8, 8, 9, 24]
+  music21/palestrina/Sanctus_24_c.krn
+    smooth counts: [8, 9, 12, 12, 18]
+  music21/palestrina/Sanctus_25.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  music21/palestrina/Sanctus_26_a.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Sanctus_26_b.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_26_c.krn
+    smooth counts: [9, 9, 12, 24]
+  music21/palestrina/Sanctus_27.krn
+    smooth counts: [8, 8, 8, 9, 12, 18]
+  music21/palestrina/Sanctus_28_a.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Sanctus_28_b.krn
+    smooth counts: [8, 9, 9, 9]
+  music21/palestrina/Sanctus_28_c.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Sanctus_29.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Sanctus_30_a.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_30_b.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  music21/palestrina/Sanctus_30_c.krn
+    smooth counts: [12]
+  music21/palestrina/Sanctus_30_d.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_31_a.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Sanctus_31_b.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Sanctus_31_c.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12]
+  music21/palestrina/Sanctus_34.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 16, 18, 24]
+  music21/palestrina/Sanctus_35.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Sanctus_36.krn
+    smooth counts: [8, 8, 8, 9, 9, 16]
+  music21/palestrina/Sanctus_37.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Sanctus_38.krn
+    smooth counts: [9, 12, 16, 18]
+  music21/palestrina/Sanctus_39.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 18]
+  music21/palestrina/Sanctus_40.krn
+    smooth counts: [8, 8, 8, 8, 12, 12, 12, 24, 32]
+  music21/palestrina/Sanctus_41.krn
+    smooth counts: [9, 32]
+  music21/palestrina/Sanctus_42.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 24]
+  music21/palestrina/Sanctus_43.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 16, 24, 32]
+  music21/palestrina/Sanctus_44.krn
+    smooth counts: [8, 8, 8, 9, 12, 18]
+  music21/palestrina/Sanctus_45_a.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Sanctus_45_b.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Sanctus_46.krn
+    smooth counts: [8, 18]
+  music21/palestrina/Sanctus_47_a.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Sanctus_47_b.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Sanctus_47_c.krn
+    smooth counts: [9, 9, 16, 16]
+  music21/palestrina/Sanctus_48_a.krn
+    smooth counts: [8, 9, 9, 9, 16]
+  music21/palestrina/Sanctus_48_b.krn
+    smooth counts: [8, 9, 9, 12, 12, 16]
+  music21/palestrina/Sanctus_49_a.krn
+    smooth counts: [8, 8, 9, 16, 16, 24]
+  music21/palestrina/Sanctus_49_b.krn
+    smooth counts: [8, 8, 9, 9, 27]
+  music21/palestrina/Sanctus_49_c.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Sanctus_50_a.krn
+    smooth counts: [8, 8, 24]
+  music21/palestrina/Sanctus_50_b.krn
+    smooth counts: [9, 9, 12, 12]
+  music21/palestrina/Sanctus_50_c.krn
+    smooth counts: [9, 16]
+  music21/palestrina/Sanctus_51.krn
+    smooth counts: [8, 8, 8, 9, 18]
+  music21/palestrina/Sanctus_52.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Sanctus_53.krn
+    smooth counts: [8, 8, 9, 9, 12, 24]
+  music21/palestrina/Sanctus_54_a.krn
+    smooth counts: [8, 8, 8, 12]
+  music21/palestrina/Sanctus_54_b.krn
+    smooth counts: [8, 9, 18]
+  music21/palestrina/Sanctus_54_c.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_55_a.krn
+    smooth counts: [8, 8, 9, 9, 16, 16]
+  music21/palestrina/Sanctus_55_b.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Sanctus_55_c.krn
+    smooth counts: [9]
+  music21/palestrina/Sanctus_56_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 18]
+  music21/palestrina/Sanctus_56_b.krn
+    smooth counts: [8, 9, 9, 9, 12, 18, 27]
+  music21/palestrina/Sanctus_56_c.krn
+    smooth counts: [8, 12, 16]
+  music21/palestrina/Sanctus_57.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Sanctus_58.krn
+    smooth counts: [8, 8, 8, 8]
+  music21/palestrina/Sanctus_59.krn
+    smooth counts: [8, 8, 8, 12]
+  music21/palestrina/Sanctus_60_a.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Sanctus_60_b.krn
+    smooth counts: [8, 8, 8, 12]
+  music21/palestrina/Sanctus_60_c.krn
+    smooth counts: [12]
+  music21/palestrina/Sanctus_61_a.krn
+    smooth counts: [8, 9, 12, 12, 18]
+  music21/palestrina/Sanctus_61_b.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_62_a.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_62_b.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Sanctus_62_c.krn
+    smooth counts: [8, 8, 8, 12]
+  music21/palestrina/Sanctus_63_a.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_63_b.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Sanctus_63_c.krn
+    smooth counts: [8, 8, 8, 12]
+  music21/palestrina/Sanctus_64.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Sanctus_65_a.krn
+    smooth counts: [8, 8, 9]
+  music21/palestrina/Sanctus_65_b.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_65_c.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_66_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 27]
+  music21/palestrina/Sanctus_66_b.krn
+    smooth counts: [8, 9, 12, 16]
+  music21/palestrina/Sanctus_66_c.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Sanctus_67_a.krn
+    smooth counts: [8, 8, 12, 16]
+  music21/palestrina/Sanctus_67_b.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12]
+  music21/palestrina/Sanctus_67_c.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Sanctus_68_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_68_b.krn
+    smooth counts: [9, 9, 12]
+  music21/palestrina/Sanctus_68_c.krn
+    smooth counts: [8, 8, 8, 12, 12, 16]
+  music21/palestrina/Sanctus_69_a.krn
+    smooth counts: [8, 12, 12, 24]
+  music21/palestrina/Sanctus_69_b.krn
+    smooth counts: [8, 8, 9, 12, 16]
+  music21/palestrina/Sanctus_70_a.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Sanctus_70_b.krn
+    smooth counts: [8, 9, 9, 16]
+  music21/palestrina/Sanctus_70_c.krn
+    smooth counts: [12]
+  music21/palestrina/Sanctus_71_a.krn
+    smooth counts: [8, 9, 9, 9, 16, 18]
+  music21/palestrina/Sanctus_71_b.krn
+    smooth counts: [8, 8, 8, 9, 16, 18]
+  music21/palestrina/Sanctus_72_a.krn
+    smooth counts: [8, 9, 12, 16, 24]
+  music21/palestrina/Sanctus_72_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_72_c.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_73_b.krn
+    smooth counts: [8, 8, 9, 12, 18]
+  music21/palestrina/Sanctus_74.krn
+    smooth counts: [8, 9, 9, 9, 9, 9, 12, 12, 18, 18]
+  music21/palestrina/Sanctus_75_a.krn
+    smooth counts: [8, 8, 8, 8, 9, 18, 24]
+  music21/palestrina/Sanctus_75_b.krn
+    smooth counts: [8, 8, 8, 9, 16]
+  music21/palestrina/Sanctus_75_c.krn
+    smooth counts: [8, 8, 9, 9]
+  music21/palestrina/Sanctus_76.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9]
+  music21/palestrina/Sanctus_77_a.krn
+    smooth counts: [9, 9, 9, 16, 24]
+  music21/palestrina/Sanctus_77_b.krn
+    smooth counts: [12]
+  music21/palestrina/Sanctus_78.krn
+    smooth counts: [8, 9, 12, 18]
+  music21/palestrina/Sanctus_79_a.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_79_b.krn
+    smooth counts: [8, 8, 8]
+  music21/palestrina/Sanctus_79_c.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Sanctus_80.krn
+    smooth counts: [9, 9, 18]
+  music21/palestrina/Sanctus_81.krn
+    smooth counts: [12]
+  music21/palestrina/Sanctus_82.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Sanctus_83_a.krn
+    smooth counts: [8, 8, 12, 12, 12]
+  music21/palestrina/Sanctus_83_b.krn
+    smooth counts: [8, 18]
+  music21/palestrina/Sanctus_83_c.krn
+    smooth counts: [8, 8, 8, 12, 16]
+  music21/palestrina/Sanctus_84.krn
+    smooth counts: [8, 9, 9, 12]
+  music21/palestrina/Sanctus_85.krn
+    smooth counts: [8, 8, 9, 9, 9, 12]
+  music21/palestrina/Sanctus_86.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Sanctus_87_a.krn
+    smooth counts: [8, 9, 12, 12]
+  music21/palestrina/Sanctus_87_b.krn
+    smooth counts: [8, 12]
+  music21/palestrina/Sanctus_87_c.krn
+    smooth counts: [8, 9, 16]
+  music21/palestrina/Sanctus_88.krn
+    smooth counts: [8, 9, 9, 9, 12, 16, 18]
+  music21/palestrina/Sanctus_89_a.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Sanctus_89_b.krn
+    smooth counts: [8, 8, 9, 9, 16]
+  music21/palestrina/Sanctus_89_c.krn
+    smooth counts: [8, 9, 12, 18]
+  music21/palestrina/Sanctus_90.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 16, 18]
+  music21/palestrina/Sanctus_91.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  music21/palestrina/Sanctus_92_a.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  music21/palestrina/Sanctus_92_b.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16]
+  music21/palestrina/Sanctus_92_c.krn
+    smooth counts: [8, 8, 9, 9, 16, 27]
+  music21/palestrina/Sanctus_93.krn
+    smooth counts: [8, 9, 12]
+  music21/palestrina/Sanctus_94_a.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  music21/palestrina/Sanctus_94_b.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_95.krn
+    smooth counts: [8, 9, 9, 9, 12, 12, 16]
+  music21/palestrina/Sanctus_96_a.krn
+    smooth counts: [9, 9, 12, 18]
+  music21/palestrina/Sanctus_96_b.krn
+    smooth counts: [9]
+  music21/palestrina/Sanctus_97.krn
+    smooth counts: [8, 8, 8, 9, 24]
+  music21/palestrina/Sanctus_98_a.krn
+    smooth counts: [8, 12, 18]
+  music21/palestrina/Sanctus_98_b.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Sanctus_98_c.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_a.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  music21/palestrina/Sanctus_b.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  music21/palestrina/Sanctus_c.krn
+    smooth counts: [8]
+  music21/palestrina/Sanctus_rpt_00.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Sanctus_rpt_01_a.krn
+    smooth counts: [8, 8, 8, 9, 12, 16]
+  music21/palestrina/Sanctus_rpt_01_b.krn
+    smooth counts: [8, 9, 9]
+  music21/palestrina/Sanctus_rpt_01_c.krn
+    smooth counts: [8, 8]
+  music21/palestrina/Sanctus_rpt_02_a.krn
+    smooth counts: [9, 12]
+  music21/palestrina/Sanctus_rpt_02_b.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_rpt_02_c.krn
+    smooth counts: [8, 9]
+  music21/palestrina/Sanctus_rpt_a.krn
+    smooth counts: [8, 8, 9, 9, 9, 12]
+  music21/palestrina/Sanctus_rpt_b.krn
+    smooth counts: [8, 8, 12]
+  music21/palestrina/Sanctus_rpt_c.krn
+    smooth counts: [9]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================

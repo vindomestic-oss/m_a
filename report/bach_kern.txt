@@ -1,0 +1,1317 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 13:52
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 638
+Successfully analysed  : 630
+Errors / empty         : 8
+Files with motifs      : 630
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 26325
+Min / Max count                   : 1 / 192
+Mean / Median                     : 8.1 / 5
+Counts >= 8                       : 8384
+
+Frequency table of ALL occurrence counts (count : frequency):
+     1 : 43
+     2 : 4630
+     3 : 4034
+     4 : 3576
+     5 : 2253
+     6 : 2038
+     7 : 1367
+     8 : 1361  <-- smooth (2^a·3^b)
+     9 : 873  <-- smooth (2^a·3^b)
+    10 : 791
+    11 : 614
+    12 : 582  <-- smooth (2^a·3^b)
+    13 : 436
+    14 : 406
+    15 : 302
+    16 : 310  <-- smooth (2^a·3^b)
+    17 : 248
+    18 : 225  <-- smooth (2^a·3^b)
+    19 : 199
+    20 : 169
+    21 : 131
+    22 : 135
+    23 : 105
+    24 : 123  <-- smooth (2^a·3^b)
+    25 : 81
+    26 : 105
+    27 : 69  <-- smooth (2^a·3^b)
+    28 : 84
+    29 : 53
+    30 : 55
+    31 : 56
+    32 : 55  <-- smooth (2^a·3^b)
+    33 : 49
+    34 : 46
+    35 : 39
+    36 : 46  <-- smooth (2^a·3^b)
+    37 : 37
+    38 : 36
+    39 : 28
+    40 : 29
+    41 : 30
+    42 : 29
+    43 : 23
+    44 : 20
+    45 : 19
+    46 : 21
+    47 : 21
+    48 : 17  <-- smooth (2^a·3^b)
+    49 : 21
+    50 : 16
+    51 : 11
+    52 : 17
+    53 : 13
+    54 : 8  <-- smooth (2^a·3^b)
+    55 : 10
+    56 : 12
+    57 : 14
+    58 : 7
+    59 : 10
+    60 : 15
+    61 : 11
+    62 : 7
+    63 : 3
+    64 : 8  <-- smooth (2^a·3^b)
+    65 : 6
+    66 : 6
+    67 : 7
+    68 : 6
+    69 : 4
+    70 : 8
+    71 : 2
+    72 : 5  <-- smooth (2^a·3^b)
+    73 : 3
+    74 : 4
+    75 : 4
+    76 : 5
+    77 : 3
+    78 : 4
+    79 : 3
+    80 : 6
+    81 : 4  <-- smooth (2^a·3^b)
+    82 : 3
+    83 : 3
+    84 : 2
+    85 : 2
+    86 : 4
+    87 : 2
+    88 : 1
+    89 : 1
+    90 : 2
+    91 : 1
+    92 : 1
+    93 : 2
+    94 : 1
+    95 : 1
+    96 : 1  <-- smooth (2^a·3^b)
+    97 : 1
+    98 : 2
+    99 : 2
+   100 : 2
+   101 : 1
+   102 : 1
+   103 : 2
+   105 : 1
+   108 : 1  <-- smooth (2^a·3^b)
+   111 : 1
+   113 : 1
+   114 : 3
+   116 : 1
+   124 : 1
+   125 : 1
+   126 : 2
+   127 : 1
+   129 : 1
+   131 : 2
+   135 : 1
+   137 : 1
+   142 : 1
+   145 : 2
+   160 : 1
+   167 : 1
+   184 : 1
+   192 : 1  <-- smooth (2^a·3^b)
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 192]
+Smooth numbers in range: 20  (out of 185 integers)
+  [8, 9, 12, 16, 18, 24, 27, 32, 36, 48, 54, 64, 72, 81, 96, 108, 128, 144, 162, 192]
+
+Observed smooth counts (>= 8): 3689
+  8 × 1361
+  9 × 873
+  12 × 582
+  16 × 310
+  18 × 225
+  24 × 123
+  27 × 69
+  32 × 55
+  36 × 46
+  48 × 17
+  54 × 8
+  64 × 8
+  72 × 5
+  81 × 4
+  96 × 1
+  108 × 1
+  192 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 20 / 185 = 0.1081  (10.81%)
+     Expected smooth counts: 906.4
+     Observed smooth counts: 3689
+     Enrichment ratio       : 4.07x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.2164  (21.64%)
+     Expected smooth counts : 1814.7
+     Observed smooth counts : 3689
+     Enrichment ratio       : 2.03x
+
+  >> Smooth counts appear MORE than 2x as often as random expectation.
+     This suggests a non-trivial alignment between motif repetition
+     structure and binary/ternary metric organisation.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  ccarh/vivaldi/op8/amsterdam/op8n01aa.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 12, 12, 12, 16, 16, 16, 18, 18, 24]
+  ccarh/vivaldi/op8/amsterdam/op8n01ca.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 12, 16, 16, 18]
+  ccarh/vivaldi/op8/amsterdam/op8n02aa.krn
+    smooth counts: [9, 9, 9, 9, 9, 12, 12, 12, 12, 16, 16, 16, 16, 16, 18, 18, 32, 36]
+  ccarh/vivaldi/op8/amsterdam/op8n03aa.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 16, 16, 24, 32]
+  ccarh/vivaldi/op8/amsterdam/op8n03ca.krn
+    smooth counts: [9, 9, 9, 9, 9, 9, 9, 12, 12, 12, 12, 12, 16, 16, 16, 16, 18, 24, 24, 36]
+  ccarh/vivaldi/op8/amsterdam/op8n04ca.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 27, 54]
+  ccarh/vivaldi/op8/amsterdam/op8n05aa.krn
+    smooth counts: [12, 12, 12, 12, 12, 16, 16, 16, 16, 24, 108]
+  ccarh/vivaldi/op8/amsterdam/op8n05ba.krn
+    smooth counts: [12, 24]
+  ccarh/vivaldi/op8/amsterdam/op8n05ca.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 12, 12, 12, 16, 16, 18, 18, 24, 32, 54]
+  ccarh/vivaldi/op8/amsterdam/op8n06aa.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 18, 48]
+  ccarh/vivaldi/op8/amsterdam/op8n06ba.krn
+    smooth counts: [8, 8, 9, 16, 18]
+  ccarh/vivaldi/op8/amsterdam/op8n06ca.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 18, 24]
+  ccarh/vivaldi/op8/amsterdam/op8n07aa.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 12, 12, 12, 12, 18, 18, 24, 32]
+  ccarh/vivaldi/op8/amsterdam/op8n07ca.krn
+    smooth counts: [8, 9, 12, 12, 24, 36]
+  ccarh/vivaldi/op8/amsterdam/op8n09aa.krn
+    smooth counts: [9, 9, 9, 9, 9, 9, 9, 12, 12, 12, 12, 12, 12, 12, 12, 18, 24, 24, 36]
+  ccarh/vivaldi/op8/amsterdam/op8n09ba.krn
+    smooth counts: [8, 12]
+  ccarh/vivaldi/op8/amsterdam/op8n09ca.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 12, 16, 16, 16, 18]
+  ccarh/vivaldi/op8/amsterdam/op8n10aa.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 12, 16, 16, 18, 24]
+  ccarh/vivaldi/op8/amsterdam/op8n10ba.krn
+    smooth counts: [8]
+  ccarh/vivaldi/op8/amsterdam/op8n10ca.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 12, 12, 16, 16]
+  ccarh/vivaldi/op8/amsterdam/op8n12aa.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 12, 12, 12, 24]
+  ccarh/vivaldi/op8/amsterdam/op8n12ca.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 12, 12, 12, 16, 18, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p01.krn
+    smooth counts: [8, 8, 12, 12, 18]
+  musedata/bach/keyboard/wtc-1/wtc1p02.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 16, 18, 18, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p03.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 18, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p04.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 12, 27]
+  musedata/bach/keyboard/wtc-1/wtc1p05.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 16, 36]
+  musedata/bach/keyboard/wtc-1/wtc1p06.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p07.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 12, 16, 192]
+  musedata/bach/keyboard/wtc-1/wtc1p08.krn
+    smooth counts: [8, 8, 8, 8]
+  musedata/bach/keyboard/wtc-1/wtc1p09.krn
+    smooth counts: [8, 9, 12, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p10.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 18, 18, 18, 24]
+  musedata/bach/keyboard/wtc-1/wtc1p11.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 16, 18, 27, 36]
+  musedata/bach/keyboard/wtc-1/wtc1p12.krn
+    smooth counts: [8, 8, 8, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p13.krn
+    smooth counts: [8, 8, 9, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p14.krn
+    smooth counts: [8, 8, 18, 64]
+  musedata/bach/keyboard/wtc-1/wtc1p15.krn
+    smooth counts: [8, 12, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p16.krn
+    smooth counts: [8, 9, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p17.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 36]
+  musedata/bach/keyboard/wtc-1/wtc1p18.krn
+    smooth counts: [8, 8, 8, 8, 16, 16, 18]
+  musedata/bach/keyboard/wtc-1/wtc1p19.krn
+    smooth counts: [8, 8, 9, 12, 12, 32, 36, 64]
+  musedata/bach/keyboard/wtc-1/wtc1p20.krn
+    smooth counts: [8, 9, 12, 12]
+  musedata/bach/keyboard/wtc-1/wtc1p22.krn
+    smooth counts: [8, 8, 9, 27]
+  musedata/bach/keyboard/wtc-1/wtc1p23.krn
+    smooth counts: [9, 32]
+  musedata/bach/keyboard/wtc-1/wtc1p24.krn
+    smooth counts: [8, 8, 9, 9, 12, 16, 16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p01.krn
+    smooth counts: [8, 8, 9, 12, 12, 32]
+  musedata/bach/keyboard/wtc-2/wtc2p02.krn
+    smooth counts: [8, 8, 8, 9, 12, 12]
+  musedata/bach/keyboard/wtc-2/wtc2p03.krn
+    smooth counts: [8, 9, 9, 16]
+  musedata/bach/keyboard/wtc-2/wtc2p04.krn
+    smooth counts: [8, 9, 36]
+  musedata/bach/keyboard/wtc-2/wtc2p06.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 12]
+  musedata/bach/keyboard/wtc-2/wtc2p08.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p09.krn
+    smooth counts: [8, 8, 9, 9, 9, 16, 16]
+  musedata/bach/keyboard/wtc-2/wtc2p10.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 12, 27]
+  musedata/bach/keyboard/wtc-2/wtc2p15.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 12, 16]
+  musedata/bach/keyboard/wtc-2/wtc2p16.krn
+    smooth counts: [9, 12, 24, 24]
+  musedata/bach/keyboard/wtc-2/wtc2p18.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 12, 16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p19.krn
+    smooth counts: [8, 8, 8, 9, 12, 48]
+  musedata/bach/keyboard/wtc-2/wtc2p20.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 16, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p22.krn
+    smooth counts: [8, 8, 9, 12, 12, 12, 16, 16, 18, 24, 27, 32, 48, 81]
+  musedata/bach/keyboard/wtc-2/wtc2p23.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 18]
+  musedata/bach/keyboard/wtc-2/wtc2p24.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 16, 16, 27]
+  musedata/corelli/op1/op01n01a.krn
+    smooth counts: [9]
+  musedata/corelli/op1/op01n01b.krn
+    smooth counts: [8, 9, 9, 18, 64]
+  musedata/corelli/op1/op01n01c.krn
+    smooth counts: [8, 16]
+  musedata/corelli/op1/op01n01d.krn
+    smooth counts: [8, 8, 8, 12, 18]
+  musedata/corelli/op1/op01n02a.krn
+    smooth counts: [8, 24]
+  musedata/corelli/op1/op01n02b.krn
+    smooth counts: [9, 16]
+  musedata/corelli/op1/op01n02d.krn
+    smooth counts: [8, 9, 9]
+  musedata/corelli/op1/op01n03b.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 16, 18, 18]
+  musedata/corelli/op1/op01n03c.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 16, 18, 18]
+  musedata/corelli/op1/op01n04b.krn
+    smooth counts: [12, 18]
+  musedata/corelli/op1/op01n04c.krn
+    smooth counts: [8, 8, 9, 12, 16]
+  musedata/corelli/op1/op01n04d.krn
+    smooth counts: [8, 9, 9, 9, 12]
+  musedata/corelli/op1/op01n05a.krn
+    smooth counts: [8, 8]
+  musedata/corelli/op1/op01n05b.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 24]
+  musedata/corelli/op1/op01n05c.krn
+    smooth counts: [9, 18]
+  musedata/corelli/op1/op01n05d.krn
+    smooth counts: [8, 18, 18]
+  musedata/corelli/op1/op01n06b.krn
+    smooth counts: [8, 8, 12, 12, 12, 12, 16, 16, 16, 18]
+  musedata/corelli/op1/op01n06c.krn
+    smooth counts: [8, 12]
+  musedata/corelli/op1/op01n06d.krn
+    smooth counts: [8, 9, 36]
+  musedata/corelli/op1/op01n07a.krn
+    smooth counts: [12]
+  musedata/corelli/op1/op01n07b.krn
+    smooth counts: [8]
+  musedata/corelli/op1/op01n07c.krn
+    smooth counts: [8, 9, 9, 9, 12, 16, 24, 24, 32]
+  musedata/corelli/op1/op01n08a.krn
+    smooth counts: [9]
+  musedata/corelli/op1/op01n08b.krn
+    smooth counts: [8]
+  musedata/corelli/op1/op01n08c.krn
+    smooth counts: [8, 9, 9, 9, 12, 18]
+  musedata/corelli/op1/op01n08d.krn
+    smooth counts: [8, 8, 8, 8]
+  musedata/corelli/op1/op01n09b.krn
+    smooth counts: [8, 12, 48]
+  musedata/corelli/op1/op01n09c.krn
+    smooth counts: [8, 8, 9]
+  musedata/corelli/op1/op01n09d.krn
+    smooth counts: [8, 8, 8, 16, 16, 18]
+  musedata/corelli/op1/op01n10a.krn
+    smooth counts: [8]
+  musedata/corelli/op1/op01n10b.krn
+    smooth counts: [8, 8, 9]
+  musedata/corelli/op1/op01n10c.krn
+    smooth counts: [9, 12, 12, 27]
+  musedata/corelli/op1/op01n10e.krn
+    smooth counts: [8, 8, 9, 12, 16, 36]
+  musedata/corelli/op1/op01n11b.krn
+    smooth counts: [12, 12, 16]
+  musedata/corelli/op1/op01n11d.krn
+    smooth counts: [8, 9, 16]
+  musedata/corelli/op1/op01n12a.krn
+    smooth counts: [8, 8, 9]
+  musedata/corelli/op1/op01n12b.krn
+    smooth counts: [8, 8, 8, 8]
+  musedata/corelli/op1/op01n12d.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 16, 18, 24, 32]
+  musedata/corelli/op3/op3n1-01.krn
+    smooth counts: [8]
+  musedata/corelli/op3/op3n1-02.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 24]
+  musedata/corelli/op3/op3n1-03.krn
+    smooth counts: [8, 8, 12]
+  musedata/corelli/op3/op3n1-04.krn
+    smooth counts: [9, 9, 12, 12, 16, 27]
+  musedata/corelli/op3/op3n10-02.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 27, 36]
+  musedata/corelli/op3/op3n10-04.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 18, 24]
+  musedata/corelli/op3/op3n11-01.krn
+    smooth counts: [9]
+  musedata/corelli/op3/op3n11-02.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  musedata/corelli/op3/op3n11-03.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op3/op3n11-04.krn
+    smooth counts: [8, 12]
+  musedata/corelli/op3/op3n12-01.krn
+    smooth counts: [8, 8, 12]
+  musedata/corelli/op3/op3n12-02.krn
+    smooth counts: [8, 9, 16]
+  musedata/corelli/op3/op3n12-03.krn
+    smooth counts: [8]
+  musedata/corelli/op3/op3n12-04.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 36]
+  musedata/corelli/op3/op3n12-05.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 16]
+  musedata/corelli/op3/op3n12-06.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 12, 16]
+  musedata/corelli/op3/op3n12-07.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  musedata/corelli/op3/op3n2-01.krn
+    smooth counts: [12, 18]
+  musedata/corelli/op3/op3n2-02.krn
+    smooth counts: [8, 8, 9]
+  musedata/corelli/op3/op3n2-03.krn
+    smooth counts: [8]
+  musedata/corelli/op3/op3n2-04.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 16, 16]
+  musedata/corelli/op3/op3n3-02.krn
+    smooth counts: [8, 12]
+  musedata/corelli/op3/op3n3-03.krn
+    smooth counts: [8, 8, 9]
+  musedata/corelli/op3/op3n3-04.krn
+    smooth counts: [8, 8, 8, 9, 18, 24, 27, 32]
+  musedata/corelli/op3/op3n4-01.krn
+    smooth counts: [12]
+  musedata/corelli/op3/op3n4-02.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  musedata/corelli/op3/op3n4-03.krn
+    smooth counts: [8]
+  musedata/corelli/op3/op3n4-04.krn
+    smooth counts: [8, 8, 9, 16, 27]
+  musedata/corelli/op3/op3n5-01.krn
+    smooth counts: [8, 8, 8]
+  musedata/corelli/op3/op3n5-02.krn
+    smooth counts: [9, 12, 18, 27]
+  musedata/corelli/op3/op3n5-04.krn
+    smooth counts: [9, 12, 18, 27, 48]
+  musedata/corelli/op3/op3n6-01.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  musedata/corelli/op3/op3n6-02.krn
+    smooth counts: [8]
+  musedata/corelli/op3/op3n6-03.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  musedata/corelli/op3/op3n6-04.krn
+    smooth counts: [8, 9, 9, 16]
+  musedata/corelli/op3/op3n7-01.krn
+    smooth counts: [8]
+  musedata/corelli/op3/op3n7-02.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12]
+  musedata/corelli/op3/op3n7-03.krn
+    smooth counts: [9]
+  musedata/corelli/op3/op3n7-04.krn
+    smooth counts: [9, 12]
+  musedata/corelli/op3/op3n8-02.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 24]
+  musedata/corelli/op3/op3n8-03.krn
+    smooth counts: [8]
+  musedata/corelli/op3/op3n8-04.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 16, 16, 16, 16, 16, 18, 32]
+  musedata/corelli/op3/op3n9-02.krn
+    smooth counts: [8, 8, 8, 9, 18]
+  musedata/corelli/op3/op3n9-04.krn
+    smooth counts: [9, 12]
+  musedata/corelli/op4/op4n1-03.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 16, 24]
+  musedata/corelli/op4/op4n10-03.krn
+    smooth counts: [8, 9, 9, 9, 12]
+  musedata/corelli/op4/op4n11-01.krn
+    smooth counts: [8, 9, 16]
+  musedata/corelli/op4/op4n11-02.krn
+    smooth counts: [8, 9, 9, 12, 12, 16, 18]
+  musedata/corelli/op4/op4n11-03.krn
+    smooth counts: [8, 16, 16, 24, 32, 36]
+  musedata/corelli/op4/op4n12-02.krn
+    smooth counts: [8, 8, 8, 8, 8, 8]
+  musedata/corelli/op4/op4n12-03.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op4/op4n2-01.krn
+    smooth counts: [8, 8, 8, 24]
+  musedata/corelli/op4/op4n2-03.krn
+    smooth counts: [8, 9, 9]
+  musedata/corelli/op4/op4n3-02.krn
+    smooth counts: [8, 8, 9, 12, 16, 18]
+  musedata/corelli/op4/op4n3-03.krn
+    smooth counts: [9, 12]
+  musedata/corelli/op4/op4n3-04.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  musedata/corelli/op4/op4n4-03.krn
+    smooth counts: [8]
+  musedata/corelli/op4/op4n5-01.krn
+    smooth counts: [9]
+  musedata/corelli/op4/op4n5-02.krn
+    smooth counts: [8, 8, 9, 16, 18]
+  musedata/corelli/op4/op4n5-03.krn
+    smooth counts: [8, 8]
+  musedata/corelli/op4/op4n5-04.krn
+    smooth counts: [9]
+  musedata/corelli/op4/op4n6-02.krn
+    smooth counts: [8, 9, 9, 16]
+  musedata/corelli/op4/op4n6-03.krn
+    smooth counts: [8, 9, 9, 9]
+  musedata/corelli/op4/op4n7-01.krn
+    smooth counts: [12]
+  musedata/corelli/op4/op4n7-03.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op4/op4n7-04.krn
+    smooth counts: [8, 8, 8, 9, 9, 24, 36]
+  musedata/corelli/op4/op4n8-02.krn
+    smooth counts: [8, 8, 9, 12, 16, 18]
+  musedata/corelli/op4/op4n8-03.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op4/op4n9-01.krn
+    smooth counts: [9, 12]
+  musedata/corelli/op4/op4n9-02.krn
+    smooth counts: [8]
+  musedata/corelli/op4/op4n9-04.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 16]
+  musedata/corelli/op5/op5n1-02.krn
+    smooth counts: [8, 8, 9, 9, 12, 32]
+  musedata/corelli/op5/op5n1-03.krn
+    smooth counts: [8]
+  musedata/corelli/op5/op5n1-04.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 16, 16]
+  musedata/corelli/op5/op5n10-01.krn
+    smooth counts: [8, 8]
+  musedata/corelli/op5/op5n10-02.krn
+    smooth counts: [9, 9, 12]
+  musedata/corelli/op5/op5n10-03.krn
+    smooth counts: [8]
+  musedata/corelli/op5/op5n10-04.krn
+    smooth counts: [9]
+  musedata/corelli/op5/op5n11-01.krn
+    smooth counts: [8, 12]
+  musedata/corelli/op5/op5n11-02.krn
+    smooth counts: [9, 9, 9, 12, 12, 18, 32]
+  musedata/corelli/op5/op5n11-04.krn
+    smooth counts: [8, 9, 9, 16]
+  musedata/corelli/op5/op5n11-05.krn
+    smooth counts: [8, 8]
+  musedata/corelli/op5/op5n2-01.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op5/op5n2-02.krn
+    smooth counts: [8, 8, 8, 12, 16, 18, 24]
+  musedata/corelli/op5/op5n2-03.krn
+    smooth counts: [8, 8, 8, 8, 8, 18, 27]
+  musedata/corelli/op5/op5n2-04.krn
+    smooth counts: [9]
+  musedata/corelli/op5/op5n2-05.krn
+    smooth counts: [8, 8, 8, 12, 12]
+  musedata/corelli/op5/op5n3-01.krn
+    smooth counts: [8, 8, 9]
+  musedata/corelli/op5/op5n3-02.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 16]
+  musedata/corelli/op5/op5n3-04.krn
+    smooth counts: [9, 9, 12, 18, 24]
+  musedata/corelli/op5/op5n3-05.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12]
+  musedata/corelli/op5/op5n4-01.krn
+    smooth counts: [8]
+  musedata/corelli/op5/op5n4-02.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 16, 16, 18, 18, 36]
+  musedata/corelli/op5/op5n4-03.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  musedata/corelli/op5/op5n4-05.krn
+    smooth counts: [9, 9, 9, 12, 24]
+  musedata/corelli/op5/op5n5-03.krn
+    smooth counts: [9]
+  musedata/corelli/op5/op5n5-04.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 27, 27, 27]
+  musedata/corelli/op5/op5n5-05.krn
+    smooth counts: [8, 8, 9, 12]
+  musedata/corelli/op5/op5n6-02.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16]
+  musedata/corelli/op5/op5n6-03.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  musedata/corelli/op5/op5n6-04.krn
+    smooth counts: [8]
+  musedata/corelli/op5/op5n6-05.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 12, 18]
+  musedata/corelli/op5/op5n7-01.krn
+    smooth counts: [8, 8, 8]
+  musedata/corelli/op5/op5n7-02.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12]
+  musedata/corelli/op5/op5n7-04.krn
+    smooth counts: [8, 8, 9, 16, 27]
+  musedata/corelli/op5/op5n8-01.krn
+    smooth counts: [8, 8, 12]
+  musedata/corelli/op5/op5n8-02.krn
+    smooth counts: [8, 9, 12, 12, 12]
+  musedata/corelli/op5/op5n8-03.krn
+    smooth counts: [8, 12]
+  musedata/corelli/op5/op5n8-04.krn
+    smooth counts: [8, 16]
+  musedata/corelli/op5/op5n9-01.krn
+    smooth counts: [9, 9]
+  musedata/corelli/op5/op5n9-02.krn
+    smooth counts: [8, 8, 8, 12, 12, 12, 16, 36]
+  musedata/corelli/op5/op5n9-04.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 12, 16, 16, 18, 24]
+  musedata/corelli/op6/op6n1-01.krn
+    smooth counts: [8, 8, 9, 12, 16]
+  musedata/corelli/op6/op6n1-02.krn
+    smooth counts: [8]
+  musedata/corelli/op6/op6n1-03.krn
+    smooth counts: [8, 9, 9, 9, 12, 18, 24, 27]
+  musedata/corelli/op6/op6n1-04.krn
+    smooth counts: [8, 9, 12]
+  musedata/corelli/op6/op6n1-05.krn
+    smooth counts: [8, 9, 9, 9, 12, 12, 18]
+  musedata/corelli/op6/op6n1-06.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 12, 12, 12, 12, 16, 24, 27]
+  musedata/corelli/op6/op6n10-01.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12]
+  musedata/corelli/op6/op6n10-02.krn
+    smooth counts: [8, 8, 9, 9, 12, 16]
+  musedata/corelli/op6/op6n10-04.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 27]
+  musedata/corelli/op6/op6n10-05.krn
+    smooth counts: [8, 16, 16]
+  musedata/corelli/op6/op6n10-06.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12]
+  musedata/corelli/op6/op6n11-01.krn
+    smooth counts: [8]
+  musedata/corelli/op6/op6n11-02.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 16, 24]
+  musedata/corelli/op6/op6n11-06bcd.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op6/op6n11-06fg.krn
+    smooth counts: [8, 8, 8, 8, 9, 12]
+  musedata/corelli/op6/op6n12-01.krn
+    smooth counts: [9, 9, 12]
+  musedata/corelli/op6/op6n12-02.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 16, 16, 16, 16, 24, 32, 36, 36]
+  musedata/corelli/op6/op6n12-03.krn
+    smooth counts: [9, 12]
+  musedata/corelli/op6/op6n12-04.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op6/op6n12-05.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  musedata/corelli/op6/op6n2-02.krn
+    smooth counts: [9, 9, 9, 18, 24, 48]
+  musedata/corelli/op6/op6n2-03.krn
+    smooth counts: [9, 9]
+  musedata/corelli/op6/op6n2-04.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 12]
+  musedata/corelli/op6/op6n3-01.krn
+    smooth counts: [8]
+  musedata/corelli/op6/op6n3-02.krn
+    smooth counts: [9, 9, 9, 12, 12, 18, 27]
+  musedata/corelli/op6/op6n3-04.krn
+    smooth counts: [8, 8, 8, 16, 18]
+  musedata/corelli/op6/op6n3-5abcd.krn
+    smooth counts: [8]
+  musedata/corelli/op6/op6n3-5efg.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 16, 18, 18]
+  musedata/corelli/op6/op6n4-01.krn
+    smooth counts: [9, 9, 9, 9, 9, 12, 12, 12, 16, 18, 32, 32]
+  musedata/corelli/op6/op6n4-02.krn
+    smooth counts: [8, 9, 16, 24]
+  musedata/corelli/op6/op6n4-03.krn
+    smooth counts: [9, 18]
+  musedata/corelli/op6/op6n4-04.krn
+    smooth counts: [8, 8, 12, 12, 18, 36]
+  musedata/corelli/op6/op6n4-05.krn
+    smooth counts: [8, 8, 8, 8]
+  musedata/corelli/op6/op6n5-01.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 12, 12, 12, 16, 16, 16, 18, 18, 27, 81]
+  musedata/corelli/op6/op6n5-02.krn
+    smooth counts: [8, 9, 9, 9]
+  musedata/corelli/op6/op6n5-05.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 12, 18, 24]
+  musedata/corelli/op6/op6n6-02.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 24, 24, 27, 64]
+  musedata/corelli/op6/op6n6-03.krn
+    smooth counts: [9, 12, 18]
+  musedata/corelli/op6/op6n6-04.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 16, 18, 18, 32]
+  musedata/corelli/op6/op6n6-05.krn
+    smooth counts: [8, 8, 8, 16]
+  musedata/corelli/op6/op6n7-02.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 24, 36]
+  musedata/corelli/op6/op6n7-03.krn
+    smooth counts: [8, 12, 16, 16, 18]
+  musedata/corelli/op6/op6n7-04.krn
+    smooth counts: [8, 12, 16, 18]
+  musedata/corelli/op6/op6n7-05.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 18]
+  musedata/corelli/op6/op6n7-06.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op6/op6n8-03.krn
+    smooth counts: [8, 8, 9, 9, 16, 16]
+  musedata/corelli/op6/op6n8-04.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 16, 18, 18, 18]
+  musedata/corelli/op6/op6n8-06.krn
+    smooth counts: [8, 9, 9, 9, 9, 9, 9, 16]
+  musedata/corelli/op6/op6n8-07.krn
+    smooth counts: [8, 8, 8, 8, 9, 12]
+  musedata/corelli/op6/op6n9-01.krn
+    smooth counts: [8, 9]
+  musedata/corelli/op6/op6n9-02.krn
+    smooth counts: [8, 9, 9, 12, 16, 18]
+  musedata/corelli/op6/op6n9-03.krn
+    smooth counts: [8, 8, 8]
+  musedata/corelli/op6/op6n9-04.krn
+    smooth counts: [8, 8, 8, 8]
+  musedata/corelli/op6/op6n9-06.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  musedata/vivaldi/op01/vivaldi-op01n01m02.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 18]
+  musedata/vivaldi/op01/vivaldi-op01n01m03.krn
+    smooth counts: [8, 12, 18]
+  musedata/vivaldi/op01/vivaldi-op01n01m04.krn
+    smooth counts: [8, 8]
+  musedata/vivaldi/op01/vivaldi-op01n02m01.krn
+    smooth counts: [8, 12]
+  musedata/vivaldi/op01/vivaldi-op01n02m02.krn
+    smooth counts: [8, 8, 9]
+  musedata/vivaldi/op01/vivaldi-op01n02m03.krn
+    smooth counts: [8, 9, 9, 12, 16, 16, 18, 24, 27]
+  musedata/vivaldi/op01/vivaldi-op01n02m04.krn
+    smooth counts: [12]
+  musedata/vivaldi/op01/vivaldi-op01n03m01.krn
+    smooth counts: [8, 8, 8, 9]
+  musedata/vivaldi/op01/vivaldi-op01n03m02.krn
+    smooth counts: [8, 9, 9, 9, 9, 9, 32]
+  musedata/vivaldi/op01/vivaldi-op01n03m04.krn
+    smooth counts: [8, 8, 8, 8]
+  musedata/vivaldi/op01/vivaldi-op01n04m02.krn
+    smooth counts: [8]
+  musedata/vivaldi/op01/vivaldi-op01n04m03.krn
+    smooth counts: [8, 9, 9, 9, 9, 9, 12, 12]
+  musedata/vivaldi/op01/vivaldi-op01n04m04.krn
+    smooth counts: [8]
+  musedata/vivaldi/op01/vivaldi-op01n04m05.krn
+    smooth counts: [8, 8, 16, 16, 18]
+  musedata/vivaldi/op01/vivaldi-op01n05m01.krn
+    smooth counts: [8, 8, 9, 12, 12]
+  musedata/vivaldi/op01/vivaldi-op01n05m02.krn
+    smooth counts: [8, 12, 12]
+  musedata/vivaldi/op01/vivaldi-op01n05m03.krn
+    smooth counts: [8, 9, 9, 12, 16, 18, 27]
+  musedata/vivaldi/op01/vivaldi-op01n05m04.krn
+    smooth counts: [8, 9]
+  musedata/vivaldi/op01/vivaldi-op01n06m01.krn
+    smooth counts: [8, 9]
+  musedata/vivaldi/op01/vivaldi-op01n06m02.krn
+    smooth counts: [8, 12, 12]
+  musedata/vivaldi/op01/vivaldi-op01n06m03.krn
+    smooth counts: [8]
+  musedata/vivaldi/op01/vivaldi-op01n06m04.krn
+    smooth counts: [8, 9, 9, 9]
+  musedata/vivaldi/op01/vivaldi-op01n07m01.krn
+    smooth counts: [8, 8, 9, 16]
+  musedata/vivaldi/op01/vivaldi-op01n07m02.krn
+    smooth counts: [8, 9, 12]
+  musedata/vivaldi/op01/vivaldi-op01n07m03.krn
+    smooth counts: [9, 18, 27]
+  musedata/vivaldi/op01/vivaldi-op01n07m04.krn
+    smooth counts: [8]
+  musedata/vivaldi/op01/vivaldi-op01n08m01.krn
+    smooth counts: [8, 8, 9, 12, 18, 24]
+  musedata/vivaldi/op01/vivaldi-op01n08m02.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 27]
+  musedata/vivaldi/op01/vivaldi-op01n08m03.krn
+    smooth counts: [8, 9]
+  musedata/vivaldi/op01/vivaldi-op01n08m04.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 16, 24]
+  musedata/vivaldi/op01/vivaldi-op01n09m01.krn
+    smooth counts: [9, 9]
+  musedata/vivaldi/op01/vivaldi-op01n09m02.krn
+    smooth counts: [9]
+  musedata/vivaldi/op01/vivaldi-op01n09m03.krn
+    smooth counts: [8, 8, 9, 9, 9, 16]
+  musedata/vivaldi/op01/vivaldi-op01n09m04.krn
+    smooth counts: [8, 12, 18]
+  musedata/vivaldi/op01/vivaldi-op01n10m02.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 18, 27, 72]
+  musedata/vivaldi/op01/vivaldi-op01n10m03.krn
+    smooth counts: [8, 8, 8]
+  musedata/vivaldi/op01/vivaldi-op01n11m01.krn
+    smooth counts: [8, 9, 12]
+  musedata/vivaldi/op01/vivaldi-op01n11m02.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 16]
+  musedata/vivaldi/op01/vivaldi-op01n11m03.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  musedata/vivaldi/op01/vivaldi-op01n11m04.krn
+    smooth counts: [8, 8, 8, 8, 9, 16]
+  musedata/vivaldi/op02/vivaldi-op02n01m01.krn
+    smooth counts: [8, 9, 16, 32]
+  musedata/vivaldi/op02/vivaldi-op02n01m02.krn
+    smooth counts: [8, 8, 9]
+  musedata/vivaldi/op02/vivaldi-op02n01m03.krn
+    smooth counts: [9, 16]
+  musedata/vivaldi/op02/vivaldi-op02n01m04.krn
+    smooth counts: [8, 8, 16, 18]
+  musedata/vivaldi/op02/vivaldi-op02n02m01.krn
+    smooth counts: [8, 8, 12, 12, 16, 24]
+  musedata/vivaldi/op02/vivaldi-op02n02m02.krn
+    smooth counts: [9]
+  musedata/vivaldi/op02/vivaldi-op02n02m03.krn
+    smooth counts: [12, 18]
+  musedata/vivaldi/op02/vivaldi-op02n03m01.krn
+    smooth counts: [8, 8, 8, 8, 9, 27]
+  musedata/vivaldi/op02/vivaldi-op02n03m02.krn
+    smooth counts: [8, 9, 9, 12, 16, 24]
+  musedata/vivaldi/op02/vivaldi-op02n03m04.krn
+    smooth counts: [8, 8, 9, 9, 9]
+  musedata/vivaldi/op02/vivaldi-op02n04m01.krn
+    smooth counts: [8, 9, 18]
+  musedata/vivaldi/op02/vivaldi-op02n04m02.krn
+    smooth counts: [8, 9, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 16, 18]
+  musedata/vivaldi/op02/vivaldi-op02n04m03.krn
+    smooth counts: [8]
+  musedata/vivaldi/op02/vivaldi-op02n04m04.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 12, 12, 16, 16]
+  musedata/vivaldi/op02/vivaldi-op02n05m01.krn
+    smooth counts: [9]
+  musedata/vivaldi/op02/vivaldi-op02n05m02.krn
+    smooth counts: [9, 9, 12]
+  musedata/vivaldi/op02/vivaldi-op02n05m03.krn
+    smooth counts: [8, 8, 12, 24]
+  musedata/vivaldi/op02/vivaldi-op02n06m01.krn
+    smooth counts: [8, 8, 9, 18, 36]
+  musedata/vivaldi/op02/vivaldi-op02n06m02.krn
+    smooth counts: [8, 8, 8, 8, 9, 36]
+  musedata/vivaldi/op02/vivaldi-op02n06m03.krn
+    smooth counts: [8, 9, 12, 16]
+  musedata/vivaldi/op02/vivaldi-op02n07m01.krn
+    smooth counts: [8, 8, 8, 12, 12, 16, 16]
+  musedata/vivaldi/op02/vivaldi-op02n07m02.krn
+    smooth counts: [8, 8, 9]
+  musedata/vivaldi/op02/vivaldi-op02n07m03.krn
+    smooth counts: [8, 8, 8, 18]
+  musedata/vivaldi/op02/vivaldi-op02n08m01.krn
+    smooth counts: [8]
+  musedata/vivaldi/op02/vivaldi-op02n08m02.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 18]
+  musedata/vivaldi/op02/vivaldi-op02n08m03.krn
+    smooth counts: [8, 16]
+  musedata/vivaldi/op02/vivaldi-op02n09m01.krn
+    smooth counts: [18, 27, 36]
+  musedata/vivaldi/op02/vivaldi-op02n09m02.krn
+    smooth counts: [8, 9, 12, 18, 24, 27, 32]
+  musedata/vivaldi/op02/vivaldi-op02n09m03.krn
+    smooth counts: [8, 9, 16]
+  musedata/vivaldi/op02/vivaldi-op02n10m01.krn
+    smooth counts: [8]
+  musedata/vivaldi/op02/vivaldi-op02n10m02.krn
+    smooth counts: [9]
+  musedata/vivaldi/op02/vivaldi-op02n10m03.krn
+    smooth counts: [8, 9, 16, 32]
+  musedata/vivaldi/op02/vivaldi-op02n11m01.krn
+    smooth counts: [8, 9]
+  musedata/vivaldi/op02/vivaldi-op02n11m02.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 16, 16, 18]
+  musedata/vivaldi/op02/vivaldi-op02n12m01.krn
+    smooth counts: [8, 8, 9, 9]
+  musedata/vivaldi/op02/vivaldi-op02n12m02.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 16, 18, 18, 18, 18]
+  musedata/vivaldi/op02/vivaldi-op02n12m03.krn
+    smooth counts: [12]
+  musedata/vivaldi/op02/vivaldi-op02n12m04.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 24, 24]
+  osu/classical/bach/inventions/inven01.krn
+    smooth counts: [8, 9, 12, 27, 32]
+  osu/classical/bach/inventions/inven02.krn
+    smooth counts: [8, 9, 12, 12, 16, 36]
+  osu/classical/bach/inventions/inven03.krn
+    smooth counts: [8, 8, 9, 12, 16]
+  osu/classical/bach/inventions/inven04.krn
+    smooth counts: [8, 9, 9, 12, 16]
+  osu/classical/bach/inventions/inven05.krn
+    smooth counts: [8, 8, 8, 8, 12, 12, 18, 36]
+  osu/classical/bach/inventions/inven06.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 16, 16, 16, 27, 32]
+  osu/classical/bach/inventions/inven07.krn
+    smooth counts: [9, 18, 32]
+  osu/classical/bach/inventions/inven08.krn
+    smooth counts: [8, 8, 8, 12, 16, 16, 16, 18, 24]
+  osu/classical/bach/inventions/inven09.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 18, 18, 48]
+  osu/classical/bach/inventions/inven10.krn
+    smooth counts: [8, 8, 9, 16]
+  osu/classical/bach/inventions/inven11.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 12, 27, 48]
+  osu/classical/bach/inventions/inven12.krn
+    smooth counts: [8, 8, 9, 9, 12, 18, 18, 24, 24, 27, 32, 54]
+  osu/classical/bach/inventions/inven13.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  osu/classical/bach/inventions/inven14.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 18]
+  osu/classical/bach/inventions/inven15.krn
+    smooth counts: [8, 8, 8, 8, 9]
+  osu/classical/bach/wtc-1/wtc1f01.krn
+    smooth counts: [8, 16, 24, 24, 24]
+  osu/classical/bach/wtc-1/wtc1f02.krn
+    smooth counts: [8, 8, 9, 9, 9, 16, 16, 18]
+  osu/classical/bach/wtc-1/wtc1f03.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 16, 16, 18, 18, 18, 24]
+  osu/classical/bach/wtc-1/wtc1f04.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12, 16, 16, 18, 18, 24, 24, 32, 48]
+  osu/classical/bach/wtc-1/wtc1f05.krn
+    smooth counts: [12, 12, 12, 12, 12, 16, 18, 18, 32]
+  osu/classical/bach/wtc-1/wtc1f06.krn
+    smooth counts: [8, 9, 9, 9, 12, 16, 16, 18, 24, 27, 27, 32]
+  osu/classical/bach/wtc-1/wtc1f07.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12, 16, 16, 27]
+  osu/classical/bach/wtc-1/wtc1f08.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 24, 32]
+  osu/classical/bach/wtc-1/wtc1f09.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 16, 18, 24, 24, 27, 72]
+  osu/classical/bach/wtc-1/wtc1f10.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 16, 18]
+  osu/classical/bach/wtc-1/wtc1f11.krn
+    smooth counts: [8, 9, 9, 9, 16, 16, 24, 36]
+  osu/classical/bach/wtc-1/wtc1f12.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 24, 96]
+  osu/classical/bach/wtc-1/wtc1f13.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 16]
+  osu/classical/bach/wtc-1/wtc1f14.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 16, 16, 18, 32, 54]
+  osu/classical/bach/wtc-1/wtc1f15.krn
+    smooth counts: [9, 9, 9, 9, 12, 12, 16, 16, 24, 24, 27, 32, 64]
+  osu/classical/bach/wtc-1/wtc1f16.krn
+    smooth counts: [9, 9, 9, 12, 16, 24]
+  osu/classical/bach/wtc-1/wtc1f17.krn
+    smooth counts: [8, 9, 9, 9, 16, 48, 54]
+  osu/classical/bach/wtc-1/wtc1f18.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 18]
+  osu/classical/bach/wtc-1/wtc1f19.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 18, 32]
+  osu/classical/bach/wtc-1/wtc1f21.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 18, 18, 18, 18, 18, 24, 27, 48]
+  osu/classical/bach/wtc-1/wtc1f22.krn
+    smooth counts: [8, 9, 9, 9]
+  osu/classical/bach/wtc-1/wtc1f23.krn
+    smooth counts: [8, 8, 9, 12, 12, 16, 18]
+  osu/classical/bach/wtc-1/wtc1f24.krn
+    smooth counts: [12, 12, 12, 12, 12, 16, 16, 16, 16, 18, 18, 18, 24, 32, 32, 48]
+  osu/classical/bach/wtc-2/wtc2f01.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 12, 27]
+  osu/classical/bach/wtc-2/wtc2f02.krn
+    smooth counts: [8, 8, 12, 18, 24, 24]
+  osu/classical/bach/wtc-2/wtc2f03.krn
+    smooth counts: [8, 9, 9, 12, 16, 27, 36]
+  osu/classical/bach/wtc-2/wtc2f04.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 16, 16, 48, 64]
+  osu/classical/bach/wtc-2/wtc2f05.krn
+    smooth counts: [18, 18]
+  osu/classical/bach/wtc-2/wtc2f06.krn
+    smooth counts: [8, 9, 9, 16, 16, 18]
+  osu/classical/bach/wtc-2/wtc2f07.krn
+    smooth counts: [8, 9, 12, 24, 27, 32]
+  osu/classical/bach/wtc-2/wtc2f08.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 16, 24, 48]
+  osu/classical/bach/wtc-2/wtc2f09.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 18, 18]
+  osu/classical/bach/wtc-2/wtc2f10.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 16, 18, 18, 18, 18, 18]
+  osu/classical/bach/wtc-2/wtc2f11.krn
+    smooth counts: [8, 9, 9, 9, 9, 12, 12, 12, 16, 72]
+  osu/classical/bach/wtc-2/wtc2f12.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 18, 32]
+  osu/classical/bach/wtc-2/wtc2f13.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 12, 16, 32]
+  osu/classical/bach/wtc-2/wtc2f14.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 16, 16, 18, 18, 24, 36, 36, 54]
+  osu/classical/bach/wtc-2/wtc2f15.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 12, 12, 12, 18, 18, 18, 24]
+  osu/classical/bach/wtc-2/wtc2f16.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 12, 16, 18, 27, 36]
+  osu/classical/bach/wtc-2/wtc2f17.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 16, 16, 18, 24]
+  osu/classical/bach/wtc-2/wtc2f18.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 12, 16, 18, 24, 27, 48]
+  osu/classical/bach/wtc-2/wtc2f19.krn
+    smooth counts: [8, 8, 8, 8, 9, 24, 36, 81]
+  osu/classical/bach/wtc-2/wtc2f20.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 12, 16, 18]
+  osu/classical/bach/wtc-2/wtc2f21.krn
+    smooth counts: [8, 9, 9, 12, 18, 32]
+  osu/classical/bach/wtc-2/wtc2f22.krn
+    smooth counts: [8, 8, 8, 12, 16, 24, 24, 24]
+  osu/classical/bach/wtc-2/wtc2f23.krn
+    smooth counts: [8, 8, 9, 9, 12, 12, 12, 18, 24, 54]
+  osu/classical/bach/wtc-2/wtc2f24.krn
+    smooth counts: [8, 9, 9, 16, 18]
+  users/craig/classical/bach/cello/bwv1007-01.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 24]
+  users/craig/classical/bach/cello/bwv1007-02.krn
+    smooth counts: [8, 8, 8, 9]
+  users/craig/classical/bach/cello/bwv1007-03.krn
+    smooth counts: [8, 8, 8, 9, 9, 16]
+  users/craig/classical/bach/cello/bwv1007-05.krn
+    smooth counts: [8]
+  users/craig/classical/bach/cello/bwv1007-07.krn
+    smooth counts: [8, 8, 8, 9]
+  users/craig/classical/bach/cello/bwv1010-01.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 16, 18, 24]
+  users/craig/classical/bach/cello/bwv1010-02.krn
+    smooth counts: [8, 9, 9, 32]
+  users/craig/classical/bach/cello/bwv1010-03.krn
+    smooth counts: [8, 8, 9, 12, 12, 24]
+  users/craig/classical/bach/cello/bwv1010-05.krn
+    smooth counts: [12]
+  users/craig/classical/bach/cello/bwv1010-07.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 24]
+  users/craig/classical/bach/cello/bwv1011-03.krn
+    smooth counts: [18]
+  users/craig/classical/bach/violin/partita1-2.krn
+    smooth counts: [8, 9, 9, 12, 18]
+  users/craig/classical/bach/violin/partita1-3.krn
+    smooth counts: [8, 9, 12, 12]
+  users/craig/classical/bach/violin/partita1-4.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 18, 18, 32, 48]
+  users/craig/classical/bach/violin/partita1-6.krn
+    smooth counts: [8, 16]
+  users/craig/classical/bach/violin/partita1-8.krn
+    smooth counts: [12, 12, 16]
+  users/craig/classical/bach/violin/partita2-1.krn
+    smooth counts: [8, 8, 8, 9, 18, 27]
+  users/craig/classical/bach/violin/partita2-4.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 16, 18, 32]
+  users/craig/classical/bach/violin/partita3-6.krn
+    smooth counts: [8, 12]
+  users/craig/classical/bach/violin/partita3-7.krn
+    smooth counts: [8, 9, 18]
+  users/craig/classical/buxtehude/op1/op1-1-1.krn
+    smooth counts: [9]
+  users/craig/classical/buxtehude/op1/op1-1-2.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 12, 16, 16, 18, 24]
+  users/craig/classical/buxtehude/op1/op1-1-4.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 12, 18, 36]
+  users/craig/classical/buxtehude/op1/op1-1-6.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16, 16, 16, 18, 18, 18, 24]
+  users/craig/classical/buxtehude/op1/op1-2-2.krn
+    smooth counts: [9, 9, 9, 12, 12, 12, 12, 12, 12, 12, 12, 16, 16, 16, 18, 18, 18, 18, 24, 24, 24, 36]
+  users/craig/classical/buxtehude/op1/op1-2-4.krn
+    smooth counts: [8, 8, 8, 8, 12, 16]
+  users/craig/classical/buxtehude/op1/op1-2-6.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 16, 18, 27]
+  users/craig/classical/buxtehude/op1/op1-3-1.krn
+    smooth counts: [8, 12]
+  users/craig/classical/buxtehude/op1/op1-3-2.krn
+    smooth counts: [9, 9, 9, 9, 12, 16, 16, 18, 18, 18, 27, 27, 36]
+  users/craig/classical/buxtehude/op1/op1-3-3.krn
+    smooth counts: [8, 16]
+  users/craig/classical/buxtehude/op1/op1-3-4.krn
+    smooth counts: [8, 8, 8, 8, 8, 16, 18, 27]
+  users/craig/classical/buxtehude/op1/op1-3-5.krn
+    smooth counts: [8, 9, 16]
+  users/craig/classical/buxtehude/op1/op1-3-6.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 24, 64]
+  users/craig/classical/buxtehude/op1/op1-4-1.krn
+    smooth counts: [9, 9, 9, 12, 12, 16, 16, 16, 32, 32, 32, 64]
+  users/craig/classical/buxtehude/op1/op1-4-3.krn
+    smooth counts: [8, 8, 8, 8, 8, 12, 12, 18]
+  users/craig/classical/frescobaldi/canzoni/canzoni01.krn
+    smooth counts: [8, 8, 8]
+  users/craig/classical/frescobaldi/canzoni/canzoni03.krn
+    smooth counts: [8, 9, 9, 12, 12, 12, 36]
+  users/craig/classical/frescobaldi/canzoni/canzoni04.krn
+    smooth counts: [8, 8, 8, 8, 9, 18]
+  users/craig/classical/frescobaldi/canzoni/canzoni05.krn
+    smooth counts: [8, 8, 9, 9, 9, 9]
+  users/craig/classical/frescobaldi/canzoni/canzoni06.krn
+    smooth counts: [8, 9, 9, 12, 12]
+  users/craig/classical/frescobaldi/canzoni/canzoni07.krn
+    smooth counts: [8, 8, 9, 24]
+  users/craig/classical/frescobaldi/canzoni/canzoni08.krn
+    smooth counts: [9, 9, 9, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni09.krn
+    smooth counts: [8, 8, 8, 8, 8, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni10.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni11.krn
+    smooth counts: [8, 8]
+  users/craig/classical/frescobaldi/canzoni/canzoni12.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 9, 12, 12, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni13.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 16, 32]
+  users/craig/classical/frescobaldi/canzoni/canzoni14.krn
+    smooth counts: [8, 8, 9, 9, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni15.krn
+    smooth counts: [8, 8, 8, 9, 12, 24, 48]
+  users/craig/classical/frescobaldi/canzoni/canzoni16.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 24]
+  users/craig/classical/frescobaldi/canzoni/canzoni17.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  users/craig/classical/frescobaldi/canzoni/canzoni18.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 18]
+  users/craig/classical/frescobaldi/canzoni/canzoni19.krn
+    smooth counts: [8, 8, 8, 12, 18]
+  users/craig/classical/frescobaldi/canzoni/canzoni20.krn
+    smooth counts: [8, 8, 16, 16, 27]
+  users/craig/classical/frescobaldi/canzoni/canzoni21.krn
+    smooth counts: [8, 8, 8, 9]
+  users/craig/classical/frescobaldi/canzoni/canzoni23.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 18]
+  users/craig/classical/frescobaldi/canzoni/canzoni24.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni25.krn
+    smooth counts: [8, 8, 9, 9, 12]
+  users/craig/classical/frescobaldi/canzoni/canzoni26.krn
+    smooth counts: [8, 8, 9]
+  users/craig/classical/frescobaldi/canzoni/canzoni27.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  users/craig/classical/frescobaldi/canzoni/canzoni28.krn
+    smooth counts: [8, 12]
+  users/craig/classical/frescobaldi/canzoni/canzoni29.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni30.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12, 12, 16, 18, 18, 24, 24, 36]
+  users/craig/classical/frescobaldi/canzoni/canzoni31.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12]
+  users/craig/classical/frescobaldi/canzoni/canzoni32.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 16, 18, 24]
+  users/craig/classical/frescobaldi/canzoni/canzoni34.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 16, 16, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni35.krn
+    smooth counts: [8, 9, 9, 9, 24]
+  users/craig/classical/frescobaldi/canzoni/canzoni37.krn
+    smooth counts: [8, 8, 12]
+  users/craig/classical/frescobaldi/canzoni/canzoni38.krn
+    smooth counts: [8, 9, 9, 9, 12, 16]
+  users/craig/classical/frescobaldi/canzoni/canzoni39.krn
+    smooth counts: [8, 8, 9, 9]
+  users/craig/classical/frescobaldi/canzoni/canzoni40.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 27]
+  users/craig/classical/handel/anthem.krn
+    smooth counts: [9]
+  users/craig/classical/handel/largo.krn
+    smooth counts: [8, 18]
+  users/craig/classical/monteverdi/contrafacta/coppini01.krn
+    smooth counts: [12, 12, 16]
+  users/craig/classical/monteverdi/contrafacta/coppini03.krn
+    smooth counts: [8]
+  users/craig/classical/monteverdi/contrafacta/coppini04.krn
+    smooth counts: [8, 8, 9, 9, 9, 9, 12, 12]
+  users/craig/classical/monteverdi/contrafacta/coppini05.krn
+    smooth counts: [8, 8]
+  users/craig/classical/monteverdi/contrafacta/coppini06.krn
+    smooth counts: [8, 9, 12, 12]
+  users/craig/classical/monteverdi/contrafacta/coppini08.krn
+    smooth counts: [12]
+  users/craig/classical/monteverdi/contrafacta/coppini09.krn
+    smooth counts: [8]
+  users/craig/classical/monteverdi/contrafacta/coppini10.krn
+    smooth counts: [8]
+  users/craig/classical/monteverdi/contrafacta/coppini17.krn
+    smooth counts: [8, 9, 9, 12, 12, 12, 12, 27, 32]
+  users/craig/classical/monteverdi/contrafacta/coppini18.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  users/craig/classical/monteverdi/contrafacta/coppini20.krn
+    smooth counts: [8, 8, 12]
+  users/craig/classical/scarlatti/longo/L001K514.krn
+    smooth counts: [8, 8, 8, 9, 16]
+  users/craig/classical/scarlatti/longo/L002K384.krn
+    smooth counts: [8, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L003K502.krn
+    smooth counts: [8, 8, 8, 9, 12, 12, 36]
+  users/craig/classical/scarlatti/longo/L004K158.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12, 16]
+  users/craig/classical/scarlatti/longo/L005K406.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L006K139.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 9, 12, 16, 16]
+  users/craig/classical/scarlatti/longo/L008K461.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 16, 16, 18, 27]
+  users/craig/classical/scarlatti/longo/L009K303.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 12, 24]
+  users/craig/classical/scarlatti/longo/L010K084.krn
+    smooth counts: [8, 8]
+  users/craig/classical/scarlatti/longo/L011K534.krn
+    smooth counts: [8, 8, 9, 9, 27, 32]
+  users/craig/classical/scarlatti/longo/L012K478.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 18, 18, 27]
+  users/craig/classical/scarlatti/longo/L013K060.krn
+    smooth counts: [8, 8, 8, 9, 12, 16]
+  users/craig/classical/scarlatti/longo/L014K492.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 12, 18, 24, 32]
+  users/craig/classical/scarlatti/longo/L015K160.krn
+    smooth counts: [8, 8, 8, 9, 9, 12]
+  users/craig/classical/scarlatti/longo/L016K306.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 12, 12, 16]
+  users/craig/classical/scarlatti/longo/L027K238.krn
+    smooth counts: [8, 8, 18, 24, 36]
+  users/craig/classical/scarlatti/longo/L051K166.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 16, 16, 16]
+  users/craig/classical/scarlatti/longo/L052K165.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 16]
+  users/craig/classical/scarlatti/longo/L053K075.krn
+    smooth counts: [8, 8, 9, 16]
+  users/craig/classical/scarlatti/longo/L054K200.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 12, 12, 16, 24]
+  users/craig/classical/scarlatti/longo/L055K330.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12]
+  users/craig/classical/scarlatti/longo/L056K281.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 16, 16, 18, 27]
+  users/craig/classical/scarlatti/longo/L064K148.krn
+    smooth counts: [8, 8, 9, 12, 16]
+  users/craig/classical/scarlatti/longo/L101K156.krn
+    smooth counts: [8, 8, 8, 36]
+  users/craig/classical/scarlatti/longo/L127K348.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 32]
+  users/craig/classical/scarlatti/longo/L154K235.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 16]
+  users/craig/classical/scarlatti/longo/L164K491.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 12, 12, 12, 16, 18, 18]
+  users/craig/classical/scarlatti/longo/L166K085.krn
+    smooth counts: [8, 8, 8, 12, 16, 18, 36]
+  users/craig/classical/scarlatti/longo/L178K258.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 16, 16]
+  users/craig/classical/scarlatti/longo/L188K525.krn
+    smooth counts: [8, 8, 9, 16, 18]
+  users/craig/classical/scarlatti/longo/L198K296.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 16, 18, 24, 27, 27]
+  users/craig/classical/scarlatti/longo/L240K369.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 12, 12, 16, 16, 36]
+  users/craig/classical/scarlatti/longo/L267K052.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 12, 16, 24, 27]
+  users/craig/classical/scarlatti/longo/L301K049.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 12, 16, 18, 18]
+  users/craig/classical/scarlatti/longo/L302K372.krn
+    smooth counts: [8, 8]
+  users/craig/classical/scarlatti/longo/L303K170.krn
+    smooth counts: [8, 8, 8, 32]
+  users/craig/classical/scarlatti/longo/L304K470.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 16, 16, 32]
+  users/craig/classical/scarlatti/longo/L305K251.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L306K345.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 12, 12, 24, 24]
+  users/craig/classical/scarlatti/longo/L307K269.krn
+    smooth counts: [8, 9, 9, 9, 12, 16]
+  users/craig/classical/scarlatti/longo/L319K442.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 12, 16, 18, 81]
+  users/craig/classical/scarlatti/longo/L333K425.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L334K122.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 16]
+  users/craig/classical/scarlatti/longo/L335K055.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 72]
+  users/craig/classical/scarlatti/longo/L336K093.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 16, 16, 54]
+  users/craig/classical/scarlatti/longo/L337K336.krn
+    smooth counts: [8, 9, 9]
+  users/craig/classical/scarlatti/longo/L338K450.krn
+    smooth counts: [8, 8, 8, 9, 16, 18]
+  users/craig/classical/scarlatti/longo/L339K512.krn
+    smooth counts: [9, 9, 12, 12, 24]
+  users/craig/classical/scarlatti/longo/L340K476.krn
+    smooth counts: [8, 9, 12, 12, 12, 12]
+  users/craig/classical/scarlatti/longo/L341K320.krn
+    smooth counts: [8, 9, 9, 12, 16]
+  users/craig/classical/scarlatti/longo/L342K220.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 12, 16, 16, 36]
+  users/craig/classical/scarlatti/longo/L343K434.krn
+    smooth counts: [8, 9, 9, 9, 18, 18, 27]
+  users/craig/classical/scarlatti/longo/L344K114.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 24, 72]
+  users/craig/classical/scarlatti/longo/L345K113.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 16, 18, 24, 27]
+  users/craig/classical/scarlatti/longo/L346K408.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 12, 12, 12, 16, 16, 18, 24]
+  users/craig/classical/scarlatti/longo/L347K227.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 16, 24, 27]
+  users/craig/classical/scarlatti/longo/L348K244.krn
+    smooth counts: [8, 9, 12, 16, 18, 18, 18, 18, 27]
+  users/craig/classical/scarlatti/longo/L349K146.krn
+    smooth counts: [8, 8, 8, 9, 16, 24]
+  users/craig/classical/scarlatti/longo/L350K498.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 24, 27, 36]
+  users/craig/classical/scarlatti/longo/L351K225.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 36, 36]
+  users/craig/classical/scarlatti/longo/L366K001.krn
+    smooth counts: [8, 8, 8, 9, 12, 16, 18, 32, 32]
+  users/craig/classical/scarlatti/longo/L400K360.krn
+    smooth counts: [8, 8, 8, 8, 8, 12, 12, 16, 16, 18]
+  users/craig/classical/scarlatti/longo/L481K025.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 16, 16]
+  users/craig/classical/scarlatti/longo/L503K513.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12]
+  users/craig/classical/scarlatti/longo/L523K205.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 12, 16, 16, 18, 18, 27]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================

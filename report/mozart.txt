@@ -1,0 +1,157 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-29 12:58
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 16
+Successfully analysed  : 16
+Errors / empty         : 0
+Files with motifs      : 16
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 746
+Min / Max count                   : 1 / 129
+Mean / Median                     : 9.3 / 6
+Counts >= 8                       : 304
+
+Frequency table of ALL occurrence counts (count : frequency):
+     1 : 1
+     2 : 87
+     3 : 92
+     4 : 101
+     5 : 59
+     6 : 66
+     7 : 36
+     8 : 47  <-- smooth (2^a·3^b)
+     9 : 31  <-- smooth (2^a·3^b)
+    10 : 27
+    11 : 21
+    12 : 21  <-- smooth (2^a·3^b)
+    13 : 14
+    14 : 20
+    15 : 8
+    16 : 15  <-- smooth (2^a·3^b)
+    17 : 9
+    18 : 5  <-- smooth (2^a·3^b)
+    19 : 15
+    20 : 3
+    21 : 4
+    22 : 3
+    23 : 5
+    24 : 6  <-- smooth (2^a·3^b)
+    25 : 8
+    26 : 3
+    27 : 8  <-- smooth (2^a·3^b)
+    28 : 3
+    29 : 3
+    30 : 2
+    31 : 2
+    32 : 2  <-- smooth (2^a·3^b)
+    33 : 1
+    34 : 2
+    35 : 2
+    36 : 2  <-- smooth (2^a·3^b)
+    40 : 1
+    41 : 1
+    50 : 1
+    53 : 2
+    54 : 1  <-- smooth (2^a·3^b)
+    57 : 1
+    74 : 1
+    85 : 1
+   106 : 1
+   108 : 1  <-- smooth (2^a·3^b)
+   129 : 1
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 129]
+Smooth numbers in range: 17  (out of 122 integers)
+  [8, 9, 12, 16, 18, 24, 27, 32, 36, 48, 54, 64, 72, 81, 96, 108, 128]
+
+Observed smooth counts (>= 8): 139
+  8 × 47
+  9 × 31
+  12 × 21
+  16 × 15
+  18 × 5
+  24 × 6
+  27 × 8
+  32 × 2
+  36 × 2
+  54 × 1
+  108 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 17 / 122 = 0.1393  (13.93%)
+     Expected smooth counts: 42.4
+     Observed smooth counts: 139
+     Enrichment ratio       : 3.28x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.2401  (24.01%)
+     Expected smooth counts : 73.0
+     Observed smooth counts : 139
+     Enrichment ratio       : 1.90x
+
+  >> Modest enrichment. Smooth counts slightly over-represented.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  music21/mozart/k155/movement1.mxl
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 16, 18, 18, 24, 27, 36]
+  music21/mozart/k155/movement2.mxl
+    smooth counts: [8, 8, 8, 8, 8, 9]
+  music21/mozart/k155/movement3.mxl
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 12, 27]
+  music21/mozart/k156/movement1.mxl
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 16, 16, 18, 27, 32, 54]
+  music21/mozart/k156/movement2.mxl
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12]
+  music21/mozart/k156/movement3.mxl
+    smooth counts: [8, 9, 16]
+  music21/mozart/k156/movement4.mxl
+    smooth counts: [8]
+  music21/mozart/k458/movement1.mxl
+    smooth counts: [8, 9, 9, 9, 9, 12, 12, 12, 16, 16, 16, 16, 18, 27, 36, 108]
+  music21/mozart/k458/movement2.mxl
+    smooth counts: [8, 9, 9, 12]
+  music21/mozart/k458/movement3.mxl
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 12, 16, 24, 27, 32]
+  music21/mozart/k458/movement4.mxl
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 16, 16, 24, 24, 27, 27]
+  music21/mozart/k545/movement1_exposition.mxl
+    smooth counts: [12, 16]
+  music21/mozart/k80/movement1.mxl
+    smooth counts: [8, 8, 9, 9, 12, 12, 24, 27]
+  music21/mozart/k80/movement2.mxl
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 16, 18]
+  music21/mozart/k80/movement3.mxl
+    smooth counts: [9, 9]
+  music21/mozart/k80/movement4.mxl
+    smooth counts: [16, 24]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================
