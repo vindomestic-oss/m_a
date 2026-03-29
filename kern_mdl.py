@@ -1343,6 +1343,298 @@ def prepare_grand_staff(content: str) -> str:
     return "".join(result)
 
 
+def _beam_groups_from_mei(mei_str):
+    """
+    Parse MEI and return {nid: beam_group_id (int)} for every note inside a <beam>.
+    Notes in the same <beam> element share the same beam_group_id.
+    Nested beams (e.g. inside tuplets) are treated independently.
+    """
+    import xml.etree.ElementTree as _ET
+    _PFX = '{%s}' % _MEI_NS
+    tree = _ET.fromstring(mei_str)
+    beam_of = {}
+    bid = 0
+    for beam_el in tree.iter(_PFX + 'beam'):
+        nids = [n.get(_XML_ID) for n in beam_el
+                if n.tag.split('}')[-1] == 'note' and n.get(_XML_ID)
+                and not n.get('grace')]
+        if len(nids) >= 2:
+            for nid in nids:
+                if nid:
+                    beam_of[nid] = bid
+            bid += 1
+    return beam_of
+
+
+def _mini_staff_svg(notes_info, beam_of=None):
+    """
+    Draw a tiny SVG staff with proper durations: beams, flags, dots, stems.
+    notes_info: [(pname_lower, oct_int, dur_q, midi_val, nid), ...]
+    beam_of: optional {nid: beam_group_id} from _beam_groups_from_mei
+    """
+    if not notes_info:
+        return ''
+    _DS = {'c': 0, 'd': 1, 'e': 2, 'f': 3, 'g': 4, 'a': 5, 'b': 6}
+    _CH = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
+
+    def dp(p, o):
+        return o * 7 + _DS.get(p, 0)
+
+    def flag_count(dq):
+        """Number of flags/beams: 0=quarter+, 1=eighth, 2=sixteenth, 3=32nd.
+        Triplets are unnormalised: triplet-8th → 1 flag, triplet-16th → 2 flags."""
+        # Detect triplet: dq*3 is a power of 2
+        x = dq * 3
+        d = x / 2 if any(abs(x - 2**p) < 0.02 for p in range(-4, 5)) else dq
+        if d >= 1.0:   return 0
+        if d >= 0.5:   return 1
+        if d >= 0.25:  return 2
+        return 3
+
+    def is_dotted(dq):
+        return abs(dq / 1.5 * 8 - round(dq / 1.5 * 8)) < 0.02 and abs(dq - round(dq)) > 0.1
+
+    def is_triplet(dq):
+        x = dq * 3
+        return any(abs(x - 2**p) < 0.02 for p in range(-3, 4))
+
+    avg   = sum(dp(p, o) for p, o, *_ in notes_info) / len(notes_info)
+    treble = avg >= 26
+    bot_d  = 30 if treble else 18   # E4 / G2
+    top_d  = bot_d + 8
+    mid_d  = bot_d + 4              # middle line
+
+    LS    = 4;    HLS   = 2.0
+    HR    = 3.0;  VR    = 2.0
+    STEM  = 14
+    CLEF_W = 14;  NSP = 16
+    PL = 3;       PR  = 5
+    BEAM_W = 2.2; BEAM_GAP = 3.0
+    FLAG_W = 5;   FLAG_H = 4
+
+    n      = len(notes_info)
+    all_d  = [dp(p, o) for p, o, *_ in notes_info]
+    flags  = [flag_count(t[2]) for t in notes_info]
+
+    extra_top = max(0, int((max(all_d) - top_d) * HLS) + 6) if max(all_d) > top_d else 0
+    extra_bot = max(0, int((bot_d - min(all_d)) * HLS) + 5) if min(all_d) < bot_d else 0
+    PT   = 10 + extra_top
+    PB   = 5  + extra_bot
+    SBOT = PT + 4 * LS
+    W    = PL + CLEF_W + n * NSP + PR
+    H    = PT + 4 * LS + PB
+
+    # ── note y positions ──────────────────────────────────────────────────────
+    note_ys = [SBOT - (dp(p, o) - bot_d) * HLS for p, o, *_ in notes_info]
+    note_xs = [PL + CLEF_W + j * NSP + NSP // 2 for j in range(n)]
+    mid_y   = SBOT - (mid_d - bot_d) * HLS
+
+    # ── beam groups ───────────────────────────────────────────────────────────
+    # Each group: {'j0': int, 'j1': int, 'fc': int, 'dir': str}
+    beam_groups = []
+    if beam_of is not None and len(notes_info[0]) >= 5:
+        # Build groups from MEI beam membership of consecutive notes
+        j = 0
+        while j < n:
+            nid = notes_info[j][4]
+            bid = beam_of.get(nid)
+            if bid is not None:
+                k = j + 1
+                while k < n and len(notes_info[k]) >= 5 and beam_of.get(notes_info[k][4]) == bid:
+                    k += 1
+                if k - j >= 2:
+                    fc = min(flag_count(notes_info[i][2]) for i in range(j, k))
+                    if fc >= 1:
+                        beam_groups.append({'j0': j, 'j1': k - 1, 'fc': fc})
+                        j = k
+                        continue
+            j += 1
+    # Fallback: beam all if same flag count ≥ 1
+    if not beam_groups and n >= 2 and min(flags) >= 1 and len(set(flags)) == 1:
+        beam_groups.append({'j0': 0, 'j1': n - 1, 'fc': flags[0]})
+
+    beamed = [False] * n
+    for bg in beam_groups:
+        for j in range(bg['j0'], bg['j1'] + 1):
+            beamed[j] = True
+
+    # ── stem directions ───────────────────────────────────────────────────────
+    dirs = [None] * n
+    for bg in beam_groups:
+        ys_g = [note_ys[j] for j in range(bg['j0'], bg['j1'] + 1)]
+        bdir = 'up' if sum(1 for y in ys_g if y >= mid_y) >= len(ys_g) / 2 else 'down'
+        bg['dir'] = bdir
+        for j in range(bg['j0'], bg['j1'] + 1):
+            dirs[j] = bdir
+    for j in range(n):
+        if dirs[j] is None:
+            dirs[j] = 'up' if note_ys[j] >= mid_y else 'down'
+
+    # stem x and raw tip y
+    stem_xs = [(note_xs[j] + HR - 0.5 if dirs[j] == 'up' else note_xs[j] - HR + 0.5)
+               for j in range(n)]
+    stem_ys = [(note_ys[j] - STEM if dirs[j] == 'up' else note_ys[j] + STEM)
+               for j in range(n)]
+
+    # Level/slant each beam group
+    for bg in beam_groups:
+        j0, j1, bdir = bg['j0'], bg['j1'], bg['dir']
+        y0, yn = stem_ys[j0], stem_ys[j1]
+        x0, xn = stem_xs[j0], stem_xs[j1]
+        for j in range(j0, j1 + 1):
+            t = (stem_xs[j] - x0) / (xn - x0) if xn != x0 else 0
+            target = y0 + t * (yn - y0)
+            if bdir == 'up':
+                stem_ys[j] = min(target, note_ys[j] - STEM)
+            else:
+                stem_ys[j] = max(target, note_ys[j] + STEM)
+
+    # ── SVG output ────────────────────────────────────────────────────────────
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+           f'style="display:inline-block;vertical-align:middle;flex-shrink:0">']
+
+    # staff lines
+    x1 = PL + CLEF_W - 2;  x2 = W - PR
+    for i in range(5):
+        y = SBOT - i * LS
+        out.append(f'<line x1="{x1}" y1="{y}" x2="{x2}" y2="{y}" '
+                   f'stroke="#666" stroke-width="0.6"/>')
+
+    # clef
+    cc  = '\U0001D11E' if treble else '\U0001D122'
+    cfs = LS * 5 if treble else LS * 3
+    cy0 = SBOT + (1 if treble else 0)
+    out.append(f'<text x="{PL}" y="{cy0}" font-size="{cfs}" '
+               f'font-family="serif" fill="#555">{cc}</text>')
+
+    # ── beams (drawn before note heads) ──────────────────────────────────────
+    # Beams pack from stem tip TOWARD the note head:
+    #   stems UP   → beams go DOWN from tip (y increases)  → offset = +bl*BEAM_GAP
+    #   stems DOWN → beams go UP from tip  (y decreases)   → offset = -bl*BEAM_GAP
+    # In both cases offset = bl * BEAM_GAP * sign  (sign=+1 UP, -1 DOWN),
+    # and beam_y = stem_tip + offset.
+
+    def _beam_line(xs, ys, xe, ye):
+        return (f'<line x1="{xs:.1f}" y1="{ys:.1f}" x2="{xe:.1f}" y2="{ye:.1f}" '
+                f'stroke="#555" stroke-width="{BEAM_W:.1f}"/>')
+
+    for bg in beam_groups:
+        j0, j1, fc, bdir = bg['j0'], bg['j1'], bg['fc'], bg['dir']
+        sign = 1 if bdir == 'up' else -1   # +1 = beams go downward from tip
+
+        def _by(tip_y, bl):
+            return tip_y + bl * BEAM_GAP * sign
+
+        # Full beams at levels 0..fc-1 (span whole group)
+        for bl in range(fc):
+            out.append(_beam_line(stem_xs[j0], _by(stem_ys[j0], bl),
+                                  stem_xs[j1], _by(stem_ys[j1], bl)))
+
+        # Partial / extra beams for notes with more flags than group minimum
+        max_fc = max(flags[jj] for jj in range(j0, j1 + 1))
+        for bl in range(fc, max_fc):
+            jj = j0
+            while jj <= j1:
+                if flags[jj] > bl:
+                    kk = jj + 1
+                    while kk <= j1 and flags[kk] > bl:
+                        kk += 1
+                    if kk - jj >= 2:
+                        out.append(_beam_line(stem_xs[jj], _by(stem_ys[jj], bl),
+                                              stem_xs[kk - 1], _by(stem_ys[kk - 1], bl)))
+                    else:
+                        # partial beam toward adjacent note
+                        pdir = 1 if jj == j0 else -1   # right for first, left otherwise
+                        xe = stem_xs[jj] + pdir * NSP * 0.4
+                        # y on the slope of the beam
+                        if stem_xs[j1] != stem_xs[j0]:
+                            t  = (stem_xs[jj] - stem_xs[j0]) / (stem_xs[j1] - stem_xs[j0])
+                            ty = stem_ys[j0] + t * (stem_ys[j1] - stem_ys[j0])
+                        else:
+                            ty = stem_ys[jj]
+                        out.append(_beam_line(stem_xs[jj], _by(ty, bl), xe, _by(ty, bl)))
+                    jj = kk
+                else:
+                    jj += 1
+
+        # triplet "3" label — placed outside the beam group (away from note heads)
+        if is_triplet(notes_info[j0][2]):
+            # for UP: above stem tip (y smaller); for DOWN: below stem tip (y larger)
+            br_y = stem_ys[j0] - sign * 5
+            mid_x = (stem_xs[j0] + stem_xs[j1]) / 2
+            out.append(f'<text x="{mid_x:.1f}" y="{br_y:.1f}" font-size="6" '
+                       f'text-anchor="middle" font-family="sans-serif" fill="#666">3</text>')
+
+    # ── notes ─────────────────────────────────────────────────────────────────
+    for j, note_t in enumerate(notes_info):
+        pn, oi, dq, mv = note_t[0], note_t[1], note_t[2], note_t[3]
+        cx  = note_xs[j]
+        cy  = note_ys[j]
+        d_v = dp(pn, oi)
+
+        # accidental
+        nat = (oi + 1) * 12 + _CH.get(pn, 0)
+        acc = mv - nat
+        if acc:
+            ac = '\u266f' if acc > 0 else '\u266d'
+            out.append(f'<text x="{cx - 5}" y="{cy + 2:.1f}" font-size="7" '
+                       f'font-family="serif" fill="#555">{ac}</text>')
+
+        # note head
+        filled = dq < 2.0
+        fill   = '#555' if filled else 'white'
+        out.append(f'<ellipse cx="{cx}" cy="{cy:.1f}" rx="{HR}" ry="{VR}" '
+                   f'fill="{fill}" stroke="#555" stroke-width="0.7" '
+                   f'transform="rotate(-15,{cx},{cy:.1f})"/>')
+
+        # augmentation dot
+        if is_dotted(dq):
+            out.append(f'<circle cx="{cx + HR + 2:.1f}" cy="{cy - 0.5:.1f}" '
+                       f'r="1" fill="#555"/>')
+
+        # stem
+        if dq < 4.0:
+            sx = stem_xs[j]; sy = stem_ys[j]
+            out.append(f'<line x1="{sx:.1f}" y1="{cy:.1f}" x2="{sx:.1f}" y2="{sy:.1f}" '
+                       f'stroke="#555" stroke-width="0.7"/>')
+
+            # individual flags (when not beamed)
+            if not beamed[j] and flags[j] >= 1:
+                for fi in range(flags[j]):
+                    fy = sy + fi * (FLAG_H + 1) * (1 if dirs[j] == 'up' else -1)
+                    if dirs[j] == 'up':
+                        out.append(f'<path d="M{sx:.1f},{fy:.1f} '
+                                   f'C{sx+FLAG_W*0.7:.1f},{fy:.1f} '
+                                   f'{sx+FLAG_W:.1f},{fy+FLAG_H*0.5:.1f} '
+                                   f'{sx+FLAG_W*0.8:.1f},{fy+FLAG_H:.1f}" '
+                                   f'stroke="#555" stroke-width="0.8" fill="none"/>')
+                    else:
+                        out.append(f'<path d="M{sx:.1f},{fy:.1f} '
+                                   f'C{sx+FLAG_W*0.7:.1f},{fy:.1f} '
+                                   f'{sx+FLAG_W:.1f},{fy-FLAG_H*0.5:.1f} '
+                                   f'{sx+FLAG_W*0.8:.1f},{fy-FLAG_H:.1f}" '
+                                   f'stroke="#555" stroke-width="0.8" fill="none"/>')
+
+        # ledger lines below staff
+        if d_v < bot_d:
+            for ld in range(bot_d - 2, d_v - 1, -2):
+                ly = SBOT + (bot_d - ld) * HLS
+                out.append(f'<line x1="{cx-HR-1:.1f}" y1="{ly:.1f}" '
+                           f'x2="{cx+HR+1:.1f}" y2="{ly:.1f}" '
+                           f'stroke="#555" stroke-width="0.6"/>')
+
+        # ledger lines above staff
+        if d_v > top_d:
+            for ld in range(top_d + 2, d_v + 2, 2):
+                ly = SBOT - (ld - bot_d) * HLS
+                out.append(f'<line x1="{cx-HR-1:.1f}" y1="{ly:.1f}" '
+                           f'x2="{cx+HR+1:.1f}" y2="{ly:.1f}" '
+                           f'stroke="#555" stroke-width="0.6"/>')
+
+    out.append('</svg>')
+    return ''.join(out)
+
+
 def render_score(path: str, version: str = "1") -> tuple:
     """Returns (html, n_pages, version). Raises RuntimeError on failure."""
     check_file(path)
@@ -1398,10 +1690,16 @@ def render_score(path: str, version: str = "1") -> tuple:
                 base = _PITCH_CLASS.get(pname.lower(), 0) + (oct_int + 1) * 12
                 acc = _ACC_SFX.get(midi_val - base, '')
                 nid_labels[nid] = pname.upper() + acc
+        # nid → (nid, pname, oct_int, dur_q, midi_val, onset) for mini-staff SVG
+        nid_to_note = {n[0]: n for _ns in _voices_s.values() for n in _ns}
+        # beam group membership: nid → beam_group_id
+        beam_of = _beam_groups_from_mei(mei_str)
     except Exception:
         all_seqs = []
         _beat_dur_q_s = 1.0
         nid_labels = {}
+        nid_to_note = {}
+        beam_of = {}
 
     def _is_smooth(k):
         """True if k = 2^a * 3^b (a,b >= 0)."""
@@ -1449,6 +1747,13 @@ def render_score(path: str, version: str = "1") -> tuple:
             cnt_html = _bold(cnt)
         mdl = m.get('mdl', 0)
         mdl_html = f'<b>{mdl}</b>' if mdl > 0 else f'<span style="color:#bbb">{mdl}</span>'
+        first_nids = m.get('occs', [[]])[0] if m.get('occs') else []
+        notes_info = []
+        for nid in first_nids:
+            if nid in nid_to_note:
+                _, pn, oi, dq, mv, _ = nid_to_note[nid]
+                notes_info.append((pn.lower(), oi, dq, mv, nid))
+        staff_svg = _mini_staff_svg(notes_info, beam_of)
         return (
             f'<tr data-midx="{i}" data-count="{m["count"]}" data-mdl="{mdl}" data-length="{m["length"]}" '
             f'style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
@@ -1458,8 +1763,11 @@ def render_score(path: str, version: str = "1") -> tuple:
             f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
             f'background:{m["color"]};margin-right:5px;vertical-align:middle"></span>'
             f'<b>M{i+1}</b>{phase_html}</td>'
-            f'<td style="padding:5px 16px 5px 0;font-family:monospace;font-size:11px">'
-            f'{" &nbsp; ".join(m["pattern"])}</td>'
+            f'<td style="padding:3px 16px 3px 0">'
+            f'<div style="display:flex;align-items:center;gap:8px">'
+            f'<span style="font-family:monospace;font-size:11px;white-space:nowrap">'
+            f'{" &nbsp; ".join(m["pattern"])}</span>'
+            f'{staff_svg}</div></td>'
             f'<td style="padding:5px 10px 5px 0;text-align:center">&times;{cnt_html}</td>'
             f'<td style="padding:5px 8px 5px 0;text-align:center;color:#888">{m["length"]}</td>'
             f'<td style="padding:5px 0;text-align:right;font-size:11px;color:#557">{mdl_html}</td>'
