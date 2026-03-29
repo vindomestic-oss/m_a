@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# version: 2026-03-29
 """
 Kern Score Reader
 - tkinter: file browser (main thread)
