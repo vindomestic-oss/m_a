@@ -1,0 +1,283 @@
+========================================================================
+KERN FILE MOTIF META-ANALYSIS
+Generated: 2026-03-28 23:16
+========================================================================
+
+========================================================================
+1. FILES PROCESSED
+========================================================================
+Total kern files found : 65
+Successfully analysed  : 65
+Errors / empty         : 0
+Files with motifs      : 65
+
+========================================================================
+2. OCCURRENCE COUNT OVERVIEW
+========================================================================
+Total motif-occurrences collected : 3211
+Min / Max count                   : 2 / 167
+Mean / Median                     : 9.5 / 6
+Counts >= 8                       : 1308
+
+Frequency table of ALL occurrence counts (count : frequency):
+     2 : 180
+     3 : 275
+     4 : 527
+     5 : 324
+     6 : 378
+     7 : 219
+     8 : 244  <-- smooth (2^a·3^b)
+     9 : 122  <-- smooth (2^a·3^b)
+    10 : 120
+    11 : 105
+    12 : 101  <-- smooth (2^a·3^b)
+    13 : 75
+    14 : 67
+    15 : 34
+    16 : 46  <-- smooth (2^a·3^b)
+    17 : 31
+    18 : 24  <-- smooth (2^a·3^b)
+    19 : 30
+    20 : 27
+    21 : 30
+    22 : 18
+    23 : 11
+    24 : 12  <-- smooth (2^a·3^b)
+    25 : 11
+    26 : 14
+    27 : 15  <-- smooth (2^a·3^b)
+    28 : 19
+    29 : 10
+    30 : 9
+    31 : 8
+    32 : 13  <-- smooth (2^a·3^b)
+    33 : 6
+    34 : 11
+    35 : 6
+    36 : 5  <-- smooth (2^a·3^b)
+    37 : 5
+    38 : 4
+    39 : 4
+    40 : 5
+    41 : 4
+    42 : 1
+    43 : 4
+    44 : 2
+    45 : 6
+    46 : 2
+    47 : 6
+    49 : 2
+    50 : 1
+    51 : 1
+    52 : 2
+    53 : 2
+    54 : 1  <-- smooth (2^a·3^b)
+    55 : 2
+    57 : 3
+    58 : 1
+    59 : 6
+    60 : 1
+    62 : 1
+    63 : 1
+    64 : 1  <-- smooth (2^a·3^b)
+    67 : 1
+    69 : 2
+    71 : 1
+    72 : 1  <-- smooth (2^a·3^b)
+    75 : 2
+    78 : 1
+    82 : 1
+    90 : 1
+    91 : 1
+    92 : 1
+    98 : 1
+   103 : 1
+   135 : 1
+   167 : 1
+
+========================================================================
+3. SMOOTH NUMBERS (2^A·3^B) OBSERVED AS OCCURRENCE COUNTS
+========================================================================
+Range analysed        : [8, 167]
+Smooth numbers in range: 19  (out of 160 integers)
+  [8, 9, 12, 16, 18, 24, 27, 32, 36, 48, 54, 64, 72, 81, 96, 108, 128, 144, 162]
+
+Observed smooth counts (>= 8): 585
+  8 × 244
+  9 × 122
+  12 × 101
+  16 × 46
+  18 × 24
+  24 × 12
+  27 × 15
+  32 × 13
+  36 × 5
+  54 × 1
+  64 × 1
+  72 × 1
+
+========================================================================
+4. STATISTICAL TEST – ARE SMOOTH COUNTS OVER-REPRESENTED?
+========================================================================
+Two null models compared:
+
+  A) UNIFORM prior: every integer in [8, max] equally likely
+     Smooth density        : 19 / 160 = 0.1187  (11.88%)
+     Expected smooth counts: 155.3
+     Observed smooth counts: 585
+     Enrichment ratio       : 3.77x
+
+  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer
+     (weight 1/k, reflects that high occurrence counts are less
+      common in musical analysis regardless of smoothness)
+     Smooth log-density     : 0.2245  (22.45%)
+     Expected smooth counts : 293.6
+     Observed smooth counts : 585
+     Enrichment ratio       : 1.99x
+
+  >> Modest enrichment. Smooth counts slightly over-represented.
+
+========================================================================
+5. PER-FILE BREAKDOWN (FILES WHERE ANY MOTIF COUNT IS SMOOTH >= 8)
+========================================================================
+  users/craig/classical/scarlatti/longo/L001K514.krn
+    smooth counts: [8, 8, 8, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L002K384.krn
+    smooth counts: [8, 9, 12, 18]
+  users/craig/classical/scarlatti/longo/L003K502.krn
+    smooth counts: [8, 8, 9, 12]
+  users/craig/classical/scarlatti/longo/L004K158.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 16, 24]
+  users/craig/classical/scarlatti/longo/L005K406.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L006K139.krn
+    smooth counts: [8, 8, 8, 9, 9, 9, 9, 9, 9, 12, 16, 16]
+  users/craig/classical/scarlatti/longo/L008K461.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 16, 18, 27]
+  users/craig/classical/scarlatti/longo/L009K303.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 12]
+  users/craig/classical/scarlatti/longo/L010K084.krn
+    smooth counts: [8, 8]
+  users/craig/classical/scarlatti/longo/L011K534.krn
+    smooth counts: [8, 8, 8, 9, 9, 24, 27, 32]
+  users/craig/classical/scarlatti/longo/L012K478.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 8, 12, 18, 18, 27]
+  users/craig/classical/scarlatti/longo/L013K060.krn
+    smooth counts: [8, 8, 9, 12]
+  users/craig/classical/scarlatti/longo/L014K492.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 24]
+  users/craig/classical/scarlatti/longo/L015K160.krn
+    smooth counts: [8, 8, 8, 9, 12]
+  users/craig/classical/scarlatti/longo/L016K306.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 12, 12, 16]
+  users/craig/classical/scarlatti/longo/L027K238.krn
+    smooth counts: [8, 24]
+  users/craig/classical/scarlatti/longo/L051K166.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 16]
+  users/craig/classical/scarlatti/longo/L052K165.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L053K075.krn
+    smooth counts: [8, 8, 9, 9]
+  users/craig/classical/scarlatti/longo/L054K200.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 12, 12, 18, 24]
+  users/craig/classical/scarlatti/longo/L055K330.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12]
+  users/craig/classical/scarlatti/longo/L056K281.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 16, 16, 18, 27]
+  users/craig/classical/scarlatti/longo/L064K148.krn
+    smooth counts: [8, 8, 9, 12, 16, 27]
+  users/craig/classical/scarlatti/longo/L101K156.krn
+    smooth counts: [8, 8, 8, 9, 12, 36]
+  users/craig/classical/scarlatti/longo/L127K348.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 32]
+  users/craig/classical/scarlatti/longo/L154K235.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 16]
+  users/craig/classical/scarlatti/longo/L164K491.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 12, 12, 12, 16, 18, 18]
+  users/craig/classical/scarlatti/longo/L166K085.krn
+    smooth counts: [8, 8, 12, 12, 16, 18]
+  users/craig/classical/scarlatti/longo/L178K258.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 16, 16, 18]
+  users/craig/classical/scarlatti/longo/L188K525.krn
+    smooth counts: [8, 8, 9, 16, 18]
+  users/craig/classical/scarlatti/longo/L198K296.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 12, 18, 24, 27, 27, 27, 32]
+  users/craig/classical/scarlatti/longo/L240K369.krn
+    smooth counts: [8, 8, 9, 9, 9, 12, 12, 16, 16, 32]
+  users/craig/classical/scarlatti/longo/L267K052.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 12, 12, 27]
+  users/craig/classical/scarlatti/longo/L301K049.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 12, 16, 16, 16, 16, 32, 64]
+  users/craig/classical/scarlatti/longo/L302K372.krn
+    smooth counts: [8, 8, 9, 32]
+  users/craig/classical/scarlatti/longo/L303K170.krn
+    smooth counts: [8, 16, 32]
+  users/craig/classical/scarlatti/longo/L304K470.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 12, 16, 16, 32]
+  users/craig/classical/scarlatti/longo/L305K251.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12]
+  users/craig/classical/scarlatti/longo/L306K345.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 12, 12, 24, 24]
+  users/craig/classical/scarlatti/longo/L307K269.krn
+    smooth counts: [8, 8, 8, 8, 9, 12, 12, 16, 16]
+  users/craig/classical/scarlatti/longo/L319K442.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 16, 18]
+  users/craig/classical/scarlatti/longo/L333K425.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 36]
+  users/craig/classical/scarlatti/longo/L334K122.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 12, 16]
+  users/craig/classical/scarlatti/longo/L335K055.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 9, 9, 12, 12, 16]
+  users/craig/classical/scarlatti/longo/L336K093.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 16, 16, 54]
+  users/craig/classical/scarlatti/longo/L337K336.krn
+    smooth counts: [8, 8, 9, 9]
+  users/craig/classical/scarlatti/longo/L338K450.krn
+    smooth counts: [8, 8, 8, 9, 9, 16, 18]
+  users/craig/classical/scarlatti/longo/L339K512.krn
+    smooth counts: [9, 9, 12, 12, 24]
+  users/craig/classical/scarlatti/longo/L340K476.krn
+    smooth counts: [8, 9, 12, 12, 12, 12, 24]
+  users/craig/classical/scarlatti/longo/L341K320.krn
+    smooth counts: [8, 9, 9, 12, 16]
+  users/craig/classical/scarlatti/longo/L342K220.krn
+    smooth counts: [8, 8, 9, 9, 12, 16, 16, 27, 36, 36]
+  users/craig/classical/scarlatti/longo/L343K434.krn
+    smooth counts: [8, 9, 9]
+  users/craig/classical/scarlatti/longo/L344K114.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 12, 12, 24]
+  users/craig/classical/scarlatti/longo/L345K113.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 12, 12, 12, 16, 18, 27]
+  users/craig/classical/scarlatti/longo/L346K408.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 12, 12, 16, 16, 32]
+  users/craig/classical/scarlatti/longo/L347K227.krn
+    smooth counts: [8, 8, 8, 9, 9, 12, 12, 16, 18, 27, 32, 72]
+  users/craig/classical/scarlatti/longo/L348K244.krn
+    smooth counts: [8, 9, 12, 16, 18, 18, 18, 18, 27, 27, 36]
+  users/craig/classical/scarlatti/longo/L349K146.krn
+    smooth counts: [8, 8, 9, 12]
+  users/craig/classical/scarlatti/longo/L350K498.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 12, 12, 24, 32]
+  users/craig/classical/scarlatti/longo/L351K225.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12]
+  users/craig/classical/scarlatti/longo/L366K001.krn
+    smooth counts: [8, 8, 8, 9, 12, 16, 18, 32, 32]
+  users/craig/classical/scarlatti/longo/L400K360.krn
+    smooth counts: [8, 8, 8, 8, 8, 8, 12, 12, 16, 16, 18]
+  users/craig/classical/scarlatti/longo/L481K025.krn
+    smooth counts: [8, 8, 8, 8, 9, 9, 12, 16, 16]
+  users/craig/classical/scarlatti/longo/L503K513.krn
+    smooth counts: [8, 8, 8, 9, 9]
+  users/craig/classical/scarlatti/longo/L523K205.krn
+    smooth counts: [8, 8, 8, 8, 8, 9, 9, 12, 12, 12, 16, 18, 18, 27]
+
+========================================================================
+6. REFERENCE: ALL SMOOTH NUMBERS 2^A·3^B IN [1, 256]
+========================================================================
+     1     2     3     4     6     8     9    12    16    18    24    27
+    32    36    48    54    64    72    81    96   108   128   144   162
+   192   216   243   256
+
+========================================================================
+END OF REPORT
+========================================================================
