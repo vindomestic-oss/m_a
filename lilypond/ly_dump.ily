@@ -39,6 +39,10 @@
    (let ((name (ly:music-property m 'name)))
      (cond
 
+       ;; ── Grace notes (appoggiatura, acciaccatura, \grace) — skip, don't advance onset
+       ((memq name '(GraceMusic AppoggiaturaMusic AcciaccaturaMusic SlashedGraceMusic))
+        onset)
+
        ;; ── Relative octave: resolve in-place, then recurse into inner element
        ((eq? name 'RelativeOctaveMusic)
         (let ((ref (ly:music-property m 'pitch (ly:make-pitch 0 0 0))))
@@ -67,29 +71,56 @@
                (arts  (ly:music-property m 'articulations '()))
                (tie   (any (lambda (a)
                              (eq? (ly:music-property a 'name) 'TieEvent))
-                           arts)))
+                           arts))
+               ;; b8\rest → NoteEvent with RestEvent in articulations (pitched rest)
+               (is-rest (any (lambda (a)
+                               (eq? (ly:music-property a 'name) 'RestEvent))
+                             arts)))
           (when (and %dump-port (ly:pitch? pitch) (ly:duration? dur))
             (let ((len (ly:duration-length dur)))
-              (dump-write
-               "{\"t\":\"N\""
-               ",\"on\":\"" (dump-onset onset) "\""
-               ",\"semi\":"  (modulo (ly:pitch-semitones pitch) 12)
-               ",\"oct\":"   (ly:pitch-octave pitch)
-               ",\"step\":"  (ly:pitch-notename pitch)
-               ",\"log\":"   (ly:duration-log dur)
-               ",\"dots\":"  (ly:duration-dot-count dur)
-               ",\"st\":\"" staff "\""
-               ",\"vc\":\"" voice "\""
-               ",\"tie\":"  (if tie "true" "false")
-               "}")
+              (if is-rest
+                  ;; Pitched rest (b8\rest) — emit as R, not N
+                  (dump-write
+                   "{\"t\":\"R\""
+                   ",\"on\":\"" (dump-onset onset) "\""
+                   ",\"dur\":\"" (dump-onset len) "\""
+                   ",\"st\":\"" staff "\""
+                   ",\"vc\":\"" voice "\""
+                   "}")
+                  (dump-write
+                   "{\"t\":\"N\""
+                   ",\"on\":\"" (dump-onset onset) "\""
+                   ",\"dur\":\"" (dump-onset len) "\""
+                   ",\"semi\":"  (modulo (ly:pitch-semitones pitch) 12)
+                   ",\"oct\":"   (ly:pitch-octave pitch)
+                   ",\"step\":"  (ly:pitch-notename pitch)
+                   ",\"st\":\"" staff "\""
+                   ",\"vc\":\"" voice "\""
+                   ",\"tie\":"  (if tie "true" "false")
+                   "}"))
               (ly:moment-add onset len)))
           ;; if no duration (shouldn't happen for normal notes) return onset
           (if (ly:duration? dur)
               (ly:moment-add onset (ly:duration-length dur))
               onset)))
 
-       ;; ── Rest / skip / spacer — advance time only
-       ((memq name '(RestEvent SkipEvent))
+       ;; ── Rest — emit R event and advance time; SkipEvent advances only
+       ((eq? name 'RestEvent)
+        (let ((dur (ly:music-property m 'duration)))
+          (when (and %dump-port (ly:duration? dur))
+            (let ((len (ly:duration-length dur)))
+              (dump-write
+               "{\"t\":\"R\""
+               ",\"on\":\"" (dump-onset onset) "\""
+               ",\"dur\":\"" (dump-onset len) "\""
+               ",\"st\":\"" staff "\""
+               ",\"vc\":\"" voice "\""
+               "}")))
+          (if (ly:duration? dur)
+              (ly:moment-add onset (ly:duration-length dur))
+              onset)))
+
+       ((eq? name 'SkipEvent)
         (let ((dur (ly:music-property m 'duration)))
           (if (ly:duration? dur)
               (ly:moment-add onset (ly:duration-length dur))
@@ -100,18 +131,10 @@
        ((eq? name 'ContextChange)
         onset)  ;; no-op here; sequential loop handles it
 
-       ;; ── Multi-measure rest — try to get duration, else skip
-       ((eq? name 'MultiMeasureRestMusic)
-        ;; MultiMeasureRestMusic has 'elements with a MultiMeasureRestEvent
-        (let loop ((es (ly:music-property m 'elements '())) (t onset))
-          (if (null? es) t
-              (loop (cdr es) (dump-traverse (car es) t staff voice)))))
-
-       ((eq? name 'MultiMeasureRestEvent)
-        (let ((dur (ly:music-property m 'duration)))
-          (if (ly:duration? dur)
-              (ly:moment-add onset (ly:duration-length dur))
-              onset)))
+       ;; ── Multi-measure rest (R1*3/4) — advance onset by total music length
+       ;; ly:music-length handles multiplied durations correctly
+       ((memq name '(MultiMeasureRestMusic MultiMeasureRestEvent))
+        (ly:moment-add onset (ly:music-length m)))
 
        ;; ── Time signature — emit event and don't advance onset
        ((eq? name 'TimeSignatureMusic)
@@ -156,14 +179,18 @@
        ((eq? name 'ContextSpeccedMusic)
         (let* ((ctype (ly:music-property m 'context-type 'Voice))
                (cid   (ly:music-property m 'context-id ""))
+               (is-new (ly:music-property m 'create-new-context #f))
                (is-staff (memq ctype '(Staff TabStaff DrumStaff RhythmicStaff)))
                (new-staff
                 (if is-staff
                     (if (string-null? cid)
-                        ;; anonymous Staff: assign a unique numbered ID
-                        (begin
-                          (set! %dump-staff-counter (+ %dump-staff-counter 1))
-                          (number->string %dump-staff-counter))
+                        ;; Only auto-number for \new Staff (create-new-context=#t).
+                        ;; Property overrides (create-new-context=#f) keep current staff.
+                        (if is-new
+                            (begin
+                              (set! %dump-staff-counter (+ %dump-staff-counter 1))
+                              (number->string %dump-staff-counter))
+                            staff)
                         cid)
                     staff))
                (new-voice

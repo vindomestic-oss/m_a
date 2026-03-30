@@ -14,7 +14,7 @@ Usage:
   python lilypond/convert_ly_direct.py --dry-run
 """
 
-import argparse, json, os, re, subprocess, sys, tempfile
+import argparse, copy, json, os, re, subprocess, sys, tempfile
 from pathlib import Path
 from fractions import Fraction
 
@@ -132,10 +132,11 @@ def run_lilypond(ly_path: Path) -> list[dict] | None:
 
 def _onset_frac(on_str: str) -> Fraction:
     """Parse "n/d" or "n" onset string → Fraction (in quarter notes)."""
+    # LilyPond moments are in whole notes; music21 offsets are in quarter notes → ×4
     if '/' in on_str:
         n, d = on_str.split('/')
-        return Fraction(int(n), int(d))
-    return Fraction(int(on_str))
+        return Fraction(int(n) * 4, int(d))
+    return Fraction(int(on_str) * 4)
 
 
 def _alter_from_semi(step: int, semi: int) -> float:
@@ -150,16 +151,9 @@ def _alter_from_semi(step: int, semi: int) -> float:
     return float(diff)
 
 
-def _dur_from_log_dots(log: int, dots: int) -> m21dur.Duration:
-    """Convert LilyPond duration-log + dots to music21 Duration."""
-    # log: 0=whole, 1=half, 2=quarter, 3=8th, 4=16th, 5=32nd, 6=64th
-    # quarterLength = 4 / 2^log
-    base_ql = Fraction(4, 2**log) if log >= 0 else Fraction(4 * (2**(-log)))
-    ql = base_ql
-    dot_val = base_ql
-    for _ in range(dots):
-        dot_val = dot_val / 2
-        ql += dot_val
+def _dur_from_moment_str(dur_str: str) -> m21dur.Duration:
+    """Parse a LilyPond moment duration string 'n/d' (whole notes) → music21 Duration."""
+    ql = _onset_frac(dur_str)  # _onset_frac already multiplies by 4 → quarter notes
     return m21dur.Duration(quarterLength=float(ql))
 
 
@@ -176,7 +170,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
 
     for ev in note_events:
         t = ev.get('t')
-        if t == 'N':
+        if t in ('N', 'R'):
             st = ev.get('st', '1')
             vc = ev.get('vc', '1')
             by_voice[(st, vc)].append(ev)
@@ -195,7 +189,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
     seen = set()
     staff_ids = []
     for ev in note_events:
-        if ev.get('t') == 'N':
+        if ev.get('t') in ('N', 'R'):
             st = ev.get('st', '1')
             if st not in seen:
                 seen.add(st)
@@ -217,87 +211,182 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
         on = _onset_frac(ks['on'])
         ks_map[on] = ks
 
-    for staff_id in staff_ids:
-        part = m21.stream.Part()
-        part.id = f'Staff{staff_id}'
+    from music21 import tie as m21tie
 
-        # Collect all notes for this staff across all voices
+    for staff_id in staff_ids:
+        # Collect all notes for this staff, sorted by onset then voice
         staff_notes = []
         for (st, vc), evs in by_voice.items():
             if st == staff_id:
                 for ev in evs:
                     staff_notes.append((ev, vc))
-
-        # Sort by onset then voice
         staff_notes.sort(key=lambda x: (_onset_frac(x[0]['on']), x[1]))
 
-        # Create a flat stream, let music21 handle measure creation
-        flat = m21.stream.Part()
-
-        # Insert time signatures
-        inserted_ts = set()
-        for on_frac, (num, den) in sorted(ts_map.items()):
-            if on_frac not in inserted_ts:
-                ts = meter.TimeSignature(f'{num}/{den}')
-                flat.insert(float(on_frac), ts)
-                inserted_ts.add(on_frac)
-
-        # Insert key signatures
-        for on_frac, ks_ev in sorted(ks_map.items()):
-            step  = ks_ev['step']
-            semi  = ks_ev['semi']
-            mode  = ks_ev.get('mode', 'major')
-            pname = STEP_NAMES[step]
-            alter = _alter_from_semi(step, semi)
-            try:
-                p = m21pitch.Pitch(pname)
-                p.octave = None
-                if alter == 1.0:  p = m21pitch.Pitch(pname + '#')
-                elif alter == -1.0: p = m21pitch.Pitch(pname + '-')
-                ks = key.Key(p.name, mode)
-                flat.insert(float(on_frac), ks)
-            except Exception:
-                pass
-
-        # Insert notes
+        # Collect voice IDs in order of first appearance
+        seen_vc: set = set()
+        voice_ids_for_staff: list = []
         for ev, vc in staff_notes:
+            if vc not in seen_vc:
+                seen_vc.add(vc)
+                voice_ids_for_staff.append(vc)
+
+        # Mark tie-stop: for each voice the next note after a tie=true note
+        tie_stop_indices: set = set()
+        by_vc: dict[str, list] = {}
+        for i, (ev, vc) in enumerate(staff_notes):
+            by_vc.setdefault(vc, []).append(i)
+        for vc, indices in by_vc.items():
+            for j, i in enumerate(indices):
+                if staff_notes[i][0].get('tie') and staff_notes[i][0].get('t', 'N') == 'N':
+                    for k in range(j + 1, len(indices)):
+                        ni = indices[k]
+                        if staff_notes[ni][0].get('t', 'N') == 'N':
+                            tie_stop_indices.add(ni)
+                            break
+
+        def _make_note_or_rest(ev, i):
+            """Return a music21 Note or Rest from a JSON event dict."""
+            ev_type = ev.get('t', 'N')
+            d = _dur_from_moment_str(ev['dur'])
+            if ev_type == 'R':
+                r = m21note.Rest()
+                r.duration = d
+                return r
             step  = ev['step']
             semi  = ev['semi']
             ly_oct = ev['oct']
-            log   = ev['log']
-            dots  = ev['dots']
-            on_frac = _onset_frac(ev['on'])
-
             pname = STEP_NAMES[step]
             alter = _alter_from_semi(step, semi)
-            std_oct = ly_oct + 4  # LilyPond oct 0 = middle C = C4
+            std_oct = ly_oct + 4
+            p = m21pitch.Pitch(pname)
+            p.octave = std_oct
+            if alter == 1.0:    p.accidental = m21pitch.Accidental('sharp')
+            elif alter == -1.0: p.accidental = m21pitch.Accidental('flat')
+            elif alter == 2.0:  p.accidental = m21pitch.Accidental('double-sharp')
+            elif alter == -2.0: p.accidental = m21pitch.Accidental('double-flat')
+            elif alter == 0.5:  p.accidental = m21pitch.Accidental('half-sharp')
+            elif alter == -0.5: p.accidental = m21pitch.Accidental('half-flat')
+            n = m21note.Note()
+            n.pitch = p
+            n.duration = d
+            is_tie_start = bool(ev.get('tie'))
+            is_tie_stop  = i in tie_stop_indices
+            if is_tie_start and is_tie_stop:
+                n.tie = m21tie.Tie('continue')
+            elif is_tie_start:
+                n.tie = m21tie.Tie('start')
+            elif is_tie_stop:
+                n.tie = m21tie.Tie('stop')
+            return n
 
+        def _make_flat(include_sigs=True) -> m21.stream.Part:
+            """Create an empty flat Part with time/key sigs."""
+            flat = m21.stream.Part()
+            if include_sigs:
+                inserted_ts: set = set()
+                for on_frac, (num, den) in sorted(ts_map.items()):
+                    if on_frac not in inserted_ts:
+                        flat.insert(float(on_frac), meter.TimeSignature(f'{num}/{den}'))
+                        inserted_ts.add(on_frac)
+                for on_frac, ks_ev in sorted(ks_map.items()):
+                    s = ks_ev['step']; sm = ks_ev['semi']
+                    mode = ks_ev.get('mode', 'major')
+                    pname = STEP_NAMES[s]
+                    alter = _alter_from_semi(s, sm)
+                    try:
+                        p = m21pitch.Pitch(pname)
+                        p.octave = None
+                        if alter == 1.0:  p = m21pitch.Pitch(pname + '#')
+                        elif alter == -1.0: p = m21pitch.Pitch(pname + '-')
+                        flat.insert(float(on_frac), key.Key(p.name, mode))
+                    except Exception:
+                        pass
+            return flat
+
+        # Build one flat stream per voice
+        voice_flats: dict[str, m21.stream.Part] = {}
+        for vc_id in voice_ids_for_staff:
+            voice_flats[vc_id] = _make_flat(include_sigs=True)
+
+        for i, (ev, vc) in enumerate(staff_notes):
             try:
-                p = m21pitch.Pitch(pname)
-                p.octave = std_oct
-                if alter == 1.0:    p.accidental = m21pitch.Accidental('sharp')
-                elif alter == -1.0: p.accidental = m21pitch.Accidental('flat')
-                elif alter == 2.0:  p.accidental = m21pitch.Accidental('double-sharp')
-                elif alter == -2.0: p.accidental = m21pitch.Accidental('double-flat')
-                elif alter == 0.5:  p.accidental = m21pitch.Accidental('half-sharp')
-                elif alter == -0.5: p.accidental = m21pitch.Accidental('half-flat')
+                obj = _make_note_or_rest(ev, i)
+                on_frac = _onset_frac(ev['on'])
+                voice_flats[vc].insert(float(on_frac), obj)
+            except Exception:
+                pass
 
-                d = _dur_from_log_dots(log, dots)
-                n = m21note.Note()
-                n.pitch = p
-                n.duration = d
-                flat.insert(float(on_frac), n)
-            except Exception as e:
-                pass  # skip bad notes
+        if len(voice_ids_for_staff) == 1:
+            # Single voice: simple path
+            flat = voice_flats[voice_ids_for_staff[0]]
+            try:
+                part = flat.makeMeasures(inPlace=False)
+                part.makeTies(inPlace=True)
+                try:
+                    part.makeBeams(inPlace=True)
+                except Exception:
+                    pass
+            except Exception:
+                part = flat
+            part.id = f'Staff{staff_id}'
+            score.append(part)
+            continue
 
-        # Make measures from flat stream
-        try:
-            part = flat.makeMeasures(inPlace=False)
-            part.makeTies(inPlace=True)
-        except Exception:
-            part = flat
+        # Multiple voices: make measures per voice then merge into Voice containers
+        voice_made: dict[str, m21.stream.Part] = {}
+        for vc_id in voice_ids_for_staff:
+            try:
+                vm = voice_flats[vc_id].makeMeasures(inPlace=False)
+                vm.makeTies(inPlace=True)
+                voice_made[vc_id] = vm
+            except Exception:
+                voice_made[vc_id] = m21.stream.Part()
 
-        score.append(part)
+        # Collect union of all measure numbers across all voices
+        all_m_nums = sorted(set(
+            m.number
+            for vpm in voice_made.values()
+            for m in vpm.getElementsByClass('Measure')
+        ))
+        # Build a lookup: m_num -> first voice_made Part that has it (for time/key sigs)
+        m_sig_source: dict = {}
+        for vc_id in voice_ids_for_staff:
+            vpm = voice_made.get(vc_id)
+            if not vpm:
+                continue
+            for m in vpm.getElementsByClass('Measure'):
+                if m.number not in m_sig_source:
+                    m_sig_source[m.number] = m
+
+        combined_part = m21.stream.Part()
+        combined_part.id = f'Staff{staff_id}'
+
+        for m_num in all_m_nums:
+            new_m = m21.stream.Measure(number=m_num)
+
+            # Carry over time/key sigs from whichever voice has this measure
+            m_obj = m_sig_source.get(m_num)
+            if m_obj:
+                for obj in m_obj.getElementsByClass(('TimeSignature', 'KeySignature', 'Clef')):
+                    new_m.insert(obj.offset, copy.deepcopy(obj))
+
+            for vi, vc_id in enumerate(voice_ids_for_staff):
+                v_obj = m21.stream.Voice()
+                v_obj.id = str(vi + 1)
+                v_made = voice_made.get(vc_id)
+                if v_made:
+                    try:
+                        v_measure = v_made.measure(m_num)
+                        if v_measure:
+                            for n in v_measure.flatten().notesAndRests:
+                                v_obj.insert(n.offset, copy.deepcopy(n))
+                    except Exception:
+                        pass
+                new_m.insert(0, v_obj)
+
+            combined_part.append(new_m)
+
+        score.append(combined_part)
 
     return score
 
