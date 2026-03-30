@@ -27,35 +27,42 @@ from torch.utils.data import Dataset, DataLoader
 
 # ── paths ──────────────────────────────────────────────────────────────────────
 BASE_DIR  = Path(__file__).parent
-DATA_PATH = BASE_DIR / 'train_data.jsonl'
+DATA_PATH = BASE_DIR / 'train_data_full.jsonl'
 CKPT_DIR  = BASE_DIR / 'checkpoints'
 
 # ── vocabulary sizes (from actual data) ───────────────────────────────────────
-PITCH_VOCAB = 45      # diatonic pitch 0-44 (range observed in Bach kern files)
-DUR_VOCAB   = 81      # duration in 16ths 0-80
-PHASE_VOCAB = 16      # metric phase 0-15
-TYPE_VOCAB  = 4539    # motif type 0-4537; 4538 = NONE (not in motif)
-POS_VOCAB   = 100     # position within motif 0-99
-DP0_VOCAB   = 52      # relative transposition: stored as dp0+25, range 0-51
-DIST_VOCAB  = 35      # distance between motif occurrences (log-bucketed, see below)
-VERT_VOCAB  = 28      # vertical interval: 0=padding, 1-27 = diatonic interval
-N_TOK_TYPES = 2       # 0=N, 1=M
+PITCH_VOCAB    = 45   # diatonic pitch 0-44 (absolute, used as input embedding)
+DUR_VOCAB      = 81   # duration in 16ths 0-80
+PHASE_VOCAB    = 16   # metric phase 0-15
+TYPE_VOCAB     = 4539 # motif type 0-4537; 4538 = NONE (not in motif)
+POS_VOCAB      = 100  # position within motif 0-99
+DP0_VOCAB      = 52   # relative transposition: stored as dp0+25, range 0-51
+DIST_VOCAB     = 35   # distance between motif occurrences (log-bucketed)
+VERT_VOCAB     = 28   # vertical interval: 0=padding, 1-27 = diatonic interval
+N_TOK_TYPES    = 2    # 0=N, 1=M
+INTERVAL_VOCAB = 29   # melodic interval -14..+14 stored as iv+14 → 0..28
+VOICE_VOCAB    = 4    # voice index 0-3
+OD_VOCAB       = 19   # onset_delta log-bucketed (0=simultaneous, …)
+
+# onset_delta bucket breaks (value <= break → that bucket)
+_OD_BREAKS = [0, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 256, 512, 1024, 2048]
 
 # ── model hyperparameters ──────────────────────────────────────────────────────
-D_MODEL  = 256
+D_MODEL  = 128
 N_HEADS  = 4
-N_LAYERS = 4
-D_FF     = 1024
-DROPOUT  = 0.1
+N_LAYERS = 3
+D_FF     = 512
+DROPOUT  = 0.3
 MAX_SEQ  = 512
 
 # ── training ──────────────────────────────────────────────────────────────────
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 LR         = 3e-4
 EPOCHS     = 80
 GRAD_CLIP  = 1.0
 VAL_SPLIT  = 0.1
 SEED       = 42
+WEIGHT_DECAY = 0.1
 
 
 # ── encoding helpers ──────────────────────────────────────────────────────────
@@ -77,6 +84,14 @@ def _dist_bucket(dist: int) -> int:
     return len(_DIST_BREAKS) - 1
 
 
+def _od_bucket(od: int) -> int:
+    """Onset delta (16ths) → bucket index."""
+    for i, b in enumerate(_OD_BREAKS):
+        if od <= b:
+            return i
+    return len(_OD_BREAKS) - 1
+
+
 # ── dataset ───────────────────────────────────────────────────────────────────
 
 def encode_piece(tokens: list) -> dict:
@@ -84,8 +99,9 @@ def encode_piece(tokens: list) -> dict:
     tok_type = []
     pitch, dur, phase = [], [], []
     mtype, mpos, mdp0, minv = [], [], [], []
-    vert = []     # list of lists (variable length, max 6)
+    vert     = []   # list of lists (variable length, max 6)
     motif_id, dist = [], []
+    iv, voice, od = [], [], []   # NEW: interval, voice index, onset_delta
 
     for tok in tokens:
         if tok['t'] == 'N':
@@ -102,12 +118,16 @@ def encode_piece(tokens: list) -> dict:
             else:
                 mtype.append(TYPE_VOCAB - 1)  # NONE
                 mpos.append(0)
-                mdp0.append(25)               # transposition 0
+                mdp0.append(25)
                 minv.append(0)
-            # vertical intervals: shift by +1 so 0 = padding
             vert.append([min(v, VERT_VOCAB - 1) for v in tok.get('v', [])])
             motif_id.append(0)
             dist.append(0)
+            # new fields
+            raw_iv = tok.get('iv', 0)
+            iv.append(min(max(raw_iv + 14, 0), INTERVAL_VOCAB - 1))  # -14..+14 → 0..28
+            voice.append(min(tok.get('voice', 0), VOICE_VOCAB - 1))
+            od.append(_od_bucket(tok.get('od', 0)))
         else:  # M token
             tok_type.append(1)
             pitch.append(0); dur.append(0); phase.append(0)
@@ -115,10 +135,14 @@ def encode_piece(tokens: list) -> dict:
             vert.append([])
             motif_id.append(min(tok['id'], TYPE_VOCAB - 2))
             dist.append(_dist_bucket(tok.get('dist', 0)))
+            iv.append(14)       # interval=0 for M tokens
+            voice.append(0)
+            od.append(_od_bucket(tok.get('od', 0)))
 
     return dict(tok_type=tok_type, pitch=pitch, dur=dur, phase=phase,
                 mtype=mtype, mpos=mpos, mdp0=mdp0, minv=minv,
-                vert=vert, motif_id=motif_id, dist=dist)
+                vert=vert, motif_id=motif_id, dist=dist,
+                iv=iv, voice=voice, od=od)
 
 
 class BachDataset(Dataset):
@@ -169,6 +193,9 @@ class BachDataset(Dataset):
             'vert':     vert_t,
             'motif_id': grab('motif_id'),
             'dist':     grab('dist'),
+            'iv':       grab('iv',    pad=14),   # interval, 14 = zero interval
+            'voice':    grab('voice'),
+            'od':       grab('od'),
         }
 
 
@@ -187,26 +214,29 @@ class MusicModel(nn.Module):
         e = d_model // 8   # base embedding dim per field
 
         # ── note token embeddings ──────────────────────────────────────────────
-        self.emb_pitch  = nn.Embedding(PITCH_VOCAB,     e * 2)
+        self.emb_pitch  = nn.Embedding(PITCH_VOCAB,     e * 2) # absolute pitch (tonal context)
         self.emb_dur    = nn.Embedding(DUR_VOCAB,       e)
         self.emb_phase  = nn.Embedding(PHASE_VOCAB,     e)
-        self.emb_mtype  = nn.Embedding(TYPE_VOCAB,      e)      # membership type
+        self.emb_mtype  = nn.Embedding(TYPE_VOCAB,      e)
         self.emb_mpos   = nn.Embedding(POS_VOCAB,       e // 2)
         self.emb_mdp0   = nn.Embedding(DP0_VOCAB,       e // 2)
         self.emb_minv   = nn.Embedding(2,               e // 4)
         self.emb_vert   = nn.Embedding(VERT_VOCAB,      e // 2, padding_idx=0)
-        note_dim = e*2 + e + e + e + e//2 + e//2 + e//4 + e//2
+        self.emb_iv     = nn.Embedding(INTERVAL_VOCAB,  e)     # melodic interval
+        self.emb_voice  = nn.Embedding(VOICE_VOCAB,     e // 2)
+        note_dim = e*2 + e + e + e + e//2 + e//2 + e//4 + e//2 + e + e//2
         self.note_proj  = nn.Linear(note_dim, d_model)
 
         # ── motif token embeddings ─────────────────────────────────────────────
-        self.emb_mid    = nn.Embedding(TYPE_VOCAB - 1,  e * 2)  # motif id
-        self.emb_mdp0m  = nn.Embedding(DP0_VOCAB,       e)      # transposition
-        self.emb_minvm  = nn.Embedding(2,               e // 2) # inversion flag
+        self.emb_mid    = nn.Embedding(TYPE_VOCAB - 1,  e * 2)
+        self.emb_mdp0m  = nn.Embedding(DP0_VOCAB,       e)
+        self.emb_minvm  = nn.Embedding(2,               e // 2)
         self.emb_dist   = nn.Embedding(DIST_VOCAB,      e)
         motif_dim = e*2 + e + e//2 + e
         self.motif_proj = nn.Linear(motif_dim, d_model)
 
-        # ── shared ────────────────────────────────────────────────────────────
+        # ── shared (onset_delta applies to both N and M) ───────────────────────
+        self.emb_od      = nn.Embedding(OD_VOCAB,    d_model)
         self.emb_toktype = nn.Embedding(N_TOK_TYPES, d_model)
         self.pos_enc     = nn.Embedding(MAX_SEQ,     d_model)
 
@@ -219,11 +249,12 @@ class MusicModel(nn.Module):
                                                   enable_nested_tensor=False)
 
         # ── output heads ──────────────────────────────────────────────────────
-        self.head_type  = nn.Linear(d_model, N_TOK_TYPES)   # predict N or M
-        self.head_pitch = nn.Linear(d_model, PITCH_VOCAB)   # N: pitch
-        self.head_dur   = nn.Linear(d_model, DUR_VOCAB)     # N: duration
-        self.head_mid   = nn.Linear(d_model, TYPE_VOCAB-1)  # M: motif type
-        self.head_dist  = nn.Linear(d_model, DIST_VOCAB)    # M: distance
+        self.head_type = nn.Linear(d_model, N_TOK_TYPES)    # next: N or M
+        self.head_iv   = nn.Linear(d_model, INTERVAL_VOCAB) # next N: interval
+        self.head_dur  = nn.Linear(d_model, DUR_VOCAB)      # next N: duration
+        self.head_od   = nn.Linear(d_model, OD_VOCAB)       # next: onset_delta
+        self.head_mid  = nn.Linear(d_model, TYPE_VOCAB - 1) # next M: motif id
+        self.head_dist = nn.Linear(d_model, DIST_VOCAB)     # next M: distance
 
         self.drop = nn.Dropout(dropout)
         self._init_weights()
@@ -240,7 +271,7 @@ class MusicModel(nn.Module):
                     nn.init.zeros_(m.bias)
 
     def _note_emb(self, b):
-        ev = self.emb_vert(b['vert']).sum(dim=2)   # (B,L,e//2) — set encoding
+        ev = self.emb_vert(b['vert']).sum(dim=2)   # (B,L,e//2)
         return self.note_proj(torch.cat([
             self.emb_pitch(b['pitch']),
             self.emb_dur(b['dur']),
@@ -250,6 +281,8 @@ class MusicModel(nn.Module):
             self.emb_mdp0(b['mdp0']),
             self.emb_minv(b['minv']),
             ev,
+            self.emb_iv(b['iv']),
+            self.emb_voice(b['voice']),
         ], dim=-1))
 
     def _motif_emb(self, b):
@@ -267,7 +300,9 @@ class MusicModel(nn.Module):
         note_e  = self._note_emb(b)
         motif_e = self._motif_emb(b)
         is_m    = b['tok_type'].unsqueeze(-1).float()
+        # combine note/motif embeddings, then add shared onset_delta
         x = note_e * (1 - is_m) + motif_e * is_m
+        x = x + self.emb_od(b['od'])
 
         pos = torch.arange(L, device=device).unsqueeze(0)
         x = x + self.emb_toktype(b['tok_type']) + self.pos_enc(pos)
@@ -277,11 +312,12 @@ class MusicModel(nn.Module):
         x = self.transformer(x, mask=mask, is_causal=True)
 
         return {
-            'type':  self.head_type(x),
-            'pitch': self.head_pitch(x),
-            'dur':   self.head_dur(x),
-            'mid':   self.head_mid(x),
-            'dist':  self.head_dist(x),
+            'type': self.head_type(x),
+            'iv':   self.head_iv(x),
+            'dur':  self.head_dur(x),
+            'od':   self.head_od(x),
+            'mid':  self.head_mid(x),
+            'dist': self.head_dist(x),
         }
 
 
@@ -306,16 +342,22 @@ def compute_loss(logits, batch):
         loss = F.cross_entropy(lgt, tgt, reduction='none')
         return (loss * mask.view(-1)).sum() / n
 
-    loss_pitch = mce('pitch', 'pitch',    is_note,  n_note)
-    loss_dur   = mce('dur',   'dur',      is_note,  n_note)
-    loss_mid   = mce('mid',   'motif_id', is_motif, n_motif)
-    loss_dist  = mce('dist',  'dist',     is_motif, n_motif)
+    n_all = tgt_type.numel()
 
-    total = loss_type + 2.0 * loss_pitch + 1.5 * loss_dur + loss_mid + 0.5 * loss_dist
+    loss_iv   = mce('iv',   'iv',       is_note,  n_note)
+    loss_dur  = mce('dur',  'dur',      is_note,  n_note)
+    loss_mid  = mce('mid',  'motif_id', is_motif, n_motif)
+    loss_dist = mce('dist', 'dist',     is_motif, n_motif)
+    # onset_delta: predict for all tokens
+    loss_od   = F.cross_entropy(
+        SL('od').view(-1, OD_VOCAB), S(batch['od']).view(-1))
+
+    total = (loss_type + 2.0 * loss_iv + 1.5 * loss_dur
+             + 1.0 * loss_od + loss_mid + 0.5 * loss_dist)
     return total, {
-        'type': loss_type.item(), 'pitch': loss_pitch.item(),
-        'dur':  loss_dur.item(),  'mid':   loss_mid.item(),
-        'dist': loss_dist.item(),
+        'type': loss_type.item(), 'iv':   loss_iv.item(),
+        'dur':  loss_dur.item(),  'od':   loss_od.item(),
+        'mid':  loss_mid.item(),  'dist': loss_dist.item(),
     }
 
 
@@ -386,7 +428,7 @@ def main():
     print(f"Parameters: {n_p:,}")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
-                                  weight_decay=0.01)
+                                  weight_decay=WEIGHT_DECAY)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs, eta_min=args.lr / 10)
 

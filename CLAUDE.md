@@ -217,6 +217,38 @@ Three-way count `×N_dir ⇅N_inv ⊕N_all` — each span is individually clicka
 
 - `max_pat_len=None` — no upper limit on pattern length
 
+## Metric phase bug fix (2/2 time)
+
+`_parse_meter` previously returned `beat_dur_q = 4.0/mu` giving 2.0 for 2/2 (alla breve). This produced 8 phase slots for 1/16 notes (phases 0-7), allowing phase=5 which is musically meaningless. Fix: `min(4.0/mu, 1.0)` caps simple-meter beat at one quarter note. Compound meters (6/8, 9/8, 12/8) are unaffected (dotted-quarter = 1.5 still computed separately).
+
+## LilyPond → MusicXML converter (no MIDI)
+
+`lilypond/convert_ly_direct.py` — converts Bach LilyPond collection to MusicXML by hooking LilyPond's Scheme compilation pipeline. No MIDI involved.
+
+### Architecture
+
+- **`lilypond/ly_dump.ily`** — Scheme include that hooks `toplevel-score-handler`, `book-score-handler`, and `bookpart-score-handler` to intercept every `\score` block during LilyPond compilation. Writes note data as JSON-lines to a temp file.
+  - `dump-traverse m onset staff voice` — recursive traversal of LilyPond music AST
+  - Handles: `RelativeOctaveMusic` (forces pitch resolution via `ly:relative-octave-music::relative-callback`), `EventChord` (chord = multiple NoteEvents same onset), `NoteEvent`, `RestEvent`, `SkipEvent`, `TimeSignatureMusic`, `KeyChangeEvent`, `SimultaneousMusic` (voice splits), `ContextSpeccedMusic` (named Staff/Voice contexts), `ContextChange` (`\change Staff`) for cross-staff notes, `MultiMeasureRestMusic`
+  - Anonymous `\new Staff` contexts assigned auto-numbered IDs (reset per score); named contexts use their ID string
+  - Output: one JSON object per line — `{"t":"N","on":"3/4","semi":7,"oct":1,"step":4,"log":3,"dots":0,"st":"upper","vc":"1","tie":false}` for notes; `{"t":"T",...}` for time sigs; `{"t":"K",...}` for key sigs
+
+- **`lilypond/convert_ly_direct.py`** — Python driver
+  - For each .ly file: creates a temp wrapper that `#(define ly:dump-output-file "...")` then `\include`s `ly_dump.ily` then the source file; runs LilyPond with `--loglevel=ERROR -dno-point-and-click`; reads JSON-lines output
+  - `notes_to_score(events)` — builds music21 Score: staves ordered by **first appearance** in note stream (preserves treble-before-bass); inserts time/key sigs; calls `makeMeasures()` + `makeTies()`; pitch alter computed from `semi - STEP_SEMI[step]` (avoids `ly:pitch-alteration` unit ambiguity)
+  - Same `is_toplevel`/`is_skip`/`short_name` helpers as `convert_bach.py`
+
+### Key technical facts
+
+- `\relative` is NOT resolved at `toplevel-score-handler` call time (music still shows `RelativeOctaveMusic`). Solution: call `ly:relative-octave-music::relative-callback m ref` in-place before traversing.
+- `\score` inside `\book`: triggers `book-score-handler`, NOT `toplevel-score-handler` — both must be hooked.
+- `\change Staff` = `ContextChange` music object with `change-to-id` property; handled in sequential loop to update current staff for subsequent notes.
+- `-dbackend=musicxml` (LilyPond built-in): broken in 2.24.4, outputs empty XML.
+
+### Results
+
+494/510 files converted successfully; 14 EMPTY (source syntax errors), 2 ERROR (LilyPond crash). Output: `lilypond/musicxml/*.xml`.
+
 ## Known issues
 
 - Verovio prints harmless C++ warnings to stderr (beamSpan, mixed beam, unknown clef types)

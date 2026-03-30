@@ -284,6 +284,42 @@ def _composer_from_rel(rel: str) -> str:
     return 'Bach'
 
 
+def _palestrina_sort_key(rel):
+    """Sort key for Palestrina files: (mass_number, filename) so mass 0 groups together."""
+    import re
+    fname = rel.split('/')[-1]
+    stem  = fname.rsplit('.', 1)[0]
+    nums  = re.findall(r'\d+', stem)
+    mass  = int(nums[-1]) if nums else 9999
+    return (mass, fname.lower())
+
+
+def find_generated_files():
+    """Return [(rel, full), ...] for .krn files in the generated/ folder."""
+    gen_dir = os.path.join(os.path.dirname(__file__), 'generated')
+    if not os.path.isdir(gen_dir):
+        return []
+    files = []
+    for fname in sorted(os.listdir(gen_dir)):
+        if fname.endswith('.krn'):
+            full = os.path.join(gen_dir, fname)
+            files.append((f'generated/{fname}', full))
+    return files
+
+
+def find_lilypond_files():
+    """Return [(rel, full), ...] for MusicXML files in lilypond/musicxml/."""
+    xml_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
+    if not os.path.isdir(xml_dir):
+        return []
+    files = []
+    for fname in sorted(os.listdir(xml_dir)):
+        if fname.endswith('.xml'):
+            full = os.path.join(xml_dir, fname)
+            files.append((f'lilypond/{fname}', full))
+    return files
+
+
 def find_music21_files():
     """Return [(rel, full), ...] for music21 corpus files verovio can render (.krn, .mxl, .xml)."""
     try:
@@ -305,7 +341,11 @@ def find_music21_files():
         except StopIteration:
             rel = 'music21/' + os.path.basename(s)
         files.append((rel, s))
-    return files
+    # re-sort Palestrina by mass number first, then movement name
+    pal   = [(r, f) for r, f in files if '/palestrina/' in r]
+    other = [(r, f) for r, f in files if '/palestrina/' not in r]
+    pal.sort(key=lambda x: _palestrina_sort_key(x[0]))
+    return other + pal
 
 
 # ── validation ────────────────────────────────────────────────────────────────
@@ -463,7 +503,8 @@ def _voice_notes_from_mei(mei_str):
         mc, mu = int(c), int(u)
         bpm = mc * 4.0 / mu
         # Compound meter (3/8, 6/8, 9/8, 12/8 …): beat = dotted note = 3 subdivisions
-        bdq = (4.0 / mu * 3) if (mc % 3 == 0 and mu >= 8) else (4.0 / mu)
+        # Simple meter: cap beat at quarter note so 2/2 doesn't give 8 phases for 1/16
+        bdq = (4.0 / mu * 3) if (mc % 3 == 0 and mu >= 8) else min(4.0 / mu, 1.0)
         return bpm, bdq
 
     for sd in tree.iter(tag_pfx + 'scoreDef'):
@@ -2295,7 +2336,7 @@ class FileBrowser(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
 
-        self._files        = find_kern_files(KERN_DIR) + find_music21_files()
+        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_music21_files()
         self._current_path = None
 
         self._build_ui()

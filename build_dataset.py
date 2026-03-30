@@ -115,6 +115,12 @@ def _worker_func(path, vocab_path, q):
                 content = (raw.decode('utf-16') if raw[:2] in (b'\xff\xfe', b'\xfe\xff')
                            else raw.decode('utf-8-sig') if raw[:3] == b'\xef\xbb\xbf'
                            else raw.decode('utf-8', errors='replace'))
+        elif ext in ('xml', 'musicxml'):
+            with open(path, 'rb') as f:
+                raw = f.read()
+            content = (raw.decode('utf-16') if raw[:2] in (b'\xff\xfe', b'\xfe\xff')
+                       else raw.decode('utf-8-sig') if raw[:3] == b'\xef\xbb\xbf'
+                       else raw.decode('utf-8', errors='replace'))
         else:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 content = f.read()
@@ -204,22 +210,27 @@ def _worker_func(path, vocab_path, q):
                     nid_motif[nid] = [type_id, pos, t['transposition'], inv]
 
         # ── build token list ─────────────────────────────────────────────────
-        # merge note tokens + motif_start tokens, sorted by onset
+        # assign stable voice indices sorted by (staff, layer)
+        voice_keys   = sorted(voices.keys())
+        voice_id_map = {k: min(i, 3) for i, k in enumerate(voice_keys)}
+
         note_tokens  = []
-        for notes in voices.values():
+        for vk, notes in voices.items():
+            vid = voice_id_map[vk]
             for nid, pname, oct_int, dur_q, _midi, onset_q in notes:
                 dp   = nid_dp[nid]
                 o16  = nid_onset[nid]
                 d16  = nid_dur16[nid]
                 ph   = nid_phase[nid]
                 note_tokens.append({
-                    't':  'N',
-                    'p':  dp,
-                    'd':  d16,
-                    'o':  o16,
-                    'ph': ph,
-                    'm':  nid_motif.get(nid),
-                    'v':  vert.get(nid, []),
+                    't':    'N',
+                    'p':    dp,
+                    'd':    d16,
+                    'o':    o16,
+                    'ph':   ph,
+                    'voice': vid,
+                    'm':    nid_motif.get(nid),
+                    'v':    vert.get(nid, []),
                 })
 
         motif_tokens = []
@@ -238,6 +249,21 @@ def _worker_func(path, vocab_path, q):
             note_tokens + motif_tokens,
             key=lambda x: (x['o'], 0 if x['t'] == 'M' else 1)
         )
+
+        # ── onset_delta: time gap from previous token in stream ───────────────
+        prev_o = 0
+        for tok in all_tokens:
+            tok['od'] = tok['o'] - prev_o
+            prev_o    = tok['o']
+
+        # ── interval: pitch delta from previous note in the same voice ────────
+        last_dp = {}   # voice_id -> last absolute dp
+        for tok in all_tokens:
+            if tok['t'] == 'N':
+                vid = tok['voice']
+                dp  = tok['p']
+                tok['iv'] = max(-14, min(14, dp - last_dp[vid])) if vid in last_dp else 0
+                last_dp[vid] = dp
 
         q.put(all_tokens)
 
@@ -274,6 +300,15 @@ def main():
         sys.exit(1)
 
     all_files = kr.find_kern_files(kr.KERN_DIR)
+
+    # add LilyPond-derived MusicXML files
+    ly_xml_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
+    if os.path.isdir(ly_xml_dir):
+        for fname in sorted(os.listdir(ly_xml_dir)):
+            if fname.endswith('.xml'):
+                full = os.path.join(ly_xml_dir, fname)
+                all_files.append((f'lilypond/{fname}', full))
+
     if args.filter:
         terms = [t.strip().lower() for t in args.filter.split(',')]
         all_files = [(r, f) for r, f in all_files
