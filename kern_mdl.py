@@ -215,6 +215,23 @@ def find_kern_files(root: str):
     return files
 
 
+XML_DIR = os.path.join(os.path.dirname(__file__), "musicxml")
+
+
+def find_xml_files(root: str):
+    """Return [(rel, full), ...] for all .xml files under root."""
+    files = []
+    if not os.path.isdir(root):
+        return files
+    for dirpath, _, fnames in os.walk(root):
+        for fname in sorted(fnames):
+            if fname.lower().endswith('.xml'):
+                full = os.path.join(dirpath, fname)
+                rel  = 'musicxml/' + os.path.relpath(full, root).replace('\\', '/')
+                files.append((rel, full))
+    return files
+
+
 _COMPOSER_MAP = {
     'bach':           'Bach',
     'palestrina':     'Palestrina',
