@@ -126,6 +126,17 @@
               (ly:moment-add onset (ly:duration-length dur))
               onset)))
 
+       ;; ── Partial measure (\partial dur) — emit P event, don't advance onset
+       ((eq? name 'PartialSet)
+        (let ((dur (ly:music-property m 'duration #f)))
+          (when (and %dump-port (ly:duration? dur))
+            (dump-write
+             "{\"t\":\"P\""
+             ",\"on\":\"" (dump-onset onset) "\""
+             ",\"dur\":\"" (dump-onset (ly:duration-length dur)) "\""
+             "}")))
+        onset)
+
        ;; ── ContextChange (\change Staff = "other") — update staff for subsequent notes
        ;; This is NOT handled here (it's stateful); handled in the sequential loop below.
        ((eq? name 'ContextChange)

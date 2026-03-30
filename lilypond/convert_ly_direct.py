@@ -168,6 +168,18 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
     time_sigs: list[dict] = []
     key_sigs:  list[dict] = []
 
+    # Detect pickup measure from \partial — compute onset shift
+    pickup_shift = Fraction(0)
+    p_events = [ev for ev in note_events
+                if ev.get('t') == 'P' and _onset_frac(ev.get('on', '0')) == Fraction(0)]
+    if p_events:
+        pickup_q = _onset_frac(p_events[0]['dur'])
+        first_ts = next((ev for ev in note_events if ev.get('t') == 'T'), None)
+        if first_ts:
+            bar_q = Fraction(first_ts['num'] * 4, first_ts['den'])
+            if bar_q > pickup_q:
+                pickup_shift = bar_q - pickup_q
+
     for ev in note_events:
         t = ev.get('t')
         if t in ('N', 'R'):
@@ -311,7 +323,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
         for i, (ev, vc) in enumerate(staff_notes):
             try:
                 obj = _make_note_or_rest(ev, i)
-                on_frac = _onset_frac(ev['on'])
+                on_frac = _onset_frac(ev['on']) + pickup_shift
                 voice_flats[vc].insert(float(on_frac), obj)
             except Exception:
                 pass
