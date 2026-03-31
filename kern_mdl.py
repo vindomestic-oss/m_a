@@ -320,6 +320,50 @@ def find_lilypond_files():
     return files
 
 
+def find_imslp_files():
+    """Return [(rel, full), ...] for .mxl files in musicxml/imslp_bach/, using manifest.json."""
+    imslp_dir = os.path.join(os.path.dirname(__file__), 'musicxml', 'imslp_bach')
+    if not os.path.isdir(imslp_dir):
+        return []
+    manifest_path = os.path.join(imslp_dir, 'manifest.json')
+    try:
+        import json as _json
+        with open(manifest_path, encoding='utf-8') as f:
+            manifest = _json.load(f)
+        page_xml = manifest.get('page_xml_files', {})
+    except Exception:
+        page_xml = {}
+
+    # Build file→title map (first title that lists this file)
+    file_title: dict = {}
+    for title, files in page_xml.items():
+        for fname in files:
+            if fname not in file_title:
+                file_title[fname] = title
+
+    result = []
+    all_files = manifest.get('all_files', []) if 'manifest_path' in dir() else []
+    try:
+        all_files = manifest.get('all_files', sorted(
+            f for f in os.listdir(imslp_dir) if f.endswith('.mxl')))
+    except Exception:
+        all_files = sorted(f for f in os.listdir(imslp_dir) if f.endswith('.mxl'))
+
+    for fname in all_files:
+        full = os.path.join(imslp_dir, fname)
+        if not os.path.isfile(full):
+            continue
+        title = file_title.get(fname, fname)
+        # If multiple files share same title, append filename suffix
+        same = [f for f in all_files if file_title.get(f, f) == title]
+        if len(same) > 1:
+            rel = f'imslp/{title} [{fname}]'
+        else:
+            rel = f'imslp/{title}'
+        result.append((rel, full))
+    return result
+
+
 def find_music21_files():
     """Return [(rel, full), ...] for music21 corpus files verovio can render (.krn, .mxl, .xml)."""
     try:
@@ -465,19 +509,24 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
       8th in 9/8  (beat=1.5): n_per_beat=3 → phase 0, 1, or 2
       triplet 1/3 in 4/4:     n_per_beat=3 → phase 0, 1, or 2
       triplet 1/6 in 4/4:     n_per_beat=6 → phase % 3 (0,1,2) — groups of 3
+      32nd in 3/4 (beat=1.0): n_per_beat=8 → capped to 4 → phase 0-3 (same as 16th)
     """
     if dur_q <= 0 or beat_dur_q <= 0:
         return 0
     n_per_beat = max(1, round(beat_dur_q / dur_q))
     if n_per_beat <= 1:
         return 0
-    pos_in_beat = onset_q % beat_dur_q
-    phase = int(round(pos_in_beat / dur_q)) % n_per_beat
     # For triplet notes (n_per_beat divisible by 3), phase within the triplet
     # group is what matters rhythmically: phase 0 and phase 3 are both
     # "first of triplet group" → collapse to phase % 3.
     if n_per_beat % 3 == 0:
-        phase = phase % 3
+        n_per_beat = 3
+    # Cap binary subdivisions at 4 phases (same resolution as 16th notes).
+    # Prevents 32nd/64th notes from generating excessive phase slots.
+    elif n_per_beat > 4:
+        n_per_beat = 4
+    pos_in_beat = onset_q % beat_dur_q
+    phase = int(round(pos_in_beat / dur_q)) % n_per_beat
     return phase
 
 

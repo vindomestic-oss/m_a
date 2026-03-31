@@ -217,9 +217,11 @@ Three-way count `×N_dir ⇅N_inv ⊕N_all` — each span is individually clicka
 
 - `max_pat_len=None` — no upper limit on pattern length
 
-## Metric phase bug fix (2/2 time)
+## Metric phase bug fixes
 
-`_parse_meter` previously returned `beat_dur_q = 4.0/mu` giving 2.0 for 2/2 (alla breve). This produced 8 phase slots for 1/16 notes (phases 0-7), allowing phase=5 which is musically meaningless. Fix: `min(4.0/mu, 1.0)` caps simple-meter beat at one quarter note. Compound meters (6/8, 9/8, 12/8) are unaffected (dotted-quarter = 1.5 still computed separately).
+**2/2 time**: `_parse_meter` previously returned `beat_dur_q = 4.0/mu` giving 2.0 for 2/2 (alla breve). This produced 8 phase slots for 1/16 notes (phases 0-7). Fix: `min(4.0/mu, 1.0)` caps simple-meter beat at one quarter note. Compound meters (6/8, 9/8, 12/8) are unaffected.
+
+**32nd notes (and shorter)**: `_metric_phase` computed `n_per_beat=8` for 32nd notes in 3/4 (phases 0-7), allowing phase=5 which is meaningless. Fix: binary subdivisions (n_per_beat not divisible by 3) are capped at 4 → same resolution as 16th notes. Triplet patterns (n_per_beat divisible by 3) are collapsed to 3 phases as before.
 
 ## LilyPond → MusicXML converter (no MIDI)
 

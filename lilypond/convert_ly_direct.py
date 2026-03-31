@@ -269,12 +269,21 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             if bar_q > pickup_q:
                 pickup_shift = bar_q - pickup_q
 
+    # First pass: determine home staff for each voice (first staff where it appears)
+    vc_home_st: dict[str, str] = {}
+    for ev in note_events:
+        if ev.get('t') in ('N', 'R'):
+            vc = ev.get('vc', '1')
+            if vc not in vc_home_st:
+                vc_home_st[vc] = ev.get('st', '1')
+
     for ev in note_events:
         t = ev.get('t')
         if t in ('N', 'R'):
-            st = ev.get('st', '1')
             vc = ev.get('vc', '1')
-            by_voice[(st, vc)].append(ev)
+            # Use home staff for this voice (merges cross-staff voices into one Part)
+            home_st = vc_home_st.get(vc, ev.get('st', '1'))
+            by_voice[(home_st, vc)].append(ev)
         elif t == 'T':
             time_sigs.append(ev)
         elif t == 'K':
