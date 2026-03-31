@@ -157,6 +157,56 @@ def _dur_from_moment_str(dur_str: str) -> m21dur.Duration:
     return m21dur.Duration(quarterLength=float(ql))
 
 
+def _fix_pickup_measure(part: m21.stream.Part, pickup_shift: float) -> None:
+    """No-op placeholder; pickup XML fix is done in _postprocess_pickup_xml."""
+    pass
+
+
+import xml.etree.ElementTree as _ET
+
+def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
+    """Remove leading padding rest from first measure of each part and set implicit='yes'."""
+    if pickup_ql <= 0:
+        return
+    try:
+        _ET.register_namespace('', 'http://www.musicxml.org/xsd/MusicXML')
+        tree = _ET.parse(xml_path)
+        root = tree.getroot()
+        ns = root.tag.split('}')[0][1:] if root.tag.startswith('{') else ''
+        tag = lambda t: ('{%s}%s' % (ns, t)) if ns else t
+
+        modified = False
+        for part in root.iter(tag('part')):
+            measures = list(part.iter(tag('measure')))
+            if not measures:
+                continue
+            m1 = measures[0]
+            # Find divisions for this part
+            divs_el = m1.find('.//' + tag('divisions'))
+            if divs_el is None:
+                continue
+            divs = int(divs_el.text)
+            pickup_divs = int(round(pickup_ql * divs))
+
+            # Find and remove leading rest whose duration == pickup_divs
+            notes = list(m1.findall(tag('note')))
+            if not notes:
+                continue
+            first = notes[0]
+            rest_el = first.find(tag('rest'))
+            dur_el  = first.find(tag('duration'))
+            if rest_el is not None and dur_el is not None:
+                if int(dur_el.text) == pickup_divs:
+                    m1.remove(first)
+                    m1.set('implicit', 'yes')
+                    modified = True
+
+        if modified:
+            tree.write(xml_path, encoding='unicode', xml_declaration=True)
+    except Exception:
+        pass
+
+
 def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
     """Convert raw note events to a music21 Score."""
     if not note_events:
@@ -334,6 +384,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             try:
                 part = flat.makeMeasures(inPlace=False)
                 part.makeTies(inPlace=True)
+                _fix_pickup_measure(part, float(pickup_shift))
                 try:
                     part.makeBeams(inPlace=True)
                 except Exception:
@@ -398,6 +449,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
 
             combined_part.append(new_m)
 
+        _fix_pickup_measure(combined_part, float(pickup_shift))
         score.append(combined_part)
 
     return score
@@ -459,6 +511,15 @@ def main():
         try:
             score = notes_to_score(events)
             score.write('musicxml', str(xml_out))
+            # Fix pickup measure in the written XML
+            p_events = [ev for ev in events
+                        if ev.get('t') == 'P' and _onset_frac(ev.get('on', '0')) == Fraction(0)]
+            if p_events:
+                first_ts = next((ev for ev in events if ev.get('t') == 'T'), None)
+                if first_ts:
+                    bar_q = Fraction(first_ts['num'] * 4, first_ts['den'])
+                    pickup_q = _onset_frac(p_events[0]['dur'])
+                    _postprocess_pickup_xml(str(xml_out), float(bar_q - pickup_q))
             n_parts = len(score.parts)
             print(f'  OK {stem}  notes={n_notes}  parts={n_parts}')
             ok += 1
