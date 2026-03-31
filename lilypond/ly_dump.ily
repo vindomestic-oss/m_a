@@ -236,9 +236,18 @@
 
 %% ── score handler hook ───────────────────────────────────────────────────────
 
+#(define (%has-layout-outdef? score)
+   ;; Returns #t if score has at least one layout (non-MIDI) output-def.
+   ;; Layout output-defs have 'mm = 1.0; MIDI output-defs have 'mm = ().
+   (any (lambda (od)
+          (number? (ly:output-def-lookup od 'mm)))
+        (ly:score-output-defs score)))
+
 #(define (%dump-one-score score)
    ;; Dump notes from a single score to the output file.
-   (when (and (ly:score? score) ly:dump-output-file)
+   ;; Skip MIDI-only scores (e.g. \score { \articulate ... \midi {} }).
+   (when (and (ly:score? score) ly:dump-output-file
+              (%has-layout-outdef? score))
      (set! %dump-score (+ %dump-score 1))
      (set! %dump-staff-counter 0)  ;; reset per score
      (let ((port (open-file ly:dump-output-file
