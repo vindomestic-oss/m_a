@@ -78,12 +78,25 @@ def short_name(ly_path: Path) -> str:
 # ── LilyPond runner ──────────────────────────────────────────────────────────
 
 def _make_wrapper(ly_path: Path, notes_path: Path) -> Path:
-    """Create a temp wrapper .ly that sets up the dump and includes the source."""
-    # Use forward slashes in paths for LilyPond
+    """Create a temp wrapper .ly that sets up the dump and includes the source.
+    If the source uses articulate.ly, patch it out to get unarticulated durations."""
     dump_ily_fwd   = str(DUMP_ILY).replace('\\', '/')
-    ly_path_fwd    = str(ly_path).replace('\\', '/')
     notes_path_fwd = str(notes_path).replace('\\', '/')
 
+    # Check if source uses articulate.ly; if so, create a patched copy without it
+    include_path = ly_path
+    try:
+        src = ly_path.read_text(encoding='utf-8', errors='replace')
+        if re.search(r'\\include\s+["\']articulate\.ly["\']', src):
+            patched = re.sub(r'\\include\s+["\']articulate\.ly["\']',
+                             '% articulate.ly disabled for note extraction', src)
+            patched_path = TMP_DIR / f'_patched_{ly_path.stem}.ly'
+            patched_path.write_text(patched, encoding='utf-8')
+            include_path = patched_path
+    except Exception:
+        pass
+
+    ly_path_fwd = str(include_path).replace('\\', '/')
     wrapper = f'''\
 \\version "2.24.0"
 #(define ly:dump-output-file "{notes_path_fwd}")
