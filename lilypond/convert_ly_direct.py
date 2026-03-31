@@ -165,11 +165,10 @@ def _fix_pickup_measure(part: m21.stream.Part, pickup_shift: float) -> None:
 import xml.etree.ElementTree as _ET
 
 def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
-    """Remove leading padding rest from first measure of each part and set implicit='yes'."""
+    """Remove leading padding rests from each voice in the pickup measure; fix backup elements."""
     if pickup_ql <= 0:
         return
     try:
-        _ET.register_namespace('', 'http://www.musicxml.org/xsd/MusicXML')
         tree = _ET.parse(xml_path)
         root = tree.getroot()
         ns = root.tag.split('}')[0][1:] if root.tag.startswith('{') else ''
@@ -181,25 +180,50 @@ def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
             if not measures:
                 continue
             m1 = measures[0]
-            # Find divisions for this part
             divs_el = m1.find('.//' + tag('divisions'))
             if divs_el is None:
                 continue
             divs = int(divs_el.text)
             pickup_divs = int(round(pickup_ql * divs))
 
-            # Find and remove leading rest whose duration == pickup_divs
-            notes = list(m1.findall(tag('note')))
-            if not notes:
-                continue
-            first = notes[0]
-            rest_el = first.find(tag('rest'))
-            dur_el  = first.find(tag('duration'))
-            if rest_el is not None and dur_el is not None:
-                if int(dur_el.text) == pickup_divs:
-                    m1.remove(first)
-                    m1.set('implicit', 'yes')
-                    modified = True
+            # Pass 1: remove leading padding rest from each voice
+            first_seen: set = set()
+            to_remove = []
+            for note_el in list(m1.findall(tag('note'))):
+                v_el = note_el.find(tag('voice'))
+                v = v_el.text if v_el is not None else '1'
+                if note_el.find(tag('chord')) is not None:
+                    continue
+                if v not in first_seen:
+                    first_seen.add(v)
+                    rest_el = note_el.find(tag('rest'))
+                    dur_el  = note_el.find(tag('duration'))
+                    if rest_el is not None and dur_el is not None:
+                        if int(dur_el.text) == pickup_divs:
+                            to_remove.append(note_el)
+            for note_el in to_remove:
+                m1.remove(note_el)
+            if to_remove:
+                m1.set('implicit', 'yes')
+                modified = True
+
+            # Pass 2: recalculate backup durations (each backup = cursor pos at that point)
+            cursor = 0
+            for child in list(m1):
+                if child.tag == tag('note'):
+                    if child.find(tag('chord')) is None:
+                        dur_el = child.find(tag('duration'))
+                        if dur_el is not None:
+                            cursor += int(dur_el.text)
+                elif child.tag == tag('backup'):
+                    dur_el = child.find(tag('duration'))
+                    if dur_el is not None and cursor > 0:
+                        dur_el.text = str(cursor)
+                    cursor = 0
+                elif child.tag == tag('forward'):
+                    dur_el = child.find(tag('duration'))
+                    if dur_el is not None:
+                        cursor += int(dur_el.text)
 
         if modified:
             tree.write(xml_path, encoding='unicode', xml_declaration=True)
