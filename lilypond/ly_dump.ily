@@ -126,6 +126,14 @@
               (ly:moment-add onset (ly:duration-length dur))
               onset)))
 
+       ;; ── SkipMusic (\skip dur  or  \skip dur*n) — same as SkipEvent but
+       ;; produced by the \skip music function (has 'duration, not 'element)
+       ((eq? name 'SkipMusic)
+        (let ((dur (ly:music-property m 'duration #f)))
+          (if (ly:duration? dur)
+              (ly:moment-add onset (ly:duration-length dur))
+              onset)))
+
        ;; ── Partial measure (\partial dur) — emit P event, don't advance onset
        ((eq? name 'PartialSet)
         (let ((dur (ly:music-property m 'duration #f)))

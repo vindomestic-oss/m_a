@@ -332,9 +332,75 @@ def _add_auto_clefs(part: m21.stream.Part) -> None:
 
 import xml.etree.ElementTree as _ET
 
-def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
-    """Remove leading padding rests from each voice in the pickup measure; fix backup elements."""
-    if pickup_ql <= 0:
+
+def _compute_shifts(note_events: list) -> tuple:
+    """
+    Compute pickup_shift, mid_shifts, and section_pickup_offsets from P and T events.
+    Returns:
+      pickup_shift:            Fraction — global shift applied to all note offsets
+      mid_shifts:              list of (threshold_q, extra_q) Fractions
+      section_pickup_offsets:  list of (measure_start_q_float, padding_ql_float)
+                               for each mid-piece pickup measure (used by postprocess)
+    """
+    # Time sig helper — defaults to 4/4 when no T events present
+    ts_sorted = sorted([ev for ev in note_events if ev.get('t') == 'T'],
+                       key=lambda e: _onset_frac(e['on']))
+    def _bar_q_at(onset_q: Fraction) -> Fraction:
+        best = Fraction(4)  # default 4/4
+        for ts in ts_sorted:
+            if _onset_frac(ts['on']) <= onset_q:
+                best = Fraction(ts['num'] * 4, ts['den'])
+        return best
+
+    # Initial pickup (P at onset 0)
+    p0 = [ev for ev in note_events
+          if ev.get('t') == 'P' and _onset_frac(ev.get('on', '0')) == Fraction(0)]
+    pickup_shift = Fraction(0)
+    if p0:
+        bar_q = _bar_q_at(Fraction(0))
+        pickup_q = _onset_frac(p0[0]['dur'])
+        if bar_q > pickup_q:
+            pickup_shift = bar_q - pickup_q
+
+    # Mid-piece pickup sections (P events at onset > 0)
+    # Deduplicate by onset — multiple staves emit identical P events.
+    mid_shifts: list[tuple[Fraction, Fraction]] = []
+    seen_p_onsets: set = set()
+    for p_ev in sorted([e for e in note_events if e.get('t') == 'P'],
+                       key=lambda e: _onset_frac(e['on'])):
+        p_on_q = _onset_frac(p_ev['on'])
+        if p_on_q == Fraction(0) or p_on_q in seen_p_onsets:
+            continue
+        seen_p_onsets.add(p_on_q)
+        p_dur_q = _onset_frac(p_ev['dur'])
+        b_q = _bar_q_at(p_on_q)
+        if b_q > p_dur_q:
+            mid_shifts.append((p_on_q, b_q - p_dur_q))
+
+    # Compute expected measure start offset for each section pickup
+    # (used by _postprocess_pickup_xml to find the right measure by position)
+    section_pickup_offsets: list[tuple[float, float]] = []
+    cumulative_extra = Fraction(0)
+    for threshold_q, extra_q in mid_shifts:
+        measure_start_q = threshold_q + pickup_shift + cumulative_extra
+        section_pickup_offsets.append((float(measure_start_q), float(extra_q)))
+        cumulative_extra += extra_q
+
+    return pickup_shift, mid_shifts, section_pickup_offsets
+
+
+def _postprocess_pickup_xml(xml_path: str, pickup_ql: float,
+                             section_pickup_offsets: list = None) -> None:
+    """
+    Fix pickup measures in MusicXML:
+    - First measure: remove leading padding rests of pickup_ql, mark implicit.
+    - Mid-piece pickup measures (identified by section_pickup_offsets): same treatment.
+      Each entry is (measure_start_q_float, padding_ql_float). Measures are found by
+      accumulating their expected quarter-note offsets using the time signature.
+    - Renumber all measures: implicit ones get unique negative numbers (not displayed),
+      explicit measures get 1, 2, 3, …
+    """
+    if pickup_ql <= 0 and not section_pickup_offsets:
         return
     try:
         tree = _ET.parse(xml_path)
@@ -342,22 +408,12 @@ def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
         ns = root.tag.split('}')[0][1:] if root.tag.startswith('{') else ''
         tag = lambda t: ('{%s}%s' % (ns, t)) if ns else t
 
-        modified = False
-        for part in root.iter(tag('part')):
-            measures = list(part.iter(tag('measure')))
-            if not measures:
-                continue
-            m1 = measures[0]
-            divs_el = m1.find('.//' + tag('divisions'))
-            if divs_el is None:
-                continue
-            divs = int(divs_el.text)
-            pickup_divs = int(round(pickup_ql * divs))
-
-            # Pass 1: remove leading padding rest from each voice
+        def _fix_pickup_measure(m_el, divs, padding_divs):
+            """Remove leading padding rest from each voice; fix backup durations.
+            Returns True if the measure was modified."""
             first_seen: set = set()
             to_remove = []
-            for note_el in list(m1.findall(tag('note'))):
+            for note_el in list(m_el.findall(tag('note'))):
                 v_el = note_el.find(tag('voice'))
                 v = v_el.text if v_el is not None else '1'
                 if note_el.find(tag('chord')) is not None:
@@ -367,17 +423,16 @@ def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
                     rest_el = note_el.find(tag('rest'))
                     dur_el  = note_el.find(tag('duration'))
                     if rest_el is not None and dur_el is not None:
-                        if int(dur_el.text) == pickup_divs:
+                        if int(dur_el.text) == padding_divs:
                             to_remove.append(note_el)
             for note_el in to_remove:
-                m1.remove(note_el)
-            if to_remove:
-                m1.set('implicit', 'yes')
-                modified = True
-
-            # Pass 2: recalculate backup durations (each backup = cursor pos at that point)
+                m_el.remove(note_el)
+            if not to_remove:
+                return False
+            m_el.set('implicit', 'yes')
+            # Recalculate backup durations
             cursor = 0
-            for child in list(m1):
+            for child in list(m_el):
                 if child.tag == tag('note'):
                     if child.find(tag('chord')) is None:
                         dur_el = child.find(tag('duration'))
@@ -392,6 +447,74 @@ def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
                     dur_el = child.find(tag('duration'))
                     if dur_el is not None:
                         cursor += int(dur_el.text)
+            return True
+
+        modified = False
+        for part in root.iter(tag('part')):
+            measures = list(part.iter(tag('measure')))
+            if not measures:
+                continue
+            # divisions may only appear in the first measure
+            divs_el = measures[0].find('.//' + tag('divisions'))
+            if divs_el is None:
+                continue
+            divs = int(divs_el.text)
+
+            # Determine initial bar_q from the time signature in the first measure
+            bar_q = 4.0  # default 4/4
+            for m_el in measures[:1]:
+                ts_el = m_el.find('.//' + tag('time'))
+                if ts_el is not None:
+                    beats = ts_el.find(tag('beats'))
+                    btype = ts_el.find(tag('beat-type'))
+                    if beats is not None and btype is not None:
+                        bar_q = int(beats.text) * 4.0 / int(btype.text)
+
+            # Build offset→padding_ql map for section pickups
+            section_map: dict[float, float] = {}
+            for off_q, p_ql in (section_pickup_offsets or []):
+                section_map[off_q] = p_ql
+
+            # Walk measures, tracking running quarter-note offset
+            running_offset = 0.0
+            for m_el in measures:
+                # Update bar_q if this measure changes the time signature
+                ts_el = m_el.find('.//' + tag('time'))
+                if ts_el is not None:
+                    beats = ts_el.find(tag('beats'))
+                    btype = ts_el.find(tag('beat-type'))
+                    if beats is not None and btype is not None:
+                        bar_q = int(beats.text) * 4.0 / int(btype.text)
+
+                padding_ql = None
+                if running_offset < 0.05 and pickup_ql > 0:
+                    # First measure: initial pickup
+                    padding_ql = pickup_ql
+                else:
+                    # Check if this measure matches a known section pickup offset
+                    for off_q, p_ql in section_map.items():
+                        if abs(running_offset - off_q) < 0.1:
+                            padding_ql = p_ql
+                            break
+
+                if padding_ql is not None:
+                    padding_divs = int(round(padding_ql * divs))
+                    if _fix_pickup_measure(m_el, divs, padding_divs):
+                        modified = True
+
+                running_offset += bar_q
+
+            # Renumber: implicit measures get unique negative numbers (not displayed),
+            # explicit measures get 1, 2, 3, …
+            implicit_num = 0
+            display_num = 1
+            for m_el in measures:
+                if m_el.get('implicit') == 'yes':
+                    m_el.set('number', str(implicit_num))
+                    implicit_num -= 1
+                else:
+                    m_el.set('number', str(display_num))
+                    display_num += 1
 
         if modified:
             tree.write(xml_path, encoding='unicode', xml_declaration=True)
@@ -410,17 +533,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
     time_sigs: list[dict] = []
     key_sigs:  list[dict] = []
 
-    # Detect pickup measure from \partial — compute onset shift
-    pickup_shift = Fraction(0)
-    p_events = [ev for ev in note_events
-                if ev.get('t') == 'P' and _onset_frac(ev.get('on', '0')) == Fraction(0)]
-    if p_events:
-        pickup_q = _onset_frac(p_events[0]['dur'])
-        first_ts = next((ev for ev in note_events if ev.get('t') == 'T'), None)
-        if first_ts:
-            bar_q = Fraction(first_ts['num'] * 4, first_ts['den'])
-            if bar_q > pickup_q:
-                pickup_shift = bar_q - pickup_q
+    pickup_shift, mid_shifts, _section_pickup_offsets = _compute_shifts(note_events)
 
     # First pass: determine home staff for each voice (first staff where it appears)
     vc_home_st: dict[str, str] = {}
@@ -581,6 +694,9 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             try:
                 obj = _make_note_or_rest(ev, i)
                 on_frac = _onset_frac(ev['on']) + pickup_shift
+                for threshold_q, extra_q in mid_shifts:
+                    if _onset_frac(ev['on']) >= threshold_q:
+                        on_frac += extra_q
                 voice_flats[vc].insert(float(on_frac), obj)
             except Exception:
                 pass
@@ -683,19 +799,31 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
         score.append(combined_part)
 
     _split_wide_range_part(score)
-    _apply_repeats(score, note_events, pickup_shift)
+    _apply_repeats(score, note_events, pickup_shift, mid_shifts)
     return score
 
 
-def _apply_repeats(score: m21.stream.Score, events: list, pickup_shift) -> None:
+def _apply_repeats(score: m21.stream.Score, events: list, pickup_shift,
+                   mid_shifts=None) -> None:
     """Insert repeat barlines and volta brackets from BAR/VOLTA events."""
     bar_evs   = [e for e in events if e.get('t') == 'BAR']
     volta_evs = [e for e in events if e.get('t') == 'VOLTA']
     if not bar_evs and not volta_evs:
         return
+    if mid_shifts is None:
+        mid_shifts = []
 
     def ev_q(ev) -> float:
-        return float(_onset_frac(ev['on'])) + float(pickup_shift)
+        # BAR/VOLTA events mark measure boundaries, not note positions.
+        # Apply mid_shifts only when onset is STRICTLY GREATER than the threshold
+        # (at the threshold the event marks the start of the pickup bar, before
+        # the pickup note itself; notes at the threshold get the full extra shift).
+        base = float(_onset_frac(ev['on']))
+        result = base + float(pickup_shift)
+        for threshold_q, extra_q in mid_shifts:
+            if base > float(threshold_q):
+                result += float(extra_q)
+        return result
 
     for part in score.parts:
         measures = list(part.getElementsByClass('Measure'))
@@ -817,15 +945,11 @@ def main():
         try:
             score = notes_to_score(events)
             score.write('musicxml', str(xml_out))
-            # Fix pickup measure in the written XML
-            p_events = [ev for ev in events
-                        if ev.get('t') == 'P' and _onset_frac(ev.get('on', '0')) == Fraction(0)]
-            if p_events:
-                first_ts = next((ev for ev in events if ev.get('t') == 'T'), None)
-                if first_ts:
-                    bar_q = Fraction(first_ts['num'] * 4, first_ts['den'])
-                    pickup_q = _onset_frac(p_events[0]['dur'])
-                    _postprocess_pickup_xml(str(xml_out), float(bar_q - pickup_q))
+            # Fix pickup measures in the written XML
+            pickup_shift, _ms, section_pickup_offsets = _compute_shifts(events)
+            if pickup_shift > 0 or section_pickup_offsets:
+                _postprocess_pickup_xml(str(xml_out), float(pickup_shift),
+                                        section_pickup_offsets)
             n_parts = len(score.parts)
             print(f'  OK {stem}  notes={n_notes}  parts={n_parts}')
             ok += 1
