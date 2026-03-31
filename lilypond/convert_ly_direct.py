@@ -90,6 +90,8 @@ def _make_wrapper(ly_path: Path, notes_path: Path) -> Path:
         if re.search(r'\\include\s+["\']articulate\.ly["\']', src):
             patched = re.sub(r'\\include\s+["\']articulate\.ly["\']',
                              '% articulate.ly disabled for note extraction', src)
+            # Also remove explicit \articulate commands (used as score-level wrapper)
+            patched = re.sub(r'\\articulate\b', '', patched)
             patched_path = TMP_DIR / f'_patched_{ly_path.stem}.ly'
             patched_path.write_text(patched, encoding='utf-8')
             include_path = patched_path
