@@ -409,22 +409,34 @@ def _postprocess_pickup_xml(xml_path: str, pickup_ql: float,
         tag = lambda t: ('{%s}%s' % (ns, t)) if ns else t
 
         def _fix_pickup_measure(m_el, divs, padding_divs):
-            """Remove leading padding rest from each voice; fix backup durations.
+            """Remove leading padding rests from each voice; fix backup durations.
+            The padding may be split across multiple consecutive rests (e.g. 5.5q
+            becomes a whole + dotted-quarter rest). Collects all leading rests per
+            voice and removes them if their total equals padding_divs.
             Returns True if the measure was modified."""
-            first_seen: set = set()
-            to_remove = []
+            # Collect consecutive leading rests per voice (before first non-rest)
+            voice_leading: dict = {}   # v -> [note_el, ...]
+            voice_done: set = set()
             for note_el in list(m_el.findall(tag('note'))):
-                v_el = note_el.find(tag('voice'))
-                v = v_el.text if v_el is not None else '1'
                 if note_el.find(tag('chord')) is not None:
                     continue
-                if v not in first_seen:
-                    first_seen.add(v)
-                    rest_el = note_el.find(tag('rest'))
-                    dur_el  = note_el.find(tag('duration'))
-                    if rest_el is not None and dur_el is not None:
-                        if int(dur_el.text) == padding_divs:
-                            to_remove.append(note_el)
+                v_el = note_el.find(tag('voice'))
+                v = v_el.text if v_el is not None else '1'
+                if v in voice_done:
+                    continue
+                rest_el = note_el.find(tag('rest'))
+                dur_el  = note_el.find(tag('duration'))
+                if rest_el is not None and dur_el is not None:
+                    voice_leading.setdefault(v, []).append(note_el)
+                else:
+                    voice_done.add(v)   # first non-rest seen — stop collecting
+
+            to_remove = []
+            for v, rests in voice_leading.items():
+                total = sum(int(n.find(tag('duration')).text) for n in rests
+                            if n.find(tag('duration')) is not None)
+                if total == padding_divs:
+                    to_remove.extend(rests)
             for note_el in to_remove:
                 m_el.remove(note_el)
             if not to_remove:
