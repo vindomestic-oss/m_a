@@ -19,7 +19,7 @@ from pathlib import Path
 from fractions import Fraction
 
 import music21 as m21
-from music21 import note as m21note, stream, pitch as m21pitch, duration as m21dur
+from music21 import note as m21note, chord as m21chord, stream, pitch as m21pitch, duration as m21dur
 from music21 import meter, key, tempo
 
 # ── paths ─────────────────────────────────────────────────────────────────────
@@ -584,6 +584,27 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
                 voice_flats[vc].insert(float(on_frac), obj)
             except Exception:
                 pass
+
+        # Merge simultaneous notes at the same offset into Chords within each voice
+        for vc_id, flat in voice_flats.items():
+            # Collect offsets that have multiple Note objects
+            from collections import defaultdict
+            offset_notes: dict = defaultdict(list)
+            for el in list(flat.getElementsByClass(m21note.Note)):
+                offset_notes[el.offset].append(el)
+            for off, nlist in offset_notes.items():
+                if len(nlist) < 2:
+                    continue
+                # Build a Chord from all notes at this offset
+                chord = m21chord.Chord(nlist)
+                chord.duration = nlist[0].duration
+                # Handle ties: if any note is tie-start, mark chord
+                tie_starts = [n for n in nlist if n.tie and n.tie.type in ('start', 'continue')]
+                if tie_starts:
+                    chord.tie = m21tie.Tie('start')
+                for n in nlist:
+                    flat.remove(n)
+                flat.insert(off, chord)
 
         if len(voice_ids_for_staff) == 1:
             # Single voice: simple path
