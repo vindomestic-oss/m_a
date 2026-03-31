@@ -272,6 +272,166 @@ _KERN_COMPOSER = {
     'monteverdi':  'Monteverdi',
 }
 
+# ── Bach cycle grouping ────────────────────────────────────────────────────────
+
+_BACH_CYCLE_ORDER = [
+    'WTC, Book I',
+    'WTC, Book II',
+    'Inventions',
+    'Sinfonias',
+    'English Suites',
+    'French Suites',
+    'Keyboard Partitas',
+    'Goldberg Variations',
+    'Art of Fugue',
+    'Violin Sonatas & Partitas',
+    'Cello Suites',
+    'Flute Sonatas',
+    'Violin Sonatas with Keyboard',
+    'Brandenburg Concertos',
+    'Concertos',
+    'Organ Sonatas',
+    'Orgelbüchlein',
+    'Organ Mass (Clavier-Übung III)',
+    'Chorale Preludes',
+    'Chorale Harmonizations',
+    'Cantatas',
+    'Motets & Masses',
+    'Notebook for A.M. Bach',
+    'Toccatas & Preludes',
+    'Small Keyboard Works',
+    'Other Bach',
+]
+
+_BACH_CYCLE_IDX = {c: i for i, c in enumerate(_BACH_CYCLE_ORDER)}
+
+
+def _bach_cycle(rel: str) -> str:
+    """Return cycle/collection name for a Bach file (kern or lilypond XML)."""
+    import re as _re
+    r = rel.replace('\\', '/').lower()
+    fname = r.split('/')[-1]
+    stem  = fname.rsplit('.', 1)[0]
+
+    # ── kern files: use directory context ─────────────────────────────────────
+    if fname.endswith('.krn'):
+        # WTC
+        m = _re.match(r'wtc([12])([pf])(\d+)', stem)
+        if m:
+            return 'WTC, Book I' if m.group(1) == '1' else 'WTC, Book II'
+        # Inventions
+        if _re.match(r'inven\d+', stem):
+            return 'Inventions'
+        # Cello suites by directory
+        if '/cello/' in r:
+            return 'Cello Suites'
+        # Violin by directory or filename
+        if '/violin/' in r or _re.match(r'(partita|sonata)\d', stem):
+            return 'Violin Sonatas & Partitas'
+        # Brandenburg by directory
+        if '/brandenburg/' in r or _re.match(r'bwv104[6-9][a-z]?|bwv105[01][a-z]?', stem):
+            return 'Brandenburg Concertos'
+        # Chorales
+        if '/chorale' in r or _re.match(r'bwv0[23]\d\d|bwv04[0-3]\d', stem) or _re.match(r'chor\d+', stem):
+            return 'Chorale Harmonizations'
+        if '/organ' in r:
+            return 'Chorale Preludes'
+        if 'bwv0565' in stem:
+            return 'Toccatas & Preludes'
+        if _re.match(r'bwv\d+', stem):
+            n = int(_re.search(r'\d+', stem).group())
+            return _bwv_to_cycle(n)
+
+    # ── lilypond XML / MXL files ───────────────────────────────────────────────
+    # Named non-BWV files
+    if 'contrapunctus' in stem or stem.startswith('f9') or 'duetto' in stem:
+        return 'Art of Fugue'
+    if 'passacag' in stem or 'toccatafugue' in stem.replace(' ', '') or 'bwv0565' in stem:
+        return 'Toccatas & Preludes'
+    if stem.startswith('french_suite') or 'french_suite' in stem:
+        return 'French Suites'
+    if 'cellosuite' in stem:
+        return 'Cello Suites'
+    if stem.startswith('concerto_in') or 'concerto_in' in stem:
+        return 'Concertos'
+    if stem.startswith('brandenbur'):
+        return 'Brandenburg Concertos'
+    if stem in ('air', 'air_tromb'):
+        return 'Concertos'
+    if 'sonataiv' in stem.replace('_', ''):
+        return 'Violin Sonatas with Keyboard'
+    if 'cantata' in stem:
+        return 'Cantatas'
+    if stem in ('bistdubeimiir', 'bistdubeimiir') or 'bistdu' in stem:
+        return 'Notebook for A.M. Bach'
+    if stem in ('prelude_et_fugue_en_la_majeur', 'prelude_et_fugue'):
+        return 'Toccatas & Preludes'
+    # Organ chorales by name
+    if any(s in stem for s in ('christ_lag', 'christlag', 'da_jesus', 'das_alte',
+                                'durch_adams', 'ich_ruf', 'in_dich', 'in_dulci',
+                                'o_haupt', 'puer_natus', 'sheep', 'vom_himmel',
+                                'von_gott', 'lobt', 'nun_komm', 'womut',
+                                'bach_brich', 'bach_christ', 'minuet_')):
+        return 'Chorale Preludes'
+    if any(s in stem for s in ('bistdu', 'bist_du')):
+        return 'Notebook for A.M. Bach'
+
+    # Notebook Anna Magdalena
+    notebook_bwvs = set(range(508, 519)) | {690, 691, 515, 516, 510, 511, 512}
+
+    # Extract BWV number
+    m = _re.search(r'bwv[-_]?(\d+)', stem)
+    if m:
+        n = int(m.group(1))
+        if n in notebook_bwvs or 508 <= n <= 518:
+            return 'Notebook for A.M. Bach'
+        return _bwv_to_cycle(n)
+
+    return 'Other Bach'
+
+
+def _bwv_to_cycle(n: int) -> str:
+    """Map BWV number to cycle name."""
+    if 846 <= n <= 869:  return 'WTC, Book I'
+    if 870 <= n <= 893:  return 'WTC, Book II'
+    # WTC early versions (847a, 848a etc — parsed as 847,848 from regex)
+    if n in (847, 848, 849, 850, 851, 852, 853, 854, 855, 856, 857, 858,
+             859, 860, 861, 862, 863, 864, 865, 866, 867, 868, 869,
+             875, 878, 881, 882, 884, 885, 886, 887, 889, 891, 893, 895):
+        # overlap with above ranges; 895 is near WTC
+        if n <= 893: return 'WTC, Book I' if n <= 869 else 'WTC, Book II'
+    if 772 <= n <= 786:  return 'Inventions'
+    if 787 <= n <= 801:  return 'Sinfonias'
+    if 806 <= n <= 811:  return 'English Suites'
+    if 812 <= n <= 817:  return 'French Suites'
+    if 825 <= n <= 830:  return 'Keyboard Partitas'
+    if n == 988:         return 'Goldberg Variations'
+    if n == 1080:        return 'Art of Fugue'
+    if 1001 <= n <= 1006: return 'Violin Sonatas & Partitas'
+    if 1007 <= n <= 1012: return 'Cello Suites'
+    if n == 1013:        return 'Flute Sonatas'
+    if 1014 <= n <= 1019: return 'Violin Sonatas with Keyboard'
+    if 1041 <= n <= 1045: return 'Concertos'
+    if 1046 <= n <= 1051: return 'Brandenburg Concertos'
+    if 1052 <= n <= 1065: return 'Concertos'
+    # Organ
+    if 525 <= n <= 530:  return 'Organ Sonatas'
+    if 531 <= n <= 598:  return 'Toccatas & Preludes'
+    if 599 <= n <= 644:  return 'Orgelbüchlein'
+    if 645 <= n <= 650:  return 'Chorale Preludes'   # Schübler chorales
+    if 651 <= n <= 689:  return 'Organ Mass (Clavier-Übung III)'
+    if 690 <= n <= 771:  return 'Chorale Preludes'
+    # Chorales (harmonized, from cantatas)
+    if 250 <= n <= 438:  return 'Chorale Harmonizations'
+    # Small keyboard works
+    if 772 <= n <= 805:  return 'Small Keyboard Works'   # already covered above
+    if 894 <= n <= 987:  return 'Small Keyboard Works'
+    if 989 <= n <= 1000: return 'Small Keyboard Works'
+    # Cantatas
+    if 1 <= n <= 200:    return 'Cantatas'
+    if 225 <= n <= 249:  return 'Motets & Masses'
+    return 'Other Bach'
+
 
 def _composer_from_rel(rel: str) -> str:
     parts = rel.replace('\\', '/').split('/')
@@ -2481,10 +2641,48 @@ class FileBrowser(tk.Tk):
 
     def _populate_list(self, files=None):
         self._tree.delete(*self._tree.get_children())
-        for rel, full in (files or self._files):
-            self._tree.insert("", tk.END, text=os.path.basename(rel), values=(full,))
-        n = len(files) if files is not None else len(self._files)
-        self._count_var.set(f"{n} file{'s' if n != 1 else ''}")
+        self._tree.tag_configure('group', foreground='#cba6f7',
+                                  font=('Segoe UI', 9, 'bold'))
+        file_list = files if files is not None else self._files
+
+        # Group by (composer, cycle)
+        groups: dict = {}
+        order: list = []
+        for rel, full in file_list:
+            composer = _composer_from_rel(rel)
+            cycle = _bach_cycle(rel) if composer == 'Bach' else None
+            key = (composer, cycle)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append((rel, full))
+
+        def _group_sort_key(key):
+            composer, cycle = key
+            if composer == 'Bach':
+                return (0, _BACH_CYCLE_IDX.get(cycle or '', 99), cycle or '')
+            return (1, 0, composer or '')
+
+        sorted_order = sorted(order, key=_group_sort_key)
+        total = 0
+        use_headers = len(sorted_order) > 1 or (
+            sorted_order and sorted_order[0][1] is not None)
+        for key in sorted_order:
+            composer, cycle = key
+            group_files = groups[key]
+            if use_headers:
+                label = cycle if cycle else (composer or 'Other')
+                header = f'{label}  ({len(group_files)})'
+                parent = self._tree.insert('', tk.END, text=header,
+                                           values=(), tags=('group',))
+                self._tree.item(parent, open=True)
+            else:
+                parent = ''
+            for rel, full in group_files:
+                self._tree.insert(parent, tk.END,
+                                  text=os.path.basename(rel), values=(full,))
+            total += len(group_files)
+        self._count_var.set(f"{total} file{'s' if total != 1 else ''}")
 
     def _apply_filter(self):
         q = self._search_var.get().lower()
@@ -2500,7 +2698,10 @@ class FileBrowser(tk.Tk):
         sel = self._tree.selection()
         if not sel:
             return
-        path = self._tree.item(sel[0], "values")[0]
+        vals = self._tree.item(sel[0], "values")
+        if not vals:
+            return  # group header clicked
+        path = vals[0]
         if path == self._current_path:
             return
         self._current_path = path

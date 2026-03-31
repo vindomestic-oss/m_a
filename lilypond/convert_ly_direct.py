@@ -433,10 +433,23 @@ def _postprocess_pickup_xml(xml_path: str, pickup_ql: float,
 
             to_remove = []
             for v, rests in voice_leading.items():
-                total = sum(int(n.find(tag('duration')).text) for n in rests
-                            if n.find(tag('duration')) is not None)
-                if total == padding_divs:
-                    to_remove.extend(rests)
+                # Greedily collect leading rests up to exactly padding_divs.
+                # Stops as soon as cumulative == padding_divs, so a real pickup
+                # rest that follows the padding is kept.
+                candidate = []
+                cumulative = 0
+                for r in rests:
+                    dur_el = r.find(tag('duration'))
+                    if dur_el is None:
+                        continue
+                    dur = int(dur_el.text)
+                    if cumulative < padding_divs:
+                        candidate.append(r)
+                        cumulative += dur
+                    else:
+                        break
+                if cumulative == padding_divs:
+                    to_remove.extend(candidate)
             for note_el in to_remove:
                 m_el.remove(note_el)
             if not to_remove:
