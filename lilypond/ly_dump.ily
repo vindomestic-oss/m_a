@@ -142,6 +142,54 @@
        ((eq? name 'ContextChange)
         onset)  ;; no-op here; sequential loop handles it
 
+       ;; ── Volta repeat: \repeat "volta" N { body } [\alternative { { a1 } ... }]
+       ;; Emits BAR start-repeat/end-repeat and VOLTA start/stop events.
+       ((eq? name 'VoltaRepeatedMusic)
+        (let* ((body (ly:music-property m 'element #f))
+               (alts (ly:music-property m 'elements '()))
+               (body-end (begin
+                           (when %dump-port
+                             (dump-write
+                              "{\"t\":\"BAR\""
+                              ",\"on\":\"" (dump-onset onset) "\""
+                              ",\"bar\":\"start-repeat\""
+                              "}"))
+                           (if body
+                               (dump-traverse body onset staff voice)
+                               onset))))
+          (if (null? alts)
+              ;; No alternatives: simple end-repeat barline
+              (begin
+                (when %dump-port
+                  (dump-write
+                   "{\"t\":\"BAR\""
+                   ",\"on\":\"" (dump-onset body-end) "\""
+                   ",\"bar\":\"end-repeat\""
+                   "}"))
+                body-end)
+              ;; Alternatives: volta brackets
+              (let loop ((as alts) (n 1) (cur body-end) (max-end body-end))
+                (if (null? as)
+                    max-end
+                    (begin
+                      (when %dump-port
+                        (dump-write
+                         "{\"t\":\"VOLTA\""
+                         ",\"on\":\"" (dump-onset cur) "\""
+                         ",\"volta-type\":\"start\""
+                         ",\"n\":" n
+                         "}"))
+                      (let ((a-end (dump-traverse (car as) cur staff voice)))
+                        (when %dump-port
+                          (dump-write
+                           "{\"t\":\"VOLTA\""
+                           ",\"on\":\"" (dump-onset a-end) "\""
+                           ",\"volta-type\":\"stop\""
+                           ",\"n\":" n
+                           "}"))
+                        (loop (cdr as) (+ n 1) a-end
+                              (if (ly:moment<? max-end a-end) a-end max-end)))))))))
+
        ;; ── Multi-measure rest (R1*3/4) — advance onset by total music length
        ;; ly:music-length handles multiplied durations correctly
        ((memq name '(MultiMeasureRestMusic MultiMeasureRestEvent))

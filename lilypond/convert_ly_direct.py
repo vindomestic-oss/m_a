@@ -20,7 +20,7 @@ from fractions import Fraction
 
 import music21 as m21
 from music21 import note as m21note, chord as m21chord, stream, pitch as m21pitch, duration as m21dur
-from music21 import meter, key, tempo
+from music21 import meter, key, tempo, bar as m21bar, spanner as m21spanner
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 
@@ -683,7 +683,82 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
         score.append(combined_part)
 
     _split_wide_range_part(score)
+    _apply_repeats(score, note_events, pickup_shift)
     return score
+
+
+def _apply_repeats(score: m21.stream.Score, events: list, pickup_shift) -> None:
+    """Insert repeat barlines and volta brackets from BAR/VOLTA events."""
+    bar_evs   = [e for e in events if e.get('t') == 'BAR']
+    volta_evs = [e for e in events if e.get('t') == 'VOLTA']
+    if not bar_evs and not volta_evs:
+        return
+
+    def ev_q(ev) -> float:
+        return float(_onset_frac(ev['on'])) + float(pickup_shift)
+
+    for part in score.parts:
+        measures = list(part.getElementsByClass('Measure'))
+        if not measures:
+            continue
+
+        def m_start(i):
+            return float(measures[i].offset)
+
+        def m_end(i):
+            if i + 1 < len(measures):
+                return float(measures[i + 1].offset)
+            return float(measures[i].offset) + float(measures[i].barDuration.quarterLength)
+
+        def find_start(q):
+            for m in measures:
+                if abs(float(m.offset) - q) < 0.1:
+                    return m
+            return None
+
+        def find_ending(q):
+            for i, m in enumerate(measures):
+                if abs(m_end(i) - q) < 0.1:
+                    return m
+            return None
+
+        # Start/end repeat barlines (from \repeat "volta" without \alternative)
+        for ev in bar_evs:
+            q = ev_q(ev)
+            if ev['bar'] == 'start-repeat':
+                m = find_start(q)
+                if m and m.leftBarline is None:
+                    m.leftBarline = m21bar.Repeat('start')
+            elif ev['bar'] == 'end-repeat':
+                m = find_ending(q)
+                if m:
+                    m.rightBarline = m21bar.Repeat('end')
+
+        # Volta brackets
+        volta_start_q: dict = {}
+        for ev in sorted(volta_evs, key=ev_q):
+            q = ev_q(ev)
+            n = ev['n']
+            if ev['volta-type'] == 'start':
+                volta_start_q[n] = q
+                if n == 1:
+                    # End-repeat barline on last body measure
+                    m = find_ending(q)
+                    if m:
+                        m.rightBarline = m21bar.Repeat('end')
+                # Start-repeat barline on the body's first measure
+                # (already emitted as BAR start-repeat, but handle here too)
+                start_m = find_start(q)
+                if start_m:
+                    start_m.leftBarline = None  # remove any accidental barline
+            elif ev['volta-type'] == 'stop':
+                start_q = volta_start_q.pop(n, None)
+                if start_q is None:
+                    continue
+                bracket_ms = [m for m in measures
+                               if start_q - 0.05 <= float(m.offset) < q - 0.05]
+                if bracket_ms:
+                    part.insert(0, m21spanner.RepeatBracket(bracket_ms, number=n))
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
