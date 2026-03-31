@@ -258,8 +258,11 @@ def _split_wide_range_part(score: m21.stream.Score) -> None:
         bass_part.append(bm)
 
     score.remove(part)
-    _add_auto_clefs(treble_part)
-    _add_auto_clefs(bass_part)
+    # Fixed clefs for split parts — do NOT use auto-clef, which would add
+    # mid-piece clef changes based on local averages and make the upper part
+    # appear in bass clef when a lower inner voice dominates a window.
+    treble_part.measures(1, 1)[0].insert(0, m21clef.TrebleClef())
+    bass_part.measures(1, 1)[0].insert(0, m21clef.BassClef())
     score.insert(0, treble_part)
     score.append(bass_part)
 
