@@ -2283,6 +2283,10 @@ function _highlightFilter(idx,filter){{
     var active=(s.getAttribute('data-ff')===filter);
     s.style.textDecoration=active?'underline':'';
     s.style.fontWeight=active?'bold':'';
+    s.style.fontStyle=active?'italic':'';
+    s.style.background=active?'rgba(255,210,60,0.45)':'';
+    s.style.borderRadius=active?'3px':'';
+    s.style.padding=active?'1px 3px':'';
   }});
 }}
 
@@ -2320,8 +2324,10 @@ function highlight(){{
       var existingDetail=document.getElementById(detailId);
       if(existingDetail) existingDetail.remove();
       clearRects(); clearActiveRows();
+      var st2=document.getElementById('motif-search-status');
       if(sameActive){{
         activeKey=null; activeFilter='all';
+        if(st2){{st2.innerHTML='';}}
       }}else{{
         activeKey=key; activeFilter=filter;
         var row=document.querySelector('#motif-dict tr[data-midx="'+idx+'"]');
@@ -2331,6 +2337,12 @@ function highlight(){{
         drawBoxes({{occs:occs,color:motifs[idx].color}});
         scrollToFirst({{occs:occs}});
         _highlightFilter(idx,filter);
+        if(st2){{
+          var badge2='';
+          if(filter==='direct')badge2='<span style="background:#1a7f37;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">\u00d7direct</span> ';
+          else if(filter==='inv')badge2='<span style="background:#c05a00;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">\u21c5inv</span> ';
+          st2.innerHTML=badge2+'<b>M'+(idx+1)+'</b>';
+        }}
       }}
     }});
   }});
@@ -2344,8 +2356,10 @@ function highlight(){{
       clearActiveRows();
       if(existingDetail) existingDetail.remove();
       activeFilter='all';
+      var st=document.getElementById('motif-search-status');
       if(wasActive){{
         clearRects(); activeKey=null;
+        if(st){{st.textContent='';st.innerHTML='';}}
       }}else{{
         activeKey=key;
         this.style.background='#e8f0fe';
@@ -2353,6 +2367,7 @@ function highlight(){{
         colorMotif(motifs[idx]);
         drawBoxes(motifs[idx]);
         scrollToFirst(motifs[idx]);
+        if(st){{st.innerHTML='<b>M'+(idx+1)+'</b>';}}
         var qs=motifs[idx].queryStr;
         if(qs){{
           var inp=document.getElementById('motif-search-input');
@@ -2432,11 +2447,79 @@ function addCustomMotif(occs,queryStr){{
   scrollToFirst({{occs:occs}});
 }}
 
+function _invertQueryStr(q){{
+  // Invert the intervals part of a query string "dur;phase;ivs" → "dur;phase;-ivs"
+  var parts=q.split(';');
+  if(parts.length<3)return null;
+  var ivPart=parts[2];
+  // Check it's an interval/contour pattern (not empty)
+  if(!ivPart)return null;
+  var invIv=ivPart.replace(/([+\\-])(\\d*)/g,function(m,sign,num){{
+    return(sign==='+' ? '-' : '+')+num;
+  }});
+  if(invIv===ivPart)return null; // nothing changed (no + or -)
+  return parts[0]+';'+parts[1]+';'+invIv;
+}}
+
+function _findDictMatch(query){{
+  // Returns {{idx, filter}} if query matches an existing auto-detected motif, else null.
+  // filter: 'direct' | 'inv' | 'all'
+  var hasInv=/;inv\\s*$/.test(query);
+  var base=query.replace(/;inv\\s*$/,'').trim();
+  var invBase=_invertQueryStr(base);
+  for(var i=0;i<motifs.length;i++){{
+    var mq=motifs[i].queryStr;
+    if(!mq)continue;
+    if(base===mq){{
+      // Direct match: user typed the motif's own query (±;inv suffix)
+      // ;inv means "show me the inverted variant of this motif"
+      var filter=hasInv?'inv':'direct';
+      var variant=hasInv?'inv':'direct';
+      return{{idx:i,filter:filter,variant:variant}};
+    }}
+    if(invBase&&invBase===mq){{
+      // User typed the inverted form of this motif's query (±;inv suffix)
+      var filter2=hasInv?'direct':'inv';
+      var variant2=hasInv?'direct':'inv';
+      return{{idx:i,filter:filter2,variant:variant2}};
+    }}
+  }}
+  return null;
+}}
+
+function _activateDictRow(match, st){{
+  var idx=match.idx; var filter=match.filter; var variant=match.variant;
+  var row=document.querySelector('#motif-dict tr[data-midx="'+idx+'"]');
+  if(!row)return;
+  clearActiveRows(); clearRects();
+  activeKey='auto:'+idx; activeFilter=filter;
+  row.style.background='#e8f0fe';
+  row.setAttribute('data-active','1');
+  row.scrollIntoView({{behavior:'smooth',block:'nearest'}});
+  colorMotif(motifs[idx]);
+  var occs=_filteredOccs(idx,filter);
+  drawBoxes({{occs:occs,color:motifs[idx].color}});
+  scrollToFirst({{occs:occs}});
+  _highlightFilter(idx,filter);
+  // Status badge
+  var label=motifs[idx].queryStr;
+  var n=idx+1;
+  var badge,bcolor;
+  if(variant==='direct'){{badge='\u00d7direct';bcolor='#1a7f37';}}
+  else if(variant==='inv'){{badge='\u21c5inv';bcolor='#c05a00';}}
+  else{{badge='\u2295all';bcolor='#1a55a0';}}
+  st.innerHTML='<span style="background:'+bcolor+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">'+badge+'</span>'
+    +' <b>M'+n+'</b>';
+}}
+
 window.searchMotif=function(){{
   var inp=document.getElementById('motif-search-input');
   var st=document.getElementById('motif-search-status');
   var query=inp.value.trim();
   if(!query)return;
+  // Check if query matches an existing dictionary motif
+  var match=_findDictMatch(query);
+  if(match){{_activateDictRow(match,st);return;}}
   st.style.color='#888'; st.textContent='\u2026';
   fetch('/search',{{method:'POST',headers:{{'Content-Type':'text/plain'}},body:query}})
   .then(function(r){{return r.json();}})
