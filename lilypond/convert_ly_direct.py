@@ -247,13 +247,20 @@ def _split_wide_range_part(score: m21.stream.Score) -> None:
         for obj in m.getElementsByClass(('TimeSignature', 'KeySignature')):
             tm.insert(obj.offset, copy.deepcopy(obj))
             bm.insert(obj.offset, copy.deepcopy(obj))
-        # Distribute voices
+        # Distribute voices; track per-part voice order for renumbering
+        t_vi = 1
+        b_vi = 1
         for v in m.getElementsByClass('Voice'):
             vid = str(v.id)
+            vc = copy.deepcopy(v)
             if vid in treble_vids:
-                tm.insert(0, copy.deepcopy(v))
+                vc.id = str(t_vi)
+                t_vi += 1
+                tm.insert(0, vc)
             else:
-                bm.insert(0, copy.deepcopy(v))
+                vc.id = str(b_vi)
+                b_vi += 1
+                bm.insert(0, vc)
         treble_part.append(tm)
         bass_part.append(bm)
 
