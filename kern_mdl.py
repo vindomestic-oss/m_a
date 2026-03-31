@@ -432,6 +432,12 @@ _MOTIF_COLORS  = [
 _MEI_NS = 'http://www.music-encoding.org/ns/mei'
 _XML_ID = '{http://www.w3.org/XML/1998/namespace}id'
 
+# Per-file beat_dur_q overrides (filename substring → beat_dur_q in quarter notes).
+# Use to force a specific metric feel when the time signature is ambiguous.
+_BEAT_DUR_OVERRIDES: dict[str, float] = {
+    'bwv_988_v27': 1.0,   # 6/8 felt as 2+2+2 (3 quarter beats), not 3+3
+}
+
 _DUR_NAMES = {
     4.0: '&#119133;', 3.0: '&#119134;.', 2.0: '&#119134;',
     1.5: '&#9833;.',  1.0: '&#9833;',    0.75: '&#9834;.',
@@ -1138,7 +1144,7 @@ def _mdl_score(n, L, transforms):
     return round(n * (L - 1) - L - transp_cost)
 
 
-def analyze_motifs(vtk, mei_str=None):
+def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     """
     Run motif analysis on the currently-loaded verovio score.
     Returns list of:
@@ -1149,6 +1155,8 @@ def analyze_motifs(vtk, mei_str=None):
         if mei_str is None:
             mei_str = vtk.getMEI()
         voices, beat_dur_q = _voice_notes_from_mei(mei_str)
+        if beat_dur_q_override is not None:
+            beat_dur_q = beat_dur_q_override
         all_seqs = [(vk, _interval_seq(notes, beat_dur_q))
                     for vk, notes in voices.items()
                     if len(notes) >= 4]
@@ -1783,11 +1791,17 @@ def render_score(path: str, version: str = "1") -> tuple:
 
     # ── motif analysis ────────────────────────────────────────────────────────
     mei_str = _vtk.getMEI()
-    motifs = analyze_motifs(_vtk, mei_str=mei_str)
+    # Per-file beat_dur_q override
+    _path_lower = str(path).lower().replace('\\', '/')
+    _beat_override = next(
+        (v for k, v in _BEAT_DUR_OVERRIDES.items() if k in _path_lower), None)
+    motifs = analyze_motifs(_vtk, mei_str=mei_str, beat_dur_q_override=_beat_override)
 
     # compute interval sequences for the /search endpoint + build note label map
     try:
         _voices_s, _beat_dur_q_s = _voice_notes_from_mei(mei_str)
+        if _beat_override is not None:
+            _beat_dur_q_s = _beat_override
         all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s))
                     for vk, notes in _voices_s.items() if len(notes) >= 4]
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}

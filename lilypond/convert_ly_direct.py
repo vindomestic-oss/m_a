@@ -177,6 +177,62 @@ def _fix_pickup_measure(part: m21.stream.Part, pickup_shift: float) -> None:
     pass
 
 
+from music21 import clef as m21clef
+
+def _add_auto_clefs(part: m21.stream.Part) -> None:
+    """
+    Insert clef objects into the Part based on local pitch range.
+    Analyzes notes in sliding windows of ~4 measures; changes clef when the
+    average pitch clearly indicates a different clef than is currently active.
+    Thresholds: avg MIDI < 58 → bass, avg MIDI > 63 → treble (hysteresis gap 58-63).
+    """
+    measures = list(part.getElementsByClass('Measure'))
+    if not measures:
+        return
+
+    # Gather average MIDI per measure
+    midi_per_measure: list[float | None] = []
+    for m in measures:
+        pitches = [n.pitch.midi for n in m.flatten().notes
+                   if isinstance(n, m21note.Note)]
+        midi_per_measure.append(sum(pitches) / len(pitches) if pitches else None)
+
+    # Smooth: for each measure use average of window ±2 measures
+    WIN = 2
+    smoothed: list[float | None] = []
+    for i in range(len(measures)):
+        vals = [v for v in midi_per_measure[max(0,i-WIN):i+WIN+1] if v is not None]
+        smoothed.append(sum(vals) / len(vals) if vals else None)
+
+    # Decide clef per measure, with hysteresis
+    BASS_THRESH   = 58   # avg below this → bass
+    TREBLE_THRESH = 63   # avg above this → treble
+
+    current_clef = None   # will be set on first measure
+    for i, (m, avg) in enumerate(zip(measures, smoothed)):
+        if avg is None:
+            continue
+        if avg < BASS_THRESH:
+            desired = 'bass'
+        elif avg > TREBLE_THRESH:
+            desired = 'treble'
+        else:
+            desired = current_clef  # stay in current when ambiguous
+
+        if desired is None:
+            desired = 'treble'  # default
+
+        if desired != current_clef:
+            # Remove any existing clef in this measure
+            for c in list(m.getElementsByClass('Clef')):
+                m.remove(c)
+            if desired == 'bass':
+                m.insert(0, m21clef.BassClef())
+            else:
+                m.insert(0, m21clef.TrebleClef())
+            current_clef = desired
+
+
 import xml.etree.ElementTree as _ET
 
 def _postprocess_pickup_xml(xml_path: str, pickup_ql: float) -> None:
@@ -440,6 +496,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             except Exception:
                 part = flat
             part.id = f'Staff{staff_id}'
+            _add_auto_clefs(part)
             score.append(part)
             continue
 
@@ -498,6 +555,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             combined_part.append(new_m)
 
         _fix_pickup_measure(combined_part, float(pickup_shift))
+        _add_auto_clefs(combined_part)
         score.append(combined_part)
 
     return score
