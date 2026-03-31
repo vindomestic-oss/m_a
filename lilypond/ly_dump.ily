@@ -162,16 +162,23 @@
           onset))
 
        ;; ── Key change — emit and don't advance
+       ;; Note: 'mode property is unreliable in 2.24; compute sharps from pitch-alist instead.
+       ;; pitch-alist entries: (step . alteration) where alteration 1/2 = one sharp, -1/2 = one flat.
        ((eq? name 'KeyChangeEvent)
-        (let ((tonic  (ly:music-property m 'tonic))
-              (mode   (ly:music-property m 'mode 'major)))
+        (let* ((tonic  (ly:music-property m 'tonic))
+               (pal    (ly:music-property m 'pitch-alist '()))
+               (sharps (apply + (map (lambda (pair)
+                                       (cond ((> (cdr pair) 0) 1)
+                                             ((< (cdr pair) 0) -1)
+                                             (else 0)))
+                                     pal))))
           (when (and %dump-port (ly:pitch? tonic))
             (dump-write
              "{\"t\":\"K\""
              ",\"on\":\"" (dump-onset onset) "\""
              ",\"semi\":" (modulo (ly:pitch-semitones tonic) 12)
              ",\"step\":" (ly:pitch-notename tonic)
-             ",\"mode\":\"" (symbol->string mode) "\""
+             ",\"sharps\":" sharps
              ",\"st\":\"" staff "\""
              "}"))
           onset))

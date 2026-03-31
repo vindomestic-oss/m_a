@@ -177,6 +177,93 @@ def _fix_pickup_measure(part: m21.stream.Part, pickup_shift: float) -> None:
     pass
 
 
+def _split_wide_range_part(score: m21.stream.Score) -> None:
+    """
+    If the score has one Part with multiple voices in clearly different registers,
+    split into treble and bass Parts.
+    Algorithm: find the largest gap between consecutive voice averages; split there
+    if gap >= MIN_GAP semitones and the lower group has avg < BASS_MAX.
+    """
+    MIN_GAP  = 7    # minimum gap (semitones) between groups to justify a split
+    BASS_MAX = 55   # lower group must have avg below this to be considered bass
+
+    if len(score.parts) != 1:
+        return
+
+    part = score.parts[0]
+    measures = list(part.getElementsByClass('Measure'))
+    if not measures:
+        return
+
+    # Collect average MIDI per voice ID
+    voice_midis: dict[str, list[int]] = {}
+    for m in measures:
+        for v in m.getElementsByClass('Voice'):
+            vid = str(v.id)
+            for n in v.flatten().notes:
+                if isinstance(n, m21note.Note):
+                    voice_midis.setdefault(vid, []).append(n.pitch.midi)
+
+    if len(voice_midis) < 2:
+        return
+
+    voice_avg = {vid: sum(ms) / len(ms) for vid, ms in voice_midis.items() if ms}
+    # Sort voices by average pitch ascending
+    sorted_vids = sorted(voice_avg, key=lambda v: voice_avg[v])
+
+    # Find the largest gap between consecutive averages
+    best_gap = 0
+    best_split = 0   # split after index best_split (inclusive) → bass
+    for i in range(len(sorted_vids) - 1):
+        gap = voice_avg[sorted_vids[i + 1]] - voice_avg[sorted_vids[i]]
+        if gap > best_gap:
+            best_gap = gap
+            best_split = i
+
+    if best_gap < MIN_GAP:
+        return  # no clear register gap
+
+    bass_vids   = set(sorted_vids[:best_split + 1])
+    treble_vids = set(sorted_vids[best_split + 1:])
+
+    # Lower group must be in genuine bass territory
+    lower_avg = sum(voice_avg[v] for v in bass_vids) / len(bass_vids)
+    if lower_avg >= BASS_MAX:
+        return
+
+    if not treble_vids or not bass_vids:
+        return
+
+    # Build treble and bass Parts
+    treble_part = m21.stream.Part()
+    treble_part.id = part.id + '_treble'
+    bass_part   = m21.stream.Part()
+    bass_part.id = part.id + '_bass'
+
+    for m in measures:
+        tm = m21.stream.Measure(number=m.number)
+        bm = m21.stream.Measure(number=m.number)
+        # Copy time/key sigs to both staves
+        for obj in m.getElementsByClass(('TimeSignature', 'KeySignature')):
+            tm.insert(obj.offset, copy.deepcopy(obj))
+            bm.insert(obj.offset, copy.deepcopy(obj))
+        # Distribute voices
+        for v in m.getElementsByClass('Voice'):
+            vid = str(v.id)
+            if vid in treble_vids:
+                tm.insert(0, copy.deepcopy(v))
+            else:
+                bm.insert(0, copy.deepcopy(v))
+        treble_part.append(tm)
+        bass_part.append(bm)
+
+    score.remove(part)
+    _add_auto_clefs(treble_part)
+    _add_auto_clefs(bass_part)
+    score.insert(0, treble_part)
+    score.append(bass_part)
+
+
 from music21 import clef as m21clef
 
 def _add_auto_clefs(part: m21.stream.Part) -> None:
@@ -455,16 +542,22 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
                         flat.insert(float(on_frac), meter.TimeSignature(f'{num}/{den}'))
                         inserted_ts.add(on_frac)
                 for on_frac, ks_ev in sorted(ks_map.items()):
-                    s = ks_ev['step']; sm = ks_ev['semi']
-                    mode = ks_ev.get('mode', 'major')
-                    pname = STEP_NAMES[s]
-                    alter = _alter_from_semi(s, sm)
                     try:
-                        p = m21pitch.Pitch(pname)
-                        p.octave = None
-                        if alter == 1.0:  p = m21pitch.Pitch(pname + '#')
-                        elif alter == -1.0: p = m21pitch.Pitch(pname + '-')
-                        flat.insert(float(on_frac), key.Key(p.name, mode))
+                        # Use sharps count from pitch-alist (reliable) rather than mode string
+                        sharps = ks_ev.get('sharps', None)
+                        if sharps is not None:
+                            flat.insert(float(on_frac), key.KeySignature(sharps))
+                        else:
+                            # Fallback for old-format events without 'sharps'
+                            s = ks_ev['step']; sm = ks_ev['semi']
+                            mode = ks_ev.get('mode', 'major')
+                            pname = STEP_NAMES[s]
+                            alter = _alter_from_semi(s, sm)
+                            p = m21pitch.Pitch(pname)
+                            p.octave = None
+                            if alter == 1.0:  p = m21pitch.Pitch(pname + '#')
+                            elif alter == -1.0: p = m21pitch.Pitch(pname + '-')
+                            flat.insert(float(on_frac), key.Key(p.name, mode))
                     except Exception:
                         pass
             return flat
@@ -558,6 +651,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
         _add_auto_clefs(combined_part)
         score.append(combined_part)
 
+    _split_wide_range_part(score)
     return score
 
 
