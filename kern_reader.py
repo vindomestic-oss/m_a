@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# version: 2026-03-29
 """
 Kern Score Reader
 - tkinter: file browser (main thread)
@@ -214,6 +215,23 @@ def find_kern_files(root: str):
     return files
 
 
+XML_DIR = os.path.join(os.path.dirname(__file__), "musicxml")
+
+
+def find_xml_files(root: str):
+    """Return [(rel, full), ...] for all .xml files under root."""
+    files = []
+    if not os.path.isdir(root):
+        return files
+    for dirpath, _, fnames in os.walk(root):
+        for fname in sorted(fnames):
+            if fname.lower().endswith('.xml'):
+                full = os.path.join(dirpath, fname)
+                rel  = 'musicxml/' + os.path.relpath(full, root).replace('\\', '/')
+                files.append((rel, full))
+    return files
+
+
 _COMPOSER_MAP = {
     'bach':           'Bach',
     'palestrina':     'Palestrina',
@@ -254,6 +272,166 @@ _KERN_COMPOSER = {
     'monteverdi':  'Monteverdi',
 }
 
+# ── Bach cycle grouping ────────────────────────────────────────────────────────
+
+_BACH_CYCLE_ORDER = [
+    'WTC, Book I',
+    'WTC, Book II',
+    'Inventions',
+    'Sinfonias',
+    'English Suites',
+    'French Suites',
+    'Keyboard Partitas',
+    'Goldberg Variations',
+    'Art of Fugue',
+    'Violin Sonatas & Partitas',
+    'Cello Suites',
+    'Flute Sonatas',
+    'Violin Sonatas with Keyboard',
+    'Brandenburg Concertos',
+    'Concertos',
+    'Organ Sonatas',
+    'Orgelbüchlein',
+    'Organ Mass (Clavier-Übung III)',
+    'Chorale Preludes',
+    'Chorale Harmonizations',
+    'Cantatas',
+    'Motets & Masses',
+    'Notebook for A.M. Bach',
+    'Toccatas & Preludes',
+    'Small Keyboard Works',
+    'Other Bach',
+]
+
+_BACH_CYCLE_IDX = {c: i for i, c in enumerate(_BACH_CYCLE_ORDER)}
+
+
+def _bach_cycle(rel: str) -> str:
+    """Return cycle/collection name for a Bach file (kern or lilypond XML)."""
+    import re as _re
+    r = rel.replace('\\', '/').lower()
+    fname = r.split('/')[-1]
+    stem  = fname.rsplit('.', 1)[0]
+
+    # ── kern files: use directory context ─────────────────────────────────────
+    if fname.endswith('.krn'):
+        # WTC
+        m = _re.match(r'wtc([12])([pf])(\d+)', stem)
+        if m:
+            return 'WTC, Book I' if m.group(1) == '1' else 'WTC, Book II'
+        # Inventions
+        if _re.match(r'inven\d+', stem):
+            return 'Inventions'
+        # Cello suites by directory
+        if '/cello/' in r:
+            return 'Cello Suites'
+        # Violin by directory or filename
+        if '/violin/' in r or _re.match(r'(partita|sonata)\d', stem):
+            return 'Violin Sonatas & Partitas'
+        # Brandenburg by directory
+        if '/brandenburg/' in r or _re.match(r'bwv104[6-9][a-z]?|bwv105[01][a-z]?', stem):
+            return 'Brandenburg Concertos'
+        # Chorales
+        if '/chorale' in r or _re.match(r'bwv0[23]\d\d|bwv04[0-3]\d', stem) or _re.match(r'chor\d+', stem):
+            return 'Chorale Harmonizations'
+        if '/organ' in r:
+            return 'Chorale Preludes'
+        if 'bwv0565' in stem:
+            return 'Toccatas & Preludes'
+        if _re.match(r'bwv\d+', stem):
+            n = int(_re.search(r'\d+', stem).group())
+            return _bwv_to_cycle(n)
+
+    # ── lilypond XML / MXL files ───────────────────────────────────────────────
+    # Named non-BWV files
+    if 'contrapunctus' in stem or stem.startswith('f9') or 'duetto' in stem:
+        return 'Art of Fugue'
+    if 'passacag' in stem or 'toccatafugue' in stem.replace(' ', '') or 'bwv0565' in stem:
+        return 'Toccatas & Preludes'
+    if stem.startswith('french_suite') or 'french_suite' in stem:
+        return 'French Suites'
+    if 'cellosuite' in stem:
+        return 'Cello Suites'
+    if stem.startswith('concerto_in') or 'concerto_in' in stem:
+        return 'Concertos'
+    if stem.startswith('brandenbur'):
+        return 'Brandenburg Concertos'
+    if stem in ('air', 'air_tromb'):
+        return 'Concertos'
+    if 'sonataiv' in stem.replace('_', ''):
+        return 'Violin Sonatas with Keyboard'
+    if 'cantata' in stem:
+        return 'Cantatas'
+    if stem in ('bistdubeimiir', 'bistdubeimiir') or 'bistdu' in stem:
+        return 'Notebook for A.M. Bach'
+    if stem in ('prelude_et_fugue_en_la_majeur', 'prelude_et_fugue'):
+        return 'Toccatas & Preludes'
+    # Organ chorales by name
+    if any(s in stem for s in ('christ_lag', 'christlag', 'da_jesus', 'das_alte',
+                                'durch_adams', 'ich_ruf', 'in_dich', 'in_dulci',
+                                'o_haupt', 'puer_natus', 'sheep', 'vom_himmel',
+                                'von_gott', 'lobt', 'nun_komm', 'womut',
+                                'bach_brich', 'bach_christ', 'minuet_')):
+        return 'Chorale Preludes'
+    if any(s in stem for s in ('bistdu', 'bist_du')):
+        return 'Notebook for A.M. Bach'
+
+    # Notebook Anna Magdalena
+    notebook_bwvs = set(range(508, 519)) | {690, 691, 515, 516, 510, 511, 512}
+
+    # Extract BWV number
+    m = _re.search(r'bwv[-_]?(\d+)', stem)
+    if m:
+        n = int(m.group(1))
+        if n in notebook_bwvs or 508 <= n <= 518:
+            return 'Notebook for A.M. Bach'
+        return _bwv_to_cycle(n)
+
+    return 'Other Bach'
+
+
+def _bwv_to_cycle(n: int) -> str:
+    """Map BWV number to cycle name."""
+    if 846 <= n <= 869:  return 'WTC, Book I'
+    if 870 <= n <= 893:  return 'WTC, Book II'
+    # WTC early versions (847a, 848a etc — parsed as 847,848 from regex)
+    if n in (847, 848, 849, 850, 851, 852, 853, 854, 855, 856, 857, 858,
+             859, 860, 861, 862, 863, 864, 865, 866, 867, 868, 869,
+             875, 878, 881, 882, 884, 885, 886, 887, 889, 891, 893, 895):
+        # overlap with above ranges; 895 is near WTC
+        if n <= 893: return 'WTC, Book I' if n <= 869 else 'WTC, Book II'
+    if 772 <= n <= 786:  return 'Inventions'
+    if 787 <= n <= 801:  return 'Sinfonias'
+    if 806 <= n <= 811:  return 'English Suites'
+    if 812 <= n <= 817:  return 'French Suites'
+    if 825 <= n <= 830:  return 'Keyboard Partitas'
+    if n == 988:         return 'Goldberg Variations'
+    if n == 1080:        return 'Art of Fugue'
+    if 1001 <= n <= 1006: return 'Violin Sonatas & Partitas'
+    if 1007 <= n <= 1012: return 'Cello Suites'
+    if n == 1013:        return 'Flute Sonatas'
+    if 1014 <= n <= 1019: return 'Violin Sonatas with Keyboard'
+    if 1041 <= n <= 1045: return 'Concertos'
+    if 1046 <= n <= 1051: return 'Brandenburg Concertos'
+    if 1052 <= n <= 1065: return 'Concertos'
+    # Organ
+    if 525 <= n <= 530:  return 'Organ Sonatas'
+    if 531 <= n <= 598:  return 'Toccatas & Preludes'
+    if 599 <= n <= 644:  return 'Orgelbüchlein'
+    if 645 <= n <= 650:  return 'Chorale Preludes'   # Schübler chorales
+    if 651 <= n <= 689:  return 'Organ Mass (Clavier-Übung III)'
+    if 690 <= n <= 771:  return 'Chorale Preludes'
+    # Chorales (harmonized, from cantatas)
+    if 250 <= n <= 438:  return 'Chorale Harmonizations'
+    # Small keyboard works
+    if 772 <= n <= 805:  return 'Small Keyboard Works'   # already covered above
+    if 894 <= n <= 987:  return 'Small Keyboard Works'
+    if 989 <= n <= 1000: return 'Small Keyboard Works'
+    # Cantatas
+    if 1 <= n <= 200:    return 'Cantatas'
+    if 225 <= n <= 249:  return 'Motets & Masses'
+    return 'Other Bach'
+
 
 def _composer_from_rel(rel: str) -> str:
     parts = rel.replace('\\', '/').split('/')
@@ -264,6 +442,86 @@ def _composer_from_rel(rel: str) -> str:
         if part.lower() in _KERN_COMPOSER:
             return _KERN_COMPOSER[part.lower()]
     return 'Bach'
+
+
+def _palestrina_sort_key(rel):
+    """Sort key for Palestrina files: (mass_number, filename) so mass 0 groups together."""
+    import re
+    fname = rel.split('/')[-1]
+    stem  = fname.rsplit('.', 1)[0]
+    nums  = re.findall(r'\d+', stem)
+    mass  = int(nums[-1]) if nums else 9999
+    return (mass, fname.lower())
+
+
+def find_generated_files():
+    """Return [(rel, full), ...] for .krn files in the generated/ folder."""
+    gen_dir = os.path.join(os.path.dirname(__file__), 'generated')
+    if not os.path.isdir(gen_dir):
+        return []
+    files = []
+    for fname in sorted(os.listdir(gen_dir)):
+        if fname.endswith('.krn'):
+            full = os.path.join(gen_dir, fname)
+            files.append((f'generated/{fname}', full))
+    return files
+
+
+def find_lilypond_files():
+    """Return [(rel, full), ...] for MusicXML files in lilypond/musicxml/."""
+    xml_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
+    if not os.path.isdir(xml_dir):
+        return []
+    files = []
+    for fname in sorted(os.listdir(xml_dir)):
+        if fname.endswith('.xml'):
+            full = os.path.join(xml_dir, fname)
+            files.append((f'lilypond/{fname}', full))
+    return files
+
+
+def find_imslp_files():
+    """Return [(rel, full), ...] for .mxl files in musicxml/imslp_bach/, using manifest.json."""
+    imslp_dir = os.path.join(os.path.dirname(__file__), 'musicxml', 'imslp_bach')
+    if not os.path.isdir(imslp_dir):
+        return []
+    manifest_path = os.path.join(imslp_dir, 'manifest.json')
+    try:
+        import json as _json
+        with open(manifest_path, encoding='utf-8') as f:
+            manifest = _json.load(f)
+        page_xml = manifest.get('page_xml_files', {})
+    except Exception:
+        page_xml = {}
+
+    # Build file→title map (first title that lists this file)
+    file_title: dict = {}
+    for title, files in page_xml.items():
+        for fname in files:
+            if fname not in file_title:
+                file_title[fname] = title
+
+    result = []
+    all_files = manifest.get('all_files', []) if 'manifest_path' in dir() else []
+    try:
+        all_files = manifest.get('all_files', sorted(
+            f for f in os.listdir(imslp_dir) if f.endswith('.mxl')))
+    except Exception:
+        all_files = sorted(f for f in os.listdir(imslp_dir) if f.endswith('.mxl'))
+
+    for fname in all_files:
+        full = os.path.join(imslp_dir, fname)
+        if not os.path.isfile(full):
+            continue
+        title = file_title.get(fname, fname)
+        # If multiple files share same title, append filename suffix
+        same = [f for f in all_files if file_title.get(f, f) == title]
+        if len(same) > 1:
+            rel = f'imslp/{title} [{fname}]'
+        else:
+            rel = f'imslp/{title}'
+        result.append((rel, full))
+    return result
 
 
 def find_music21_files():
@@ -287,7 +545,11 @@ def find_music21_files():
         except StopIteration:
             rel = 'music21/' + os.path.basename(s)
         files.append((rel, s))
-    return files
+    # re-sort Palestrina by mass number first, then movement name
+    pal   = [(r, f) for r, f in files if '/palestrina/' in r]
+    other = [(r, f) for r, f in files if '/palestrina/' not in r]
+    pal.sort(key=lambda x: _palestrina_sort_key(x[0]))
+    return other + pal
 
 
 # ── validation ────────────────────────────────────────────────────────────────
@@ -330,6 +592,12 @@ _MOTIF_COLORS  = [
 _MEI_NS = 'http://www.music-encoding.org/ns/mei'
 _XML_ID = '{http://www.w3.org/XML/1998/namespace}id'
 
+# Per-file beat_dur_q overrides (filename substring → beat_dur_q in quarter notes).
+# Use to force a specific metric feel when the time signature is ambiguous.
+_BEAT_DUR_OVERRIDES: dict[str, float] = {
+    'bwv_988_v27': 1.0,   # 6/8 felt as 2+2+2 (3 quarter beats), not 3+3
+}
+
 _DUR_NAMES = {
     4.0: '&#119133;', 3.0: '&#119134;.', 2.0: '&#119134;',
     1.5: '&#9833;.',  1.0: '&#9833;',    0.75: '&#9834;.',
@@ -344,6 +612,13 @@ def _dur_q_to_str(d):
     Examples: 0.25 → '1/16', 0.5 → '1/8', 1.0 → '1/4', 1.5 → '3/8'."""
     from fractions import Fraction
     f = Fraction(d / 4.0).limit_denominator(64)
+    return f"{f.numerator}/{f.denominator}"
+
+
+def _dur_q_label(d):
+    """Fraction string in quarter-note units for display (e.g. 1/3 for triplet eighth)."""
+    from fractions import Fraction
+    f = Fraction(d).limit_denominator(100)
     return f"{f.numerator}/{f.denominator}"
 
 
@@ -364,7 +639,7 @@ def _interval_label(dsteps, dur_q):
     if octaves:
         iname += f'+{octaves}о'
     arrow = '&uarr;' if dsteps > 0 else ('&darr;' if dsteps < 0 else '&mdash;')
-    dname = _DUR_NAMES.get(dur_q, f'{dur_q}q')
+    dname = _DUR_NAMES.get(dur_q, _dur_q_to_str(dur_q))
     return f'{arrow}{iname}<sub>{dname}</sub>'
 
 
@@ -399,14 +674,26 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
       8th in 4/4  (beat=1.0): n_per_beat=2 → phase 0 or 1
       8th in 9/8  (beat=1.5): n_per_beat=3 → phase 0, 1, or 2
       triplet 1/3 in 4/4:     n_per_beat=3 → phase 0, 1, or 2
+      triplet 1/6 in 4/4:     n_per_beat=6 → phase % 3 (0,1,2) — groups of 3
+      32nd in 3/4 (beat=1.0): n_per_beat=8 → capped to 4 → phase 0-3 (same as 16th)
     """
     if dur_q <= 0 or beat_dur_q <= 0:
         return 0
     n_per_beat = max(1, round(beat_dur_q / dur_q))
     if n_per_beat <= 1:
         return 0
+    # For triplet notes (n_per_beat divisible by 3), phase within the triplet
+    # group is what matters rhythmically: phase 0 and phase 3 are both
+    # "first of triplet group" → collapse to phase % 3.
+    if n_per_beat % 3 == 0:
+        n_per_beat = 3
+    # Cap binary subdivisions at 4 phases (same resolution as 16th notes).
+    # Prevents 32nd/64th notes from generating excessive phase slots.
+    elif n_per_beat > 4:
+        n_per_beat = 4
     pos_in_beat = onset_q % beat_dur_q
-    return int(round(pos_in_beat / dur_q)) % n_per_beat
+    phase = int(round(pos_in_beat / dur_q)) % n_per_beat
+    return phase
 
 
 
@@ -431,7 +718,8 @@ def _voice_notes_from_mei(mei_str):
         mc, mu = int(c), int(u)
         bpm = mc * 4.0 / mu
         # Compound meter (3/8, 6/8, 9/8, 12/8 …): beat = dotted note = 3 subdivisions
-        bdq = (4.0 / mu * 3) if (mc % 3 == 0 and mu >= 8) else (4.0 / mu)
+        # Simple meter: cap beat at quarter note so 2/2 doesn't give 8 phases for 1/16
+        bdq = (4.0 / mu * 3) if (mc % 3 == 0 and mu >= 8) else min(4.0 / mu, 1.0)
         return bpm, bdq
 
     for sd in tree.iter(tag_pfx + 'scoreDef'):
@@ -445,7 +733,7 @@ def _voice_notes_from_mei(mei_str):
             beats_per_measure, beat_dur_q = _parse_meter(c, u)
             break
 
-    def proc_note(n, dur_override=None, dots_override=None, onset=0.0):
+    def proc_note(n, dur_override=None, dots_override=None, onset=0.0, scale=1.0):
         nid   = n.get(_XML_ID)
         pname = n.get('pname', '')
         if not pname or not nid:
@@ -457,17 +745,22 @@ def _voice_notes_from_mei(mei_str):
         dur     = dur_override if dur_override is not None else n.get('dur', '4')
         dots    = dots_override if dots_override is not None else int(n.get('dots', 0))
         accid   = n.get('accid') or n.get('accid.ges')
-        return (nid, pname, int(oct_str), _to_quarters(dur, dots),
+        return (nid, pname, int(oct_str), _to_quarters(dur, dots) * scale,
                 _to_midi(pname, oct_str, accid), onset)
 
-    def iter_events(el):
-        """Yield all events in order, recursing into beam/tuplet containers."""
+    def iter_events(el, scale=1.0):
+        """Yield (event_element, scale) pairs, recursing into beam/tuplet containers.
+        Tuplet ratio num/numbase is applied as a multiplier to note durations."""
         for child in el:
             t = child.tag.split('}')[-1]
-            if t in ('beam', 'tuplet', 'ligature', 'ftrem', 'btrem'):
-                yield from iter_events(child)
+            if t == 'tuplet':
+                num     = int(child.get('num', 1))
+                numbase = int(child.get('numbase', 1))
+                yield from iter_events(child, scale * numbase / num)
+            elif t in ('beam', 'ligature', 'ftrem', 'btrem'):
+                yield from iter_events(child, scale)
             else:
-                yield child
+                yield child, scale
 
     voices        = defaultdict(list)
     measure_onset = 0.0
@@ -487,39 +780,73 @@ def _voice_notes_from_mei(mei_str):
                 key = (sn, ln)
                 pos = 0.0   # position within measure
 
-                for child in iter_events(layer_el):
+                for child, scale in iter_events(layer_el):
                     t = child.tag.split('}')[-1]
                     onset = measure_onset + pos
                     if t == 'note':
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0)))
+                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         if child.get('grace'):   # grace note (q/Q in kern) — skip, no pos advance
                             pass
                         else:
-                            e = proc_note(child, onset=onset)
+                            e = proc_note(child, onset=onset, scale=scale)
                             if e:
                                 voices[key].append(e)
                             pos += dur
                     elif t == 'chord':
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0)))
+                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         if child.get('grace'):   # grace chord — skip
                             pass
                         else:
                             cands = [proc_note(n,
                                                dur_override=child.get('dur', '4'),
                                                dots_override=int(child.get('dots', 0)),
-                                               onset=onset)
+                                               onset=onset, scale=scale)
                                      for n in child.findall(tag_pfx + 'note')]
                             cands = [c for c in cands if c]
                             if cands:
                                 voices[key].append(max(cands, key=lambda x: x[4]))
                             pos += dur
                     elif t in ('rest', 'space'):
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0)))
+                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         pos += dur
                     elif t == 'mRest':
                         pos += beats_per_measure
 
         measure_onset += beats_per_measure
+
+    # Merge tied notes from <tie> elements (MusicXML-sourced MEI).
+    # kern-sourced MEI uses tie="i/m/t" attributes (handled in proc_note);
+    # MusicXML-sourced MEI uses standalone <tie startid=... endid=...> elements.
+    tie_start_to_end = {}
+    for el in tree.iter(tag_pfx + 'tie'):
+        sid = el.get('startid', '').lstrip('#')
+        eid = el.get('endid',   '').lstrip('#')
+        if sid and eid:
+            tie_start_to_end[sid] = eid
+    if tie_start_to_end:
+        for key in list(voices):
+            notes = voices[key]
+            id_to_idx = {n[0]: i for i, n in enumerate(notes)}
+            to_remove = set()
+            new_notes = list(notes)
+            for i, note in enumerate(notes):
+                nid = note[0]
+                if nid in tie_start_to_end:
+                    extra_dur = 0.0
+                    cur = nid
+                    while cur in tie_start_to_end:
+                        eid = tie_start_to_end[cur]
+                        if eid in id_to_idx:
+                            j = id_to_idx[eid]
+                            extra_dur += notes[j][3]
+                            to_remove.add(j)
+                            cur = eid
+                        else:
+                            break
+                    if extra_dur > 0:
+                        n = new_notes[i]
+                        new_notes[i] = (n[0], n[1], n[2], n[3] + extra_dur, n[4], n[5])
+            voices[key] = [n for i, n in enumerate(new_notes) if i not in to_remove]
 
     # Build slur/phrase map: startid → endid
     # verovio writes kern ( ) as <slur> or <phrase> elements (not inline attributes)
@@ -764,9 +1091,9 @@ def _parse_dur(s):
             break
     if '/' in s:
         num, den = s.split('/', 1)
-        val = round(float(num) * 4.0 / float(den) * 16) / 16
+        val = float(num) * 4.0 / float(den)
     else:
-        val = round(float(s) * 16) / 16
+        val = float(s)
     return (op, val)
 
 
@@ -977,7 +1304,7 @@ def _mdl_score(n, L, transforms):
     return round(n * (L - 1) - L - transp_cost)
 
 
-def analyze_motifs(vtk, mei_str=None):
+def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     """
     Run motif analysis on the currently-loaded verovio score.
     Returns list of:
@@ -988,6 +1315,8 @@ def analyze_motifs(vtk, mei_str=None):
         if mei_str is None:
             mei_str = vtk.getMEI()
         voices, beat_dur_q = _voice_notes_from_mei(mei_str)
+        if beat_dur_q_override is not None:
+            beat_dur_q = beat_dur_q_override
         all_seqs = [(vk, _interval_seq(notes, beat_dur_q))
                     for vk, notes in voices.items()
                     if len(notes) >= 4]
@@ -1289,6 +1618,298 @@ def prepare_grand_staff(content: str) -> str:
     return "".join(result)
 
 
+def _beam_groups_from_mei(mei_str):
+    """
+    Parse MEI and return {nid: beam_group_id (int)} for every note inside a <beam>.
+    Notes in the same <beam> element share the same beam_group_id.
+    Nested beams (e.g. inside tuplets) are treated independently.
+    """
+    import xml.etree.ElementTree as _ET
+    _PFX = '{%s}' % _MEI_NS
+    tree = _ET.fromstring(mei_str)
+    beam_of = {}
+    bid = 0
+    for beam_el in tree.iter(_PFX + 'beam'):
+        nids = [n.get(_XML_ID) for n in beam_el
+                if n.tag.split('}')[-1] == 'note' and n.get(_XML_ID)
+                and not n.get('grace')]
+        if len(nids) >= 2:
+            for nid in nids:
+                if nid:
+                    beam_of[nid] = bid
+            bid += 1
+    return beam_of
+
+
+def _mini_staff_svg(notes_info, beam_of=None):
+    """
+    Draw a tiny SVG staff with proper durations: beams, flags, dots, stems.
+    notes_info: [(pname_lower, oct_int, dur_q, midi_val, nid), ...]
+    beam_of: optional {nid: beam_group_id} from _beam_groups_from_mei
+    """
+    if not notes_info:
+        return ''
+    _DS = {'c': 0, 'd': 1, 'e': 2, 'f': 3, 'g': 4, 'a': 5, 'b': 6}
+    _CH = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
+
+    def dp(p, o):
+        return o * 7 + _DS.get(p, 0)
+
+    def flag_count(dq):
+        """Number of flags/beams: 0=quarter+, 1=eighth, 2=sixteenth, 3=32nd.
+        Triplets are unnormalised: triplet-8th → 1 flag, triplet-16th → 2 flags."""
+        # Detect triplet: dq*3 is a power of 2
+        x = dq * 3
+        d = x / 2 if any(abs(x - 2**p) < 0.02 for p in range(-4, 5)) else dq
+        if d >= 1.0:   return 0
+        if d >= 0.5:   return 1
+        if d >= 0.25:  return 2
+        return 3
+
+    def is_dotted(dq):
+        return abs(dq / 1.5 * 8 - round(dq / 1.5 * 8)) < 0.02 and abs(dq - round(dq)) > 0.1
+
+    def is_triplet(dq):
+        x = dq * 3
+        return any(abs(x - 2**p) < 0.02 for p in range(-3, 4))
+
+    avg   = sum(dp(p, o) for p, o, *_ in notes_info) / len(notes_info)
+    treble = avg >= 26
+    bot_d  = 30 if treble else 18   # E4 / G2
+    top_d  = bot_d + 8
+    mid_d  = bot_d + 4              # middle line
+
+    LS    = 4;    HLS   = 2.0
+    HR    = 3.0;  VR    = 2.0
+    STEM  = 14
+    CLEF_W = 14;  NSP = 16
+    PL = 3;       PR  = 5
+    BEAM_W = 2.2; BEAM_GAP = 3.0
+    FLAG_W = 5;   FLAG_H = 4
+
+    n      = len(notes_info)
+    all_d  = [dp(p, o) for p, o, *_ in notes_info]
+    flags  = [flag_count(t[2]) for t in notes_info]
+
+    extra_top = max(0, int((max(all_d) - top_d) * HLS) + 6) if max(all_d) > top_d else 0
+    extra_bot = max(0, int((bot_d - min(all_d)) * HLS) + 5) if min(all_d) < bot_d else 0
+    PT   = 10 + extra_top
+    PB   = 5  + extra_bot
+    SBOT = PT + 4 * LS
+    W    = PL + CLEF_W + n * NSP + PR
+    H    = PT + 4 * LS + PB
+
+    # ── note y positions ──────────────────────────────────────────────────────
+    note_ys = [SBOT - (dp(p, o) - bot_d) * HLS for p, o, *_ in notes_info]
+    note_xs = [PL + CLEF_W + j * NSP + NSP // 2 for j in range(n)]
+    mid_y   = SBOT - (mid_d - bot_d) * HLS
+
+    # ── beam groups ───────────────────────────────────────────────────────────
+    # Each group: {'j0': int, 'j1': int, 'fc': int, 'dir': str}
+    beam_groups = []
+    if beam_of is not None and len(notes_info[0]) >= 5:
+        # Build groups from MEI beam membership of consecutive notes
+        j = 0
+        while j < n:
+            nid = notes_info[j][4]
+            bid = beam_of.get(nid)
+            if bid is not None:
+                k = j + 1
+                while k < n and len(notes_info[k]) >= 5 and beam_of.get(notes_info[k][4]) == bid:
+                    k += 1
+                if k - j >= 2:
+                    fc = min(flag_count(notes_info[i][2]) for i in range(j, k))
+                    if fc >= 1:
+                        beam_groups.append({'j0': j, 'j1': k - 1, 'fc': fc})
+                        j = k
+                        continue
+            j += 1
+    # Fallback: beam all if same flag count ≥ 1
+    if not beam_groups and n >= 2 and min(flags) >= 1 and len(set(flags)) == 1:
+        beam_groups.append({'j0': 0, 'j1': n - 1, 'fc': flags[0]})
+
+    beamed = [False] * n
+    for bg in beam_groups:
+        for j in range(bg['j0'], bg['j1'] + 1):
+            beamed[j] = True
+
+    # ── stem directions ───────────────────────────────────────────────────────
+    dirs = [None] * n
+    for bg in beam_groups:
+        ys_g = [note_ys[j] for j in range(bg['j0'], bg['j1'] + 1)]
+        bdir = 'up' if sum(1 for y in ys_g if y >= mid_y) >= len(ys_g) / 2 else 'down'
+        bg['dir'] = bdir
+        for j in range(bg['j0'], bg['j1'] + 1):
+            dirs[j] = bdir
+    for j in range(n):
+        if dirs[j] is None:
+            dirs[j] = 'up' if note_ys[j] >= mid_y else 'down'
+
+    # stem x and raw tip y
+    stem_xs = [(note_xs[j] + HR - 0.5 if dirs[j] == 'up' else note_xs[j] - HR + 0.5)
+               for j in range(n)]
+    stem_ys = [(note_ys[j] - STEM if dirs[j] == 'up' else note_ys[j] + STEM)
+               for j in range(n)]
+
+    # Level/slant each beam group
+    for bg in beam_groups:
+        j0, j1, bdir = bg['j0'], bg['j1'], bg['dir']
+        y0, yn = stem_ys[j0], stem_ys[j1]
+        x0, xn = stem_xs[j0], stem_xs[j1]
+        for j in range(j0, j1 + 1):
+            t = (stem_xs[j] - x0) / (xn - x0) if xn != x0 else 0
+            target = y0 + t * (yn - y0)
+            if bdir == 'up':
+                stem_ys[j] = min(target, note_ys[j] - STEM)
+            else:
+                stem_ys[j] = max(target, note_ys[j] + STEM)
+
+    # ── SVG output ────────────────────────────────────────────────────────────
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
+           f'style="display:inline-block;vertical-align:middle;flex-shrink:0">']
+
+    # staff lines
+    x1 = PL + CLEF_W - 2;  x2 = W - PR
+    for i in range(5):
+        y = SBOT - i * LS
+        out.append(f'<line x1="{x1}" y1="{y}" x2="{x2}" y2="{y}" '
+                   f'stroke="#666" stroke-width="0.6"/>')
+
+    # clef
+    cc  = '\U0001D11E' if treble else '\U0001D122'
+    cfs = LS * 5 if treble else LS * 3
+    cy0 = SBOT + (1 if treble else 0)
+    out.append(f'<text x="{PL}" y="{cy0}" font-size="{cfs}" '
+               f'font-family="serif" fill="#555">{cc}</text>')
+
+    # ── beams (drawn before note heads) ──────────────────────────────────────
+    # Beams pack from stem tip TOWARD the note head:
+    #   stems UP   → beams go DOWN from tip (y increases)  → offset = +bl*BEAM_GAP
+    #   stems DOWN → beams go UP from tip  (y decreases)   → offset = -bl*BEAM_GAP
+    # In both cases offset = bl * BEAM_GAP * sign  (sign=+1 UP, -1 DOWN),
+    # and beam_y = stem_tip + offset.
+
+    def _beam_line(xs, ys, xe, ye):
+        return (f'<line x1="{xs:.1f}" y1="{ys:.1f}" x2="{xe:.1f}" y2="{ye:.1f}" '
+                f'stroke="#555" stroke-width="{BEAM_W:.1f}"/>')
+
+    for bg in beam_groups:
+        j0, j1, fc, bdir = bg['j0'], bg['j1'], bg['fc'], bg['dir']
+        sign = 1 if bdir == 'up' else -1   # +1 = beams go downward from tip
+
+        def _by(tip_y, bl):
+            return tip_y + bl * BEAM_GAP * sign
+
+        # Full beams at levels 0..fc-1 (span whole group)
+        for bl in range(fc):
+            out.append(_beam_line(stem_xs[j0], _by(stem_ys[j0], bl),
+                                  stem_xs[j1], _by(stem_ys[j1], bl)))
+
+        # Partial / extra beams for notes with more flags than group minimum
+        max_fc = max(flags[jj] for jj in range(j0, j1 + 1))
+        for bl in range(fc, max_fc):
+            jj = j0
+            while jj <= j1:
+                if flags[jj] > bl:
+                    kk = jj + 1
+                    while kk <= j1 and flags[kk] > bl:
+                        kk += 1
+                    if kk - jj >= 2:
+                        out.append(_beam_line(stem_xs[jj], _by(stem_ys[jj], bl),
+                                              stem_xs[kk - 1], _by(stem_ys[kk - 1], bl)))
+                    else:
+                        # partial beam toward adjacent note
+                        pdir = 1 if jj == j0 else -1   # right for first, left otherwise
+                        xe = stem_xs[jj] + pdir * NSP * 0.4
+                        # y on the slope of the beam
+                        if stem_xs[j1] != stem_xs[j0]:
+                            t  = (stem_xs[jj] - stem_xs[j0]) / (stem_xs[j1] - stem_xs[j0])
+                            ty = stem_ys[j0] + t * (stem_ys[j1] - stem_ys[j0])
+                        else:
+                            ty = stem_ys[jj]
+                        out.append(_beam_line(stem_xs[jj], _by(ty, bl), xe, _by(ty, bl)))
+                    jj = kk
+                else:
+                    jj += 1
+
+        # triplet "3" label — placed outside the beam group (away from note heads)
+        if is_triplet(notes_info[j0][2]):
+            # for UP: above stem tip (y smaller); for DOWN: below stem tip (y larger)
+            br_y = stem_ys[j0] - sign * 5
+            mid_x = (stem_xs[j0] + stem_xs[j1]) / 2
+            out.append(f'<text x="{mid_x:.1f}" y="{br_y:.1f}" font-size="6" '
+                       f'text-anchor="middle" font-family="sans-serif" fill="#666">3</text>')
+
+    # ── notes ─────────────────────────────────────────────────────────────────
+    for j, note_t in enumerate(notes_info):
+        pn, oi, dq, mv = note_t[0], note_t[1], note_t[2], note_t[3]
+        cx  = note_xs[j]
+        cy  = note_ys[j]
+        d_v = dp(pn, oi)
+
+        # accidental
+        nat = (oi + 1) * 12 + _CH.get(pn, 0)
+        acc = mv - nat
+        if acc:
+            ac = '\u266f' if acc > 0 else '\u266d'
+            out.append(f'<text x="{cx - 5}" y="{cy + 2:.1f}" font-size="7" '
+                       f'font-family="serif" fill="#555">{ac}</text>')
+
+        # note head
+        filled = dq < 2.0
+        fill   = '#555' if filled else 'white'
+        out.append(f'<ellipse cx="{cx}" cy="{cy:.1f}" rx="{HR}" ry="{VR}" '
+                   f'fill="{fill}" stroke="#555" stroke-width="0.7" '
+                   f'transform="rotate(-15,{cx},{cy:.1f})"/>')
+
+        # augmentation dot
+        if is_dotted(dq):
+            out.append(f'<circle cx="{cx + HR + 2:.1f}" cy="{cy - 0.5:.1f}" '
+                       f'r="1" fill="#555"/>')
+
+        # stem
+        if dq < 4.0:
+            sx = stem_xs[j]; sy = stem_ys[j]
+            out.append(f'<line x1="{sx:.1f}" y1="{cy:.1f}" x2="{sx:.1f}" y2="{sy:.1f}" '
+                       f'stroke="#555" stroke-width="0.7"/>')
+
+            # individual flags (when not beamed)
+            if not beamed[j] and flags[j] >= 1:
+                for fi in range(flags[j]):
+                    fy = sy + fi * (FLAG_H + 1) * (1 if dirs[j] == 'up' else -1)
+                    if dirs[j] == 'up':
+                        out.append(f'<path d="M{sx:.1f},{fy:.1f} '
+                                   f'C{sx+FLAG_W*0.7:.1f},{fy:.1f} '
+                                   f'{sx+FLAG_W:.1f},{fy+FLAG_H*0.5:.1f} '
+                                   f'{sx+FLAG_W*0.8:.1f},{fy+FLAG_H:.1f}" '
+                                   f'stroke="#555" stroke-width="0.8" fill="none"/>')
+                    else:
+                        out.append(f'<path d="M{sx:.1f},{fy:.1f} '
+                                   f'C{sx+FLAG_W*0.7:.1f},{fy:.1f} '
+                                   f'{sx+FLAG_W:.1f},{fy-FLAG_H*0.5:.1f} '
+                                   f'{sx+FLAG_W*0.8:.1f},{fy-FLAG_H:.1f}" '
+                                   f'stroke="#555" stroke-width="0.8" fill="none"/>')
+
+        # ledger lines below staff
+        if d_v < bot_d:
+            for ld in range(bot_d - 2, d_v - 1, -2):
+                ly = SBOT + (bot_d - ld) * HLS
+                out.append(f'<line x1="{cx-HR-1:.1f}" y1="{ly:.1f}" '
+                           f'x2="{cx+HR+1:.1f}" y2="{ly:.1f}" '
+                           f'stroke="#555" stroke-width="0.6"/>')
+
+        # ledger lines above staff
+        if d_v > top_d:
+            for ld in range(top_d + 2, d_v + 2, 2):
+                ly = SBOT - (ld - bot_d) * HLS
+                out.append(f'<line x1="{cx-HR-1:.1f}" y1="{ly:.1f}" '
+                           f'x2="{cx+HR+1:.1f}" y2="{ly:.1f}" '
+                           f'stroke="#555" stroke-width="0.6"/>')
+
+    out.append('</svg>')
+    return ''.join(out)
+
+
 def render_score(path: str, version: str = "1") -> tuple:
     """Returns (html, n_pages, version). Raises RuntimeError on failure."""
     check_file(path)
@@ -1304,7 +1925,7 @@ def render_score(path: str, version: str = "1") -> tuple:
             import zipfile as _zf
             with _zf.ZipFile(path) as z:
                 xml_name = next(n for n in z.namelist()
-                                if n.lower().endswith('.xml') and 'META' not in n)
+                                if n.lower().endswith(('.xml', '.musicxml')) and 'META' not in n)
                 raw = z.read(xml_name)
                 if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
                     content = raw.decode('utf-16')
@@ -1330,11 +1951,17 @@ def render_score(path: str, version: str = "1") -> tuple:
 
     # ── motif analysis ────────────────────────────────────────────────────────
     mei_str = _vtk.getMEI()
-    motifs = analyze_motifs(_vtk, mei_str=mei_str)
+    # Per-file beat_dur_q override
+    _path_lower = str(path).lower().replace('\\', '/')
+    _beat_override = next(
+        (v for k, v in _BEAT_DUR_OVERRIDES.items() if k in _path_lower), None)
+    motifs = analyze_motifs(_vtk, mei_str=mei_str, beat_dur_q_override=_beat_override)
 
     # compute interval sequences for the /search endpoint + build note label map
     try:
         _voices_s, _beat_dur_q_s = _voice_notes_from_mei(mei_str)
+        if _beat_override is not None:
+            _beat_dur_q_s = _beat_override
         all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s))
                     for vk, notes in _voices_s.items() if len(notes) >= 4]
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
@@ -1344,10 +1971,16 @@ def render_score(path: str, version: str = "1") -> tuple:
                 base = _PITCH_CLASS.get(pname.lower(), 0) + (oct_int + 1) * 12
                 acc = _ACC_SFX.get(midi_val - base, '')
                 nid_labels[nid] = pname.upper() + acc
+        # nid → (nid, pname, oct_int, dur_q, midi_val, onset) for mini-staff SVG
+        nid_to_note = {n[0]: n for _ns in _voices_s.values() for n in _ns}
+        # beam group membership: nid → beam_group_id
+        beam_of = _beam_groups_from_mei(mei_str)
     except Exception:
         all_seqs = []
         _beat_dur_q_s = 1.0
         nid_labels = {}
+        nid_to_note = {}
+        beam_of = {}
 
     def _is_smooth(k):
         """True if k = 2^a * 3^b (a,b >= 0)."""
@@ -1395,6 +2028,13 @@ def render_score(path: str, version: str = "1") -> tuple:
             cnt_html = _bold(cnt)
         mdl = m.get('mdl', 0)
         mdl_html = f'<b>{mdl}</b>' if mdl > 0 else f'<span style="color:#bbb">{mdl}</span>'
+        first_nids = m.get('occs', [[]])[0] if m.get('occs') else []
+        notes_info = []
+        for nid in first_nids:
+            if nid in nid_to_note:
+                _, pn, oi, dq, mv, _ = nid_to_note[nid]
+                notes_info.append((pn.lower(), oi, dq, mv, nid))
+        staff_svg = _mini_staff_svg(notes_info, beam_of)
         return (
             f'<tr data-midx="{i}" data-count="{m["count"]}" data-mdl="{mdl}" data-length="{m["length"]}" '
             f'style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
@@ -1404,8 +2044,11 @@ def render_score(path: str, version: str = "1") -> tuple:
             f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
             f'background:{m["color"]};margin-right:5px;vertical-align:middle"></span>'
             f'<b>M{i+1}</b>{phase_html}</td>'
-            f'<td style="padding:5px 16px 5px 0;font-family:monospace;font-size:11px">'
-            f'{" &nbsp; ".join(m["pattern"])}</td>'
+            f'<td style="padding:3px 16px 3px 0">'
+            f'<div style="display:flex;align-items:center;gap:8px">'
+            f'<span style="font-family:monospace;font-size:11px;white-space:nowrap">'
+            f'{" &nbsp; ".join(m["pattern"])}</span>'
+            f'{staff_svg}</div></td>'
             f'<td style="padding:5px 10px 5px 0;text-align:center">&times;{cnt_html}</td>'
             f'<td style="padding:5px 8px 5px 0;text-align:center;color:#888">{m["length"]}</td>'
             f'<td style="padding:5px 0;text-align:right;font-size:11px;color:#557">{mdl_html}</td>'
@@ -1916,7 +2559,7 @@ class FileBrowser(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
 
-        self._files        = find_kern_files(KERN_DIR) + find_music21_files()
+        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_music21_files()
         self._current_path = None
 
         self._build_ui()
@@ -1998,10 +2641,48 @@ class FileBrowser(tk.Tk):
 
     def _populate_list(self, files=None):
         self._tree.delete(*self._tree.get_children())
-        for rel, full in (files or self._files):
-            self._tree.insert("", tk.END, text=os.path.basename(rel), values=(full,))
-        n = len(files) if files is not None else len(self._files)
-        self._count_var.set(f"{n} file{'s' if n != 1 else ''}")
+        self._tree.tag_configure('group', foreground='#cba6f7',
+                                  font=('Segoe UI', 9, 'bold'))
+        file_list = files if files is not None else self._files
+
+        # Group by (composer, cycle)
+        groups: dict = {}
+        order: list = []
+        for rel, full in file_list:
+            composer = _composer_from_rel(rel)
+            cycle = _bach_cycle(rel) if composer == 'Bach' else None
+            key = (composer, cycle)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append((rel, full))
+
+        def _group_sort_key(key):
+            composer, cycle = key
+            if composer == 'Bach':
+                return (0, _BACH_CYCLE_IDX.get(cycle or '', 99), cycle or '')
+            return (1, 0, composer or '')
+
+        sorted_order = sorted(order, key=_group_sort_key)
+        total = 0
+        use_headers = len(sorted_order) > 1 or (
+            sorted_order and sorted_order[0][1] is not None)
+        for key in sorted_order:
+            composer, cycle = key
+            group_files = groups[key]
+            if use_headers:
+                label = cycle if cycle else (composer or 'Other')
+                header = f'{label}  ({len(group_files)})'
+                parent = self._tree.insert('', tk.END, text=header,
+                                           values=(), tags=('group',))
+                self._tree.item(parent, open=True)
+            else:
+                parent = ''
+            for rel, full in group_files:
+                self._tree.insert(parent, tk.END,
+                                  text=os.path.basename(rel), values=(full,))
+            total += len(group_files)
+        self._count_var.set(f"{total} file{'s' if total != 1 else ''}")
 
     def _apply_filter(self):
         q = self._search_var.get().lower()
@@ -2017,7 +2698,10 @@ class FileBrowser(tk.Tk):
         sel = self._tree.selection()
         if not sel:
             return
-        path = self._tree.item(sel[0], "values")[0]
+        vals = self._tree.item(sel[0], "values")
+        if not vals:
+            return  # group header clicked
+        path = vals[0]
         if path == self._current_path:
             return
         self._current_path = path
