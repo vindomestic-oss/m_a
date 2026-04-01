@@ -598,6 +598,76 @@ _BEAT_DUR_OVERRIDES: dict[str, float] = {
     'bwv_988_v27': 1.0,   # 6/8 felt as 2+2+2 (3 quarter beats), not 3+3
 }
 
+# ── MusicXML voice-order fix ──────────────────────────────────────────────────
+_STEP_MIDI = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
+
+def _fix_musicxml_voice_order(content: str) -> str:
+    """
+    For each part with multiple voices, re-number voices so that voice 1 has
+    the highest average MIDI pitch (→ stems up) and voice 2 the next, etc.
+    Also inserts explicit <stem>up/down</stem> on every note.
+    Only modifies parts that have 2+ voices and need reordering.
+    """
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content.encode())
+    except ET.ParseError:
+        return content
+
+    changed = False
+    for part in root.findall('.//part'):
+        # Collect average MIDI pitch per voice (non-chord notes only)
+        voice_midis: dict = {}
+        for note in part.findall('.//note'):
+            if note.find('chord') is not None:
+                continue
+            v_el = note.find('voice')
+            p_el = note.find('pitch')
+            if v_el is None or p_el is None:
+                continue
+            step  = (p_el.findtext('step') or 'C').strip()
+            oct_  = int(p_el.findtext('octave') or '4')
+            alter = float(p_el.findtext('alter') or '0')
+            midi  = (oct_ + 1) * 12 + _STEP_MIDI.get(step, 0) + round(alter)
+            voice_midis.setdefault(v_el.text, []).append(midi)
+
+        if len(voice_midis) < 2:
+            continue
+
+        voice_avg  = {v: sum(ms) / len(ms) for v, ms in voice_midis.items() if ms}
+        sorted_vox = sorted(voice_avg, key=lambda v: -voice_avg[v])  # highest first
+        voice_remap = {v: str(i + 1) for i, v in enumerate(sorted_vox)}
+
+        if all(voice_remap[v] == v for v in voice_remap):
+            # Add stem elements even if order is already correct
+            pass
+
+        for note in part.findall('.//note'):
+            v_el = note.find('voice')
+            if v_el is None:
+                continue
+            old_v       = v_el.text
+            new_v       = voice_remap.get(old_v, old_v)
+            v_el.text   = new_v
+            stem_dir    = 'up' if new_v == '1' else 'down'
+            stem_el     = note.find('stem')
+            if stem_el is None:
+                dur_el = note.find('duration')
+                stem_el = ET.Element('stem')
+                if dur_el is not None:
+                    list(note).index(dur_el)   # ensure dur_el in note
+                    note.insert(list(note).index(dur_el) + 1, stem_el)
+                else:
+                    note.append(stem_el)
+            stem_el.text = stem_dir
+
+        changed = True
+
+    if not changed:
+        return content
+    return ET.tostring(root, encoding='unicode')
+
+
 # ── TSD harmony labels ────────────────────────────────────────────────────────
 # Loaded once from TSD.txt: filename → (beat_dur_q, [label, ...])
 # label: 'T', 'S', or 'D'
@@ -800,6 +870,7 @@ def _voice_notes_from_mei(mei_str):
                 beats_per_measure, beat_dur_q = _parse_meter(c, u)
                 break
 
+        max_pos = 0.0   # actual measure duration (for pickup bar detection)
         for staff_el in measure_el.findall(tag_pfx + 'staff'):
             sn = int(staff_el.get('n', 1))
             for layer_el in staff_el.findall(tag_pfx + 'layer'):
@@ -839,7 +910,13 @@ def _voice_notes_from_mei(mei_str):
                     elif t == 'mRest':
                         pos += beats_per_measure
 
-        measure_onset += beats_per_measure
+                max_pos = max(max_pos, pos)
+
+        # Pickup bar (anacrusis): metcon='false' → use actual notes duration
+        if measure_el.get('metcon') == 'false' and max_pos > 0:
+            measure_onset += max_pos
+        else:
+            measure_onset += beats_per_measure
 
     # Merge tied notes from <tie> elements (MusicXML-sourced MEI).
     # kern-sourced MEI uses tie="i/m/t" attributes (handled in proc_note);
@@ -1968,6 +2045,8 @@ def render_score(path: str, version: str = "1") -> tuple:
         if ext == 'krn':
             content = prepare_grand_staff(content)
             content = add_beam_markers(content)
+        elif ext in ('xml', 'musicxml'):
+            content = _fix_musicxml_voice_order(content)
         ok = _vtk.loadData(content)
         if not ok:
             raise RuntimeError("verovio could not parse this file")
@@ -2610,18 +2689,17 @@ function drawTSD(){{
   clearTSD();
   if(!tsdLabels.length)return;
 
-  // Run-length encode: runs of 3+ same labels → single "T6" token at run start.
-  // Runs of 1-2 → individual tokens.
+  // Run-length encode: runs of 2+ same labels → single "T2" / "T6" token at run start.
   var tokens=[];
   var ri=0;
   while(ri<tsdLabels.length){{
     var rj=ri+1;
     while(rj<tsdLabels.length&&tsdLabels[rj]===tsdLabels[ri])rj++;
     var rlen=rj-ri;
-    if(rlen>2){{
+    if(rlen>1){{
       tokens.push({{text:tsdLabels[ri]+rlen,label:tsdLabels[ri],nidIdx:ri}});
     }}else{{
-      for(var rk=0;rk<rlen;rk++)tokens.push({{text:tsdLabels[ri],label:tsdLabels[ri],nidIdx:ri+rk}});
+      tokens.push({{text:tsdLabels[ri],label:tsdLabels[ri],nidIdx:ri}});
     }}
     ri=rj;
   }}
