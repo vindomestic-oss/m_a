@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-Build global motif vocabulary from the Bach kern corpus.
+Build global motif vocabulary from kern + MusicXML corpus.
+
+Composers included by default: Bach, Buxtehude, Vivaldi, Scarlatti.
+Sources:
+  kern/          — filtered to target composers
+  lilypond/musicxml/*.xml — all Bach MusicXML files
 
 Scans all files with analyze_motifs, collects unique (body, phase) patterns,
 assigns integer IDs sorted by total corpus occurrence count.
@@ -12,7 +17,7 @@ Output:
 Usage:
   python build_vocab.py
   python build_vocab.py --min-files 2   # only motifs appearing in >= N files
-  python build_vocab.py --filter wtc    # only scan matching files
+  python build_vocab.py --filter wtc    # further narrow by path substring
 """
 
 import json
@@ -22,7 +27,7 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(__file__))
-import kern_mdl as kr
+import kern_reader as kr
 
 
 # ── subprocess worker ─────────────────────────────────────────────────────────
@@ -32,7 +37,7 @@ def _worker_func(path, q):
     try:
         import sys as _sys, os as _os
         _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-        import kern_mdl as _kr
+        import kern_reader as _kr
 
         _kr.check_file(path)
         ext = path.rsplit('.', 1)[-1].lower()
@@ -159,7 +164,7 @@ def _phase_label(phase):
 # ── HTML generation ───────────────────────────────────────────────────────────
 
 def _generate_html(vocab_json, html_path):
-    from kern_mdl import _mini_staff_svg
+    from kern_reader import _mini_staff_svg
 
     rows = []
     for entry in vocab_json:
@@ -319,21 +324,50 @@ applyFilter();
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+_COMPOSERS = ['bach', 'buxtehude', 'vivaldi', 'scarlatti']
+
+MUSICXML_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'lilypond', 'musicxml')
+
+
+def _collect_files(filter_terms=None):
+    """Return [(rel_path, full_path), ...] for all target files."""
+    files = []
+
+    # kern: only target composers
+    kern_files = kr.find_kern_files(kr.KERN_DIR)
+    for rel, full in kern_files:
+        rel_lo = rel.lower()
+        if any(c in rel_lo for c in _COMPOSERS):
+            files.append((rel, full))
+
+    # MusicXML: all files in lilypond/musicxml/
+    if os.path.isdir(MUSICXML_DIR):
+        for name in sorted(os.listdir(MUSICXML_DIR)):
+            if name.lower().endswith('.xml'):
+                rel  = os.path.join('lilypond', 'musicxml', name)
+                full = os.path.join(MUSICXML_DIR, name)
+                files.append((rel, full))
+
+    if filter_terms:
+        files = [(r, f) for r, f in files
+                 if any(t in r.lower() for t in filter_terms)]
+
+    return files
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--filter',    default=None,
-                        help='Only scan files whose rel path contains substring '
-                             '(comma-separated OR)')
+                        help='Further narrow by path substring (comma-separated OR)')
     parser.add_argument('--min-files', type=int, default=1,
                         help='Exclude motif types appearing in fewer than N files (default 1)')
     args = parser.parse_args()
 
-    all_files = kr.find_kern_files(kr.KERN_DIR)
-    if args.filter:
-        terms = [t.strip().lower() for t in args.filter.split(',')]
-        all_files = [(r, f) for r, f in all_files
-                     if any(t in r.lower() for t in terms)]
+    filter_terms = ([t.strip().lower() for t in args.filter.split(',')]
+                    if args.filter else None)
+    all_files = _collect_files(filter_terms)
 
     total = len(all_files)
     print(f"Scanning {total} files…")

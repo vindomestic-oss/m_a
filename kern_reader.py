@@ -598,6 +598,33 @@ _BEAT_DUR_OVERRIDES: dict[str, float] = {
     'bwv_988_v27': 1.0,   # 6/8 felt as 2+2+2 (3 quarter beats), not 3+3
 }
 
+# ── TSD harmony labels ────────────────────────────────────────────────────────
+# Loaded once from TSD.txt: filename → (beat_dur_q, [label, ...])
+# label: 'T', 'S', or 'D'
+
+def _load_tsd_file() -> dict:
+    path = os.path.join(os.path.dirname(__file__), 'TSD.txt')
+    data = {}
+    if not os.path.exists(path):
+        return data
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('\t')
+            if len(parts) < 3:
+                continue
+            filename, metre, tsd_str = parts[0], parts[1], parts[2]
+            num, den = metre.split('/')
+            beat_dur_q = int(num) * 4.0 / int(den)   # bar duration in quarter notes
+            labels = [c for c in tsd_str if c in 'TSD']
+            if labels:
+                data[filename] = (beat_dur_q, labels)
+    return data
+
+_TSD_DATA: dict = _load_tsd_file()   # filename → (beat_dur_q, ['T','S','D',...])
+
 _DUR_NAMES = {
     4.0: '&#119133;', 3.0: '&#119134;.', 2.0: '&#119134;',
     1.5: '&#9833;.',  1.0: '&#9833;',    0.75: '&#9834;.',
@@ -1913,11 +1940,13 @@ def _mini_staff_svg(notes_info, beam_of=None):
 def render_score(path: str, version: str = "1") -> tuple:
     """Returns (html, n_pages, version). Raises RuntimeError on failure."""
     check_file(path)
+    _has_tsd = os.path.basename(path) in _TSD_DATA
     _vtk.setOptions({
         "pageWidth":        2200,
         "adjustPageHeight": True,
         "scale":            35,
         "font":             "Leipzig",
+        "spacingSystem":    16 if _has_tsd else 8,
     })
     ext = path.rsplit('.', 1)[-1].lower()
     try:
@@ -1978,6 +2007,7 @@ def render_score(path: str, version: str = "1") -> tuple:
     except Exception:
         all_seqs = []
         _beat_dur_q_s = 1.0
+        _voices_s = {}
         nid_labels = {}
         nid_to_note = {}
         beam_of = {}
@@ -2064,6 +2094,29 @@ def render_score(path: str, version: str = "1") -> tuple:
                   for m in motifs]
     motif_json = json.dumps(motif_data)
     note_labels_json = json.dumps(nid_labels)
+
+    # ── TSD harmony labels ────────────────────────────────────────────────────
+    _basename = os.path.basename(path)
+    _tsd_labels_out = []
+    _tsd_nids_out = []
+    if _basename in _TSD_DATA:
+        _bar_dur_q_tsd, _tsd_labels_out = _TSD_DATA[_basename]
+        # flat list of (onset_q, nid) from all voices, sorted by onset
+        _flat = sorted(
+            (onset_q, nid)
+            for note_list in _voices_s.values()
+            for nid, _p, _o, _d, _m, onset_q in note_list
+        )
+        for _i in range(len(_tsd_labels_out)):
+            _t0 = _i * _bar_dur_q_tsd
+            _t1 = _t0 + _bar_dur_q_tsd
+            _anchor = next(
+                (nid for onset_q, nid in _flat if _t0 - 0.01 <= onset_q < _t1 - 0.01),
+                None
+            )
+            _tsd_nids_out.append(_anchor)
+    tsd_json      = json.dumps(_tsd_labels_out)
+    tsd_nids_json = json.dumps(_tsd_nids_out)
 
     # ── legend panel (always shown — contains search input + table) ───────────
     legend_html = (
@@ -2535,6 +2588,82 @@ window.searchMotif=function(){{
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',highlight);
 else highlight();
+
+// ── TSD harmony labels ──────────────────────────────────────────────────────
+var tsdLabels={tsd_json};
+var tsdNids={tsd_nids_json};
+var TSD_COLOR={{'T':'#2ecc40','S':'#0074d9','D':'#e74c3c'}};
+var tsdElems=[];
+
+function clearTSD(){{
+  tsdElems.forEach(function(el){{if(el.parentNode)el.parentNode.removeChild(el);}});
+  tsdElems=[];
+}}
+
+function drawTSD(){{
+  clearTSD();
+  if(!tsdLabels.length)return;
+
+  // Compute a single consistent font size from the first valid anchor note.
+  var fs=8;
+  for(var _i=0;_i<tsdNids.length;_i++){{
+    var _el=tsdNids[_i]&&document.getElementById(tsdNids[_i]);
+    if(!_el)continue;
+    var _svg=_el.closest('svg'); if(!_svg)continue;
+    var _cr=_el.getBoundingClientRect();
+    if(_cr.height<=0)continue;
+    var _pt=clientToSVG(_svg,_cr.left,_cr.top);
+    var _pb=clientToSVG(_svg,_cr.left,_cr.bottom);
+    var _h=Math.abs(_pb.y-_pt.y);
+    if(_h>0){{fs=Math.max(_h*0.6,4); break;}}
+  }}
+
+  tsdLabels.forEach(function(label,i){{
+    var nid=tsdNids[i];
+    if(!nid)return;
+    var el=document.getElementById(nid);
+    if(!el)return;
+    try{{
+      var svg=el.closest('svg');
+      if(!svg)return;
+      var cr=el.getBoundingClientRect();
+      if(cr.width<=0&&cr.height<=0)return;
+
+      // walk up to find system
+      var sys=el.parentNode;
+      while(sys&&sys!==svg){{
+        if(sys.nodeType===1&&sys.getAttribute('class')==='system')break;
+        sys=sys.parentNode;
+      }}
+
+      // y: below the system
+      var refBottom=cr.bottom;
+      if(sys&&sys!==svg){{
+        var sb=sys.getBoundingClientRect();
+        if(sb.height>0)refBottom=sb.bottom;
+      }}
+
+      var cx=cr.left+cr.width/2;
+      var p=clientToSVG(svg,cx,refBottom+cr.height*0.6);
+
+      var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x',p.x);
+      txt.setAttribute('y',p.y+fs*0.35);
+      txt.setAttribute('text-anchor','middle');
+      txt.setAttribute('font-size',fs);
+      txt.setAttribute('font-family','sans-serif');
+      txt.setAttribute('fill',TSD_COLOR[label]||'#333');
+      txt.setAttribute('pointer-events','none');
+      txt.textContent=label;
+      svg.appendChild(txt);
+      tsdElems.push(txt);
+    }}catch(e){{}}
+  }});
+}}
+
+function _runTSD(){{requestAnimationFrame(function(){{requestAnimationFrame(drawTSD);}});}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_runTSD);
+else _runTSD();
 }})();
 </script>"""
 

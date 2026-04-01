@@ -19,7 +19,7 @@ from datetime import datetime
 
 # ── import shared functions from kern_reader ──────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
-import kern_mdl as kr   # initialises verovio _vtk at import
+import kern_reader as kr   # initialises verovio _vtk at import
 
 
 # ── subprocess worker (isolated from verovio segfaults) ──────────────────────
@@ -29,7 +29,7 @@ def _worker_func(path, q):
     try:
         import sys as _sys, os as _os
         _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-        import kern_mdl as _kr
+        import kern_reader as _kr
         _kr.check_file(path)
         ext = path.rsplit('.', 1)[-1].lower()
         if ext == 'mxl':
@@ -136,7 +136,18 @@ def main():
                         help='Lower bound for smooth-count analysis (default: 8)')
     args = parser.parse_args()
 
-    all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files()
+    _base = os.path.dirname(os.path.abspath(__file__))
+    _xml_dir = os.path.join(_base, 'lilypond', 'musicxml')
+    _xml_files = []
+    if os.path.isdir(_xml_dir):
+        for _name in sorted(os.listdir(_xml_dir)):
+            if _name.lower().endswith('.xml'):
+                _xml_files.append((
+                    os.path.join('lilypond', 'musicxml', _name),
+                    os.path.join(_xml_dir, _name),
+                ))
+
+    all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files() + _xml_files
     if args.filter:
         terms = [t.strip().lower() for t in args.filter.split(',')]
         files = [(r, f) for r, f in all_files
@@ -250,7 +261,7 @@ def main():
     lines.append("")
 
     h("1. files processed")
-    lines.append(f"Total kern files found : {total}")
+    lines.append(f"Total files found      : {total}")
     lines.append(f"Successfully analysed  : {n_ok}")
     lines.append(f"Errors / empty         : {n_err}")
     lines.append(f"Files with motifs      : {len(results)}")
