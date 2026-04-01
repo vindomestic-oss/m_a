@@ -385,6 +385,9 @@ def _bach_cycle(rel: str) -> str:
         n = int(m.group(1))
         if n in notebook_bwvs or 508 <= n <= 518:
             return 'Notebook for A.M. Bach'
+        # bwv_117.4 style → cantata movement/chorale; skip keyboard-work override
+        if _re.search(r'bwv[-_]?\d+\.\d', stem):
+            return 'Cantatas'
         return _bwv_to_cycle(n)
 
     return 'Other Bach'
@@ -427,6 +430,8 @@ def _bwv_to_cycle(n: int) -> str:
     if 772 <= n <= 805:  return 'Small Keyboard Works'   # already covered above
     if 894 <= n <= 987:  return 'Small Keyboard Works'
     if 989 <= n <= 1000: return 'Small Keyboard Works'
+    # Keyboard arrangements sharing BWV numbers with cantatas
+    if n in (117, 118, 119, 120, 121, 127, 128): return 'Small Keyboard Works'
     # Cantatas
     if 1 <= n <= 200:    return 'Cantatas'
     if 225 <= n <= 249:  return 'Motets & Masses'
@@ -685,12 +690,13 @@ def _load_tsd_file() -> dict:
             parts = line.split('\t')
             if len(parts) < 3:
                 continue
-            filename, metre, tsd_str = parts[0], parts[1], parts[2]
+            filenames_field, metre, tsd_str = parts[0], parts[1], parts[2]
             num, den = metre.split('/')
             beat_dur_q = int(num) * 4.0 / int(den)   # bar duration in quarter notes
             labels = [c for c in tsd_str if c in 'TSD']
             if labels:
-                data[filename] = (beat_dur_q, labels)
+                for filename in filenames_field.split(','):
+                    data[filename.strip()] = (beat_dur_q, labels)
     return data
 
 _TSD_DATA: dict = _load_tsd_file()   # filename → (beat_dur_q, ['T','S','D',...])
@@ -2791,6 +2797,7 @@ def _render_worker(path: str, version: str, queue):
 def load_file_bg(path: str, status_cb):
     with _state_lock:
         next_ver = str(int(_state["version"]) + 1)
+        _state["version"] = next_ver  # claim version immediately; prevents two concurrent renders getting same ver
 
     ctx   = multiprocessing.get_context('spawn')
     queue = ctx.Queue()
@@ -3054,10 +3061,10 @@ if __name__ == "__main__":
     _url = f"http://127.0.0.1:{SERVER_PORT}/"
     _browser_opened = False
     for _exe in [
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     ]:
         if os.path.exists(_exe):
             import subprocess
