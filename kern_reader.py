@@ -2110,10 +2110,16 @@ def render_score(path: str, version: str = "1") -> tuple:
         for _i in range(len(_tsd_labels_out)):
             _t0 = _i * _bar_dur_q_tsd
             _t1 = _t0 + _bar_dur_q_tsd
+            # First choice: any note starting in [t0, t1)
             _anchor = next(
-                (nid for onset_q, nid in _flat if _t0 - 0.01 <= onset_q < _t1 - 0.01),
-                None
+                (nid for onset_q, nid in _flat if _t0 <= onset_q < _t1), None
             )
+            # Fallback: nearest note within ±one window width
+            if _anchor is None:
+                _nearby = [(abs(onset_q - _t0), nid) for onset_q, nid in _flat
+                           if abs(onset_q - _t0) < _bar_dur_q_tsd]
+                if _nearby:
+                    _anchor = min(_nearby)[1]
             _tsd_nids_out.append(_anchor)
     tsd_json      = json.dumps(_tsd_labels_out)
     tsd_nids_json = json.dumps(_tsd_nids_out)
@@ -2604,58 +2610,63 @@ function drawTSD(){{
   clearTSD();
   if(!tsdLabels.length)return;
 
-  // Compute a single consistent font size from the first valid anchor note.
-  var fs=8;
-  for(var _i=0;_i<tsdNids.length;_i++){{
-    var _el=tsdNids[_i]&&document.getElementById(tsdNids[_i]);
-    if(!_el)continue;
-    var _svg=_el.closest('svg'); if(!_svg)continue;
-    var _cr=_el.getBoundingClientRect();
-    if(_cr.height<=0)continue;
-    var _pt=clientToSVG(_svg,_cr.left,_cr.top);
-    var _pb=clientToSVG(_svg,_cr.left,_cr.bottom);
-    var _h=Math.abs(_pb.y-_pt.y);
-    if(_h>0){{fs=Math.max(_h*0.6,4); break;}}
+  // Run-length encode: runs of 3+ same labels → single "T6" token at run start.
+  // Runs of 1-2 → individual tokens.
+  var tokens=[];
+  var ri=0;
+  while(ri<tsdLabels.length){{
+    var rj=ri+1;
+    while(rj<tsdLabels.length&&tsdLabels[rj]===tsdLabels[ri])rj++;
+    var rlen=rj-ri;
+    if(rlen>2){{
+      tokens.push({{text:tsdLabels[ri]+rlen,label:tsdLabels[ri],nidIdx:ri}});
+    }}else{{
+      for(var rk=0;rk<rlen;rk++)tokens.push({{text:tsdLabels[ri],label:tsdLabels[ri],nidIdx:ri+rk}});
+    }}
+    ri=rj;
   }}
 
-  tsdLabels.forEach(function(label,i){{
-    var nid=tsdNids[i];
-    if(!nid)return;
-    var el=document.getElementById(nid);
-    if(!el)return;
+  // Collect screen positions for each token's anchor note.
+  var items=[];
+  tokens.forEach(function(tok){{
+    var nid=tsdNids[tok.nidIdx]; if(!nid)return;
+    var el=document.getElementById(nid); if(!el)return;
     try{{
-      var svg=el.closest('svg');
-      if(!svg)return;
+      var svg=el.closest('svg'); if(!svg)return;
       var cr=el.getBoundingClientRect();
       if(cr.width<=0&&cr.height<=0)return;
-
-      // walk up to find system
       var sys=el.parentNode;
       while(sys&&sys!==svg){{
         if(sys.nodeType===1&&sys.getAttribute('class')==='system')break;
         sys=sys.parentNode;
       }}
-
-      // y: below the system
       var refBottom=cr.bottom;
-      if(sys&&sys!==svg){{
-        var sb=sys.getBoundingClientRect();
-        if(sb.height>0)refBottom=sb.bottom;
-      }}
+      if(sys&&sys!==svg){{var sb=sys.getBoundingClientRect();if(sb.height>0)refBottom=sb.bottom;}}
+      items.push({{text:tok.text,label:tok.label,svg:svg,
+                   cx:cr.left+cr.width/2,crH:cr.height,
+                   refBottom:refBottom,crTop:cr.top,crBottom:cr.bottom}});
+    }}catch(e){{}}
+  }});
+  if(!items.length)return;
 
-      var cx=cr.left+cr.width/2;
-      var p=clientToSVG(svg,cx,refBottom+cr.height*0.6);
+  // Convert desired screen pixels → SVG units via getScreenCTM().a (x-scale factor).
+  var _ctm=items[0].svg.getScreenCTM();
+  var fs=_ctm?12/_ctm.a:200;
 
+  // Place tokens.
+  items.forEach(function(it){{
+    try{{
+      var p=clientToSVG(it.svg,it.cx,it.refBottom+it.crH*0.6);
       var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
       txt.setAttribute('x',p.x);
       txt.setAttribute('y',p.y+fs*0.35);
       txt.setAttribute('text-anchor','middle');
       txt.setAttribute('font-size',fs);
       txt.setAttribute('font-family','sans-serif');
-      txt.setAttribute('fill',TSD_COLOR[label]||'#333');
+      txt.setAttribute('fill',TSD_COLOR[it.label]||'#333');
       txt.setAttribute('pointer-events','none');
-      txt.textContent=label;
-      svg.appendChild(txt);
+      txt.textContent=it.text;
+      it.svg.appendChild(txt);
       tsdElems.push(txt);
     }}catch(e){{}}
   }});
