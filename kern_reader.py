@@ -606,6 +606,53 @@ _BEAT_DUR_OVERRIDES: dict[str, float] = {
 # ── MusicXML voice-order fix ──────────────────────────────────────────────────
 _STEP_MIDI = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 
+def _fix_implicit_pickup_measures(content: str) -> str:
+    """Fix MusicXML implicit measures (number='-1') from LilyPond repeat pickups.
+    Voices 2+ have print-object=no mRests with full-measure duration (e.g. 40320)
+    while voice 1 has only a short pickup (e.g. 10080).  Verovio renders the measure
+    as full-width with an extra barline.  Fix: set hidden-rest and backup durations
+    to match the real voice content so verovio sees a short pickup bar."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    changed = False
+    for part in root.iter('part'):
+        for measure in part.findall('measure'):
+            if measure.get('implicit') != 'yes' or measure.get('number') != '-1':
+                continue
+            real_dur = sum(
+                int(n.findtext('duration', '0'))
+                for n in measure.findall('note')
+                if n.get('print-object') != 'no'
+            )
+            if real_dur == 0:
+                continue
+            for note in measure.findall('note'):
+                if note.get('print-object') != 'no':
+                    continue
+                rest = note.find('rest')
+                if rest is not None:
+                    rest.attrib.pop('measure', None)
+                dur_el = note.find('duration')
+                if dur_el is not None and int(dur_el.text) != real_dur:
+                    dur_el.text = str(real_dur)
+                    changed = True
+            for backup in measure.findall('backup'):
+                dur_el = backup.find('duration')
+                if dur_el is not None and int(dur_el.text) > real_dur:
+                    dur_el.text = str(real_dur)
+                    changed = True
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
+
+
 def _fix_musicxml_voice_order(content: str) -> str:
     """
     For each part with multiple voices, re-number voices so that voice 1 has
@@ -2061,6 +2108,7 @@ def render_score(path: str, version: str = "1") -> tuple:
             content = prepare_grand_staff(content)
             content = add_beam_markers(content)
         elif ext in ('xml', 'musicxml'):
+            content = _fix_implicit_pickup_measures(content)
             content = _fix_musicxml_voice_order(content)
         ok = _vtk.loadData(content)
         if not ok:

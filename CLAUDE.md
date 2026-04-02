@@ -108,7 +108,7 @@ python meta_analysis.py --filter beethoven/opus132 --output meta_report_beethove
 ### Design
 - Each file is analyzed in a **fresh subprocess** (`multiprocessing.get_context('spawn')`) with a 90-second timeout — isolates verovio segfaults and hangs
 - Worker: `_worker_func(path, q)` — spawned per file, puts result into a `Queue`; main process calls `q.get(timeout=90)`, terminates process if it doesn't respond
-- Imports `kern_mdl` as module (no HTTP server started); uses `kr.find_kern_files`, `kr.find_music21_files`, `kr.prepare_grand_staff`, `kr.add_beam_markers`, `kr.analyze_motifs`
+- Imports `kern_reader` as module (no HTTP server started); uses `kr.find_kern_files`, `kr.find_music21_files`, `kr.prepare_grand_staff`, `kr.add_beam_markers`, `kr.analyze_motifs`
 - Worker handles both `.krn` (text, kern preprocessing applied) and `.mxl` (unzipped, XML extracted, no kern preprocessing)
 - `.mxl` inner file may use `.xml` or `.musicxml` extension — both matched
 - `main()` always loads `kr.find_kern_files() + kr.find_music21_files()`; without `--filter`, music21 files are excluded; with `--filter`, both sources are searched
@@ -175,17 +175,12 @@ Server endpoints: `POST /search` — returns `{"occs": [[nid,...], ...], "count"
 - `tkinter` / `http.server` / `webbrowser` — stdlib
 - HTTP server uses `ThreadingTCPServer` (one thread per connection) to support long-lived SSE connections alongside normal requests
 
-## kern_mdl.py — MDL working copy
-
-**Primary development file.** All new features and changes go here first. `kern_reader.py` is only synced from `kern_mdl.py` when explicitly requested. Both files are currently identical.
-
-Run with `python kern_mdl.py`.
-
-### Additional functions
+## Additional functions in kern_reader.py
 
 - `_dur_q_to_str(d)` — converts duration in quarter notes to search-format string (e.g. 0.5 → `"1/8"`). Formula: `Fraction(d/4.0)` because `_parse_dur` computes `num*4/den`.
 - `_pattern_to_query(pattern, phase)` — converts a motif body tuple to a search query string (e.g. `"1/16;0;+1-1-1"`); used to populate the search field when clicking a motif row.
 - `_mdl_score(n, L, transforms)` — module-level function. MDL saving = `n*(L-1) - L - transp_cost`. Sequence bonus: if ≥3 occurrences have constant ∆transposition (nonzero), `transp_cost = log2(n+1)` instead of `n * log2(n_distinct+1)`.
+- `_fix_implicit_pickup_measures(content)` — fixes MusicXML `number="-1"` implicit measures (LilyPond repeat pickups) where voices 2+ have full-measure rests causing verovio to render an extra barline. Sets hidden-rest and backup durations to match actual voice content.
 
 ### File sort order
 
