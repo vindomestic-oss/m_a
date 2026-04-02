@@ -883,6 +883,7 @@ def _voice_notes_from_mei(mei_str):
                 ln  = int(layer_el.get('n', 1))
                 key = (sn, ln)
                 pos = 0.0   # position within measure
+                pos_real = 0.0  # pos excluding mRest (for pickup detection)
 
                 for child, scale in iter_events(layer_el):
                     t = child.tag.split('}')[-1]
@@ -896,6 +897,7 @@ def _voice_notes_from_mei(mei_str):
                             if e:
                                 voices[key].append(e)
                             pos += dur
+                            pos_real = pos
                     elif t == 'chord':
                         dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         if child.get('grace'):   # grace chord — skip
@@ -910,16 +912,23 @@ def _voice_notes_from_mei(mei_str):
                             if cands:
                                 voices[key].append(max(cands, key=lambda x: x[4]))
                             pos += dur
+                            pos_real = pos
                     elif t in ('rest', 'space'):
                         dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
                         pos += dur
+                        pos_real = pos
                     elif t == 'mRest':
                         pos += beats_per_measure
+                        # pos_real NOT updated: mRest must not inflate pickup detection
 
-                max_pos = max(max_pos, pos)
+                max_pos = max(max_pos, pos_real)
 
-        # Pickup bar (anacrusis): metcon='false' → use actual notes duration
-        if measure_el.get('metcon') == 'false' and max_pos > 0:
+        # Pickup bar (anacrusis): use actual notes duration when:
+        # 1. verovio explicitly marks metcon='false' (kern pickup bars), OR
+        # 2. actual note content < full measure (MusicXML implicit measures where
+        #    verovio doesn't set metcon; mRest filler voices are excluded via pos_real)
+        if max_pos > 0 and (measure_el.get('metcon') == 'false' or
+                            max_pos < beats_per_measure - 1e-9):
             measure_onset += max_pos
         else:
             measure_onset += beats_per_measure
@@ -2199,12 +2208,12 @@ def render_score(path: str, version: str = "1") -> tuple:
             _anchor = next(
                 (nid for onset_q, nid in _flat if _t0 <= onset_q < _t1), None
             )
-            # Fallback: nearest note within ±one window width
+            # Fallback: nearest note within ±one window width (inclusive)
             if _anchor is None:
-                _nearby = [(abs(onset_q - _t0), nid) for onset_q, nid in _flat
-                           if abs(onset_q - _t0) < _bar_dur_q_tsd]
+                _nearby = [(abs(onset_q - _t0), onset_q, nid) for onset_q, nid in _flat
+                           if abs(onset_q - _t0) <= _bar_dur_q_tsd]
                 if _nearby:
-                    _anchor = min(_nearby)[1]
+                    _anchor = min(_nearby)[2]
             _tsd_nids_out.append(_anchor)
     tsd_json      = json.dumps(_tsd_labels_out)
     tsd_nids_json = json.dumps(_tsd_nids_out)
@@ -2223,7 +2232,11 @@ def render_score(path: str, version: str = "1") -> tuple:
         f'<button onclick="window.searchMotif()" '
         f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
         f'border-radius:4px;background:#f5f5f5;cursor:pointer">Найти</button>'
-        f'<span id="motif-search-status" style="font:11px sans-serif;color:#888"></span>'
+        + (f'<button id="tsd-btn" onclick="window.toggleTSD()" '
+           f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
+           f'border-radius:4px;background:#f5f5f5;cursor:pointer">TSD</button>'
+           if _tsd_labels_out else '')
+        + f'<span id="motif-search-status" style="font:11px sans-serif;color:#888"></span>'
         f'</div>'
         f'<table id="motif-dict" style="border-collapse:collapse">'
         f'<thead><tr style="color:#888;font-size:10px;border-bottom:2px solid #ccc">'
@@ -2684,81 +2697,76 @@ else highlight();
 var tsdLabels={tsd_json};
 var tsdNids={tsd_nids_json};
 var TSD_COLOR={{'T':'#2ecc40','S':'#0074d9','D':'#e74c3c'}};
-var tsdElems=[];
+var _tsdElems=[];
+var _tsdVisible=false;
 
-function clearTSD(){{
-  tsdElems.forEach(function(el){{if(el.parentNode)el.parentNode.removeChild(el);}});
-  tsdElems=[];
-}}
-
-function drawTSD(){{
-  clearTSD();
-  if(!tsdLabels.length)return;
-
-  // Run-length encode: runs of 2+ same labels → single "T2" / "T6" token at run start.
-  var tokens=[];
-  var ri=0;
-  while(ri<tsdLabels.length){{
-    var rj=ri+1;
-    while(rj<tsdLabels.length&&tsdLabels[rj]===tsdLabels[ri])rj++;
-    var rlen=rj-ri;
-    if(rlen>1){{
-      tokens.push({{text:tsdLabels[ri]+rlen,label:tsdLabels[ri],nidIdx:ri}});
-    }}else{{
-      tokens.push({{text:tsdLabels[ri],label:tsdLabels[ri],nidIdx:ri}});
-    }}
-    ri=rj;
+function _buildTsdOverlay(){{
+  if(_tsdElems.length)return;
+  // RLE: collapse consecutive same labels → T2, D3, etc.
+  var _runs=[];
+  var _ri=0;
+  while(_ri<tsdLabels.length){{
+    var _rj=_ri+1;
+    while(_rj<tsdLabels.length&&tsdLabels[_rj]===tsdLabels[_ri])_rj++;
+    _runs.push({{lbl:tsdLabels[_ri],cnt:_rj-_ri,idx:_ri}});
+    _ri=_rj;
   }}
-
-  // Collect screen positions for each token's anchor note.
-  var items=[];
-  tokens.forEach(function(tok){{
-    var nid=tsdNids[tok.nidIdx]; if(!nid)return;
-    var el=document.getElementById(nid); if(!el)return;
-    try{{
-      var svg=el.closest('svg'); if(!svg)return;
-      var cr=el.getBoundingClientRect();
-      if(cr.width<=0&&cr.height<=0)return;
-      var sys=el.parentNode;
-      while(sys&&sys!==svg){{
-        if(sys.nodeType===1&&sys.getAttribute('class')==='system')break;
-        sys=sys.parentNode;
-      }}
-      var refBottom=cr.bottom;
-      if(sys&&sys!==svg){{var sb=sys.getBoundingClientRect();if(sb.height>0)refBottom=sb.bottom;}}
-      items.push({{text:tok.text,label:tok.label,svg:svg,
-                   cx:cr.left+cr.width/2,crH:cr.height,
-                   refBottom:refBottom,crTop:cr.top,crBottom:cr.bottom}});
-    }}catch(e){{}}
-  }});
-  if(!items.length)return;
-
-  // Convert desired screen pixels → SVG units via getScreenCTM().a (x-scale factor).
-  var _ctm=items[0].svg.getScreenCTM();
-  var fs=_ctm?12/_ctm.a:200;
-
-  // Place tokens.
-  items.forEach(function(it){{
-    try{{
-      var p=clientToSVG(it.svg,it.cx,it.refBottom+it.crH*0.6);
-      var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-      txt.setAttribute('x',p.x);
-      txt.setAttribute('y',p.y+fs*0.35);
-      txt.setAttribute('text-anchor','middle');
-      txt.setAttribute('font-size',fs);
-      txt.setAttribute('font-family','sans-serif');
-      txt.setAttribute('fill',TSD_COLOR[it.label]||'#333');
-      txt.setAttribute('pointer-events','none');
-      txt.textContent=it.text;
-      it.svg.appendChild(txt);
-      tsdElems.push(txt);
-    }}catch(e){{}}
-  }});
+  for(var _ti=0;_ti<_runs.length;_ti++){{
+    var nid=tsdNids[_runs[_ti].idx];
+    var lbl=_runs[_ti].lbl;
+    var txt=_runs[_ti].cnt>1?lbl+_runs[_ti].cnt:lbl;
+    if(!nid||!lbl)continue;
+    var el=document.getElementById(nid);
+    if(!el)continue;
+    // Find parent SVG
+    var svg=el;
+    while(svg&&svg.tagName&&svg.tagName.toLowerCase()!=='svg')svg=svg.parentNode;
+    if(!svg)continue;
+    // Find ancestor system <g class="system">
+    var sys=el;
+    while(sys&&sys!==svg){{
+      if(sys.getAttribute&&sys.getAttribute('class')==='system')break;
+      sys=sys.parentNode;
+    }}
+    if(!sys||sys===svg)sys=null;
+    var noteBB=el.getBBox();
+    var _sr=svg.getBoundingClientRect(),_vb=svg.viewBox.baseVal;
+    var _px=(_sr.width&&_vb&&_vb.width)?_vb.width/_sr.width:0;
+    var x=noteBB.x+15*_px;
+    var sysBB=sys?sys.getBBox():null;
+    var fs=sysBB?sysBB.height*0.12:noteBB.height*4.5;
+    var y=sysBB?(sysBB.y+sysBB.height+fs*1.8):(noteBB.y+noteBB.height+fs*2.0);
+    var t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',x);
+    t.setAttribute('y',y);
+    t.setAttribute('text-anchor','start');
+    t.setAttribute('font-size',String(fs));
+    t.setAttribute('font-family','sans-serif');
+    t.setAttribute('font-weight','bold');
+    t.setAttribute('fill',TSD_COLOR[lbl]||'#333');
+    t.setAttribute('pointer-events','none');
+    t.setAttribute('display','none');
+    t.textContent=txt;
+    svg.appendChild(t);
+    _tsdElems.push(t);
+  }}
 }}
 
-function _runTSD(){{requestAnimationFrame(function(){{requestAnimationFrame(drawTSD);}});}}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_runTSD);
-else _runTSD();
+window.toggleTSD=function(){{
+  _buildTsdOverlay();
+  _tsdVisible=!_tsdVisible;
+  for(var _i=0;_i<_tsdElems.length;_i++){{
+    _tsdElems[_i].setAttribute('display',_tsdVisible?'inline':'none');
+  }}
+  var btn=document.getElementById('tsd-btn');
+  if(btn){{
+    btn.style.background=_tsdVisible?'#fffde7':'#f5f5f5';
+    btn.style.borderColor=_tsdVisible?'#e0a800':'#bbb';
+    btn.style.fontWeight=_tsdVisible?'bold':'normal';
+  }}
+  if(_tsdVisible){{var sp=document.getElementById('score-pages');if(sp)sp.scrollIntoView({{behavior:'smooth'}});}}
+}};
+
 }})();
 </script>"""
 
@@ -2778,7 +2786,7 @@ else _runTSD();
 <div id="motif-tooltip" style="display:none;position:fixed;background:rgba(0,0,0,0.78);color:#fff;font:12px monospace;padding:4px 8px;border-radius:4px;pointer-events:none;z-index:9999;white-space:nowrap"></div>
 <div class="fn">{os.path.basename(path)}</div>
 {legend_html}
-{pages}
+<div id="score-pages">{pages}</div>
 </body>
 </html>"""
     return html, n_pages, version, all_seqs, _beat_dur_q_s
