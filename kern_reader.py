@@ -2782,7 +2782,9 @@ function _buildTsdOverlay(){{
     var _px=(_sr.width&&_vb&&_vb.width)?_vb.width/_sr.width:0;
     var x=noteBB.x+15*_px;
     var sysBB=sys?sys.getBBox():null;
-    var fs=sysBB?sysBB.height*0.12:noteBB.height*4.5;
+    var _stf=sys?sys.querySelector('g.staff'):null;
+    var _stfH=_stf?_stf.getBBox().height:0;
+    var fs=_stfH?_stfH*0.24:(sysBB?sysBB.height*0.12:noteBB.height*4.5);
     var y=sysBB?(sysBB.y+sysBB.height+fs*1.8):(noteBB.y+noteBB.height+fs*2.0);
     var t=document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('x',x);
