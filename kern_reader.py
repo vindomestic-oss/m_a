@@ -2928,6 +2928,7 @@ class FileBrowser(tk.Tk):
         search_entry = ttk.Entry(outer, textvariable=self._search_var)
         search_entry.pack(fill=tk.X, padx=8, pady=(0, 6))
         self.after(100, search_entry.focus_set)
+        search_entry.bind("<Tab>", self._focus_tree)
 
         self._tree = ttk.Treeview(outer, show="tree", selectmode="browse")
         sb = ttk.Scrollbar(outer, orient=tk.VERTICAL, command=self._tree.yview)
@@ -2983,7 +2984,7 @@ class FileBrowser(tk.Tk):
                 header = f'{label}  ({len(group_files)})'
                 parent = self._tree.insert('', tk.END, text=header,
                                            values=(), tags=('group',))
-                self._tree.item(parent, open=True)
+                self._tree.item(parent, open=False)
             else:
                 parent = ''
             for rel, full in group_files:
@@ -2991,6 +2992,23 @@ class FileBrowser(tk.Tk):
                                   text=os.path.basename(rel), values=(full,))
             total += len(group_files)
         self._count_var.set(f"{total} file{'s' if total != 1 else ''}")
+
+    def _focus_tree(self, _=None):
+        self._tree.focus_set()
+        children = self._tree.get_children()
+        if children:
+            # find first selectable item (not a group header)
+            for item in children:
+                sub = self._tree.get_children(item)
+                if sub:
+                    self._tree.selection_set(sub[0])
+                    self._tree.focus(sub[0])
+                    break
+                else:
+                    self._tree.selection_set(item)
+                    self._tree.focus(item)
+                    break
+        return "break"  # prevent default Tab behaviour
 
     def _apply_filter(self):
         q = self._search_var.get().lower()
