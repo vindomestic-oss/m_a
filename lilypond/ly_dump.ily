@@ -286,7 +286,14 @@
                     staff))
                (new-voice
                 (if (memq ctype '(Voice CueVoice))
-                    (if (string-null? cid) voice cid)
+                    (if (string-null? cid) voice
+                        ;; Qualify named voice IDs with the enclosing staff name so that
+                        ;; two separate staves each having a Voice "1" produce distinct IDs
+                        ;; ("Upper.1" vs "Lower.1").  Cross-staff \change Staff voices keep
+                        ;; the same vc throughout (staff changes, voice context does not),
+                        ;; so they are still correctly merged to their home staff by Python.
+                        (if (string-null? staff) cid
+                            (string-append staff "." cid)))
                     voice))
                (elt  (ly:music-property m 'element #f))
                (elts (ly:music-property m 'elements '())))
