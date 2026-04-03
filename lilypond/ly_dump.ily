@@ -17,6 +17,7 @@
 #(define %dump-port  #f)
 #(define %dump-score 0)
 #(define %dump-staff-counter 0)
+#(define %cur-staff "1")   ;; mutable: updated by ContextChange at any nesting depth
 
 %% ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@
                    "{\"t\":\"R\""
                    ",\"on\":\"" (dump-onset onset) "\""
                    ",\"dur\":\"" (dump-onset len) "\""
-                   ",\"st\":\"" staff "\""
+                   ",\"st\":\"" %cur-staff "\""
                    ",\"vc\":\"" voice "\""
                    "}")
                   (dump-write
@@ -94,7 +95,7 @@
                    ",\"semi\":"  (modulo (ly:pitch-semitones pitch) 12)
                    ",\"oct\":"   (ly:pitch-octave pitch)
                    ",\"step\":"  (ly:pitch-notename pitch)
-                   ",\"st\":\"" staff "\""
+                   ",\"st\":\"" %cur-staff "\""
                    ",\"vc\":\"" voice "\""
                    ",\"tie\":"  (if tie "true" "false")
                    "}"))
@@ -113,7 +114,7 @@
                "{\"t\":\"R\""
                ",\"on\":\"" (dump-onset onset) "\""
                ",\"dur\":\"" (dump-onset len) "\""
-               ",\"st\":\"" staff "\""
+               ",\"st\":\"" %cur-staff "\""
                ",\"vc\":\"" voice "\""
                "}")))
           (if (ly:duration? dur)
@@ -145,10 +146,12 @@
              "}")))
         onset)
 
-       ;; ── ContextChange (\change Staff = "other") — update staff for subsequent notes
-       ;; This is NOT handled here (it's stateful); handled in the sequential loop below.
+       ;; ── ContextChange (\change Staff = "other") — update %cur-staff at any nesting depth
        ((eq? name 'ContextChange)
-        onset)  ;; no-op here; sequential loop handles it
+        (let ((new-id (ly:music-property m 'change-to-id "")))
+          (when (not (string-null? new-id))
+            (set! %cur-staff new-id)))
+        onset)
 
        ;; ── Property set — detect \set Timing.measurePosition for pickup detection
        ;; \partialPickup = \set Timing.measurePosition = #(ly:make-moment 7/8) pattern
@@ -230,7 +233,7 @@
              ",\"on\":\"" (dump-onset onset) "\""
              ",\"num\":" num
              ",\"den\":" den
-             ",\"st\":\"" staff "\""
+             ",\"st\":\"" %cur-staff "\""
              "}"))
           onset))
 
@@ -252,7 +255,7 @@
              ",\"semi\":" (modulo (ly:pitch-semitones tonic) 12)
              ",\"step\":" (ly:pitch-notename tonic)
              ",\"sharps\":" sharps
-             ",\"st\":\"" staff "\""
+             ",\"st\":\"" %cur-staff "\""
              "}"))
           onset))
 
@@ -297,6 +300,10 @@
                     voice))
                (elt  (ly:music-property m 'element #f))
                (elts (ly:music-property m 'elements '())))
+          ;; Reset %cur-staff for explicit new-Voice or Staff contexts.
+          ;; NOT for oiceTwo/\oneVoice (is-new=#f) which should preserve current staff.
+          (when (or is-staff is-new)
+            (set! %cur-staff new-staff))
           (let loop ((es (if elt (cons elt elts) elts)) (t onset))
             (if (null? es) t
                 (loop (cdr es)
@@ -311,8 +318,10 @@
             (if (null? es) t
                 (let ((e (car es)))
                   (if (eq? (ly:music-property e 'name) 'ContextChange)
-                      ;; staff change: update cur-staff, don't advance time
+                      ;; staff change: update cur-staff and %cur-staff, don't advance time
                       (let ((new-id (ly:music-property e 'change-to-id "")))
+                        (when (not (string-null? new-id))
+                          (set! %cur-staff new-id))
                         (loop (cdr es) t
                               (if (string-null? new-id) cur-staff new-id)))
                       (loop (cdr es)
@@ -337,6 +346,7 @@
               (%has-layout-outdef? score))
      (set! %dump-score (+ %dump-score 1))
      (set! %dump-staff-counter 0)  ;; reset per score
+     (set! %cur-staff "1")          ;; reset current staff per score
      (let ((port (open-file ly:dump-output-file
                             (if (= %dump-score 1) "w" "a"))))
        (set! %dump-port port)

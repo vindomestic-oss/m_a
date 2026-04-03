@@ -572,13 +572,35 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
 
     pickup_shift, mid_shifts, _section_pickup_offsets = _compute_shifts(note_events)
 
-    # First pass: determine home staff for each voice (first staff where it appears)
-    vc_home_st: dict[str, str] = {}
+    # First pass: determine home staff for each voice.
+    # Use majority staff (staff containing >= 2/3 of actual notes) when a voice
+    # predominantly lives in a different staff than its first appearance (e.g. voices
+    # declared in Upper but living mostly in Lower via \change Staff).
+    # Fall back to first-appearance staff for true cross-staff voices (balanced split).
+    from collections import Counter as _Counter
+    vc_first_st: dict[str, str] = {}
+    vc_note_counts: dict[str, _Counter] = {}
     for ev in note_events:
         if ev.get('t') in ('N', 'R'):
             vc = ev.get('vc', '1')
-            if vc not in vc_home_st:
-                vc_home_st[vc] = ev.get('st', '1')
+            if vc not in vc_first_st:
+                vc_first_st[vc] = ev.get('st', '1')
+        if ev.get('t') == 'N':  # actual notes only (not rests) for majority vote
+            vc = ev.get('vc', '1')
+            vc_note_counts.setdefault(vc, _Counter())[ev.get('st', '1')] += 1
+    vc_home_st: dict[str, str] = {}
+    for vc, first_st in vc_first_st.items():
+        counts = vc_note_counts.get(vc, _Counter())
+        if counts:
+            total = sum(counts.values())
+            best_st, best_n = counts.most_common(1)[0]
+            # Override first-appearance staff only when the majority is overwhelming (>= 2/3)
+            if best_st != first_st and best_n >= total * 2 / 3:
+                vc_home_st[vc] = best_st
+            else:
+                vc_home_st[vc] = first_st
+        else:
+            vc_home_st[vc] = first_st
 
     for ev in note_events:
         t = ev.get('t')
