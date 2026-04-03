@@ -1800,17 +1800,40 @@ def prepare_grand_staff(content: str) -> str:
 
         staff_row = ["*"] * n_total
         clef_row  = ["*"] * n_total
-        for rank, col in enumerate(kern_idxs):
-            staff_row[col] = "*staff1" if rank < n_kern - 1 else "*staff2"
-            clef_row[col]  = "*clefG2" if rank < n_kern - 1 else "*clefF4"
 
-        # Check if next non-empty line already has a *clef token
+        # Scan interpretation lines (before first data line) for *clef tokens
         has_clef = False
+        file_clefs = {}  # kern column index → clef string
         for j in range(header_idx + 1, len(lines)):
             raw = lines[j].rstrip("\n\r")
-            if raw:
-                has_clef = any(t.startswith("*clef") for t in raw.split("\t"))
+            if not raw or raw.startswith("!"):
+                continue
+            if not raw.startswith("*") and not raw.startswith("="):
+                break  # reached note data
+            tokens = raw.split("\t")
+            if any(t.startswith("*clef") for t in tokens):
+                has_clef = True
+                for ci, t in enumerate(tokens):
+                    if t.startswith("*clef") and ci in kern_idxs:
+                        file_clefs[ci] = t
                 break
+
+        if file_clefs:
+            # Order staves by clef: G-clef spines (treble) → lower staff numbers (top);
+            # F/C-clef spines (bass/alto) → higher staff numbers (bottom).
+            # Within each group, rightmost column = lowest staff number (standard score order).
+            treble_cols = sorted([c for c in kern_idxs if 'G' in file_clefs.get(c, '')],
+                                 reverse=True)
+            bass_cols   = sorted([c for c in kern_idxs if 'G' not in file_clefs.get(c, '')],
+                                 reverse=True)
+            ordered = treble_cols + bass_cols
+            for staff_n, col in enumerate(ordered, 1):
+                staff_row[col] = f"*staff{staff_n}"
+        else:
+            # No clef tokens in file — fall back: last kern column = bass (staff2), rest treble (staff1)
+            for rank, col in enumerate(kern_idxs):
+                staff_row[col] = "*staff1" if rank < n_kern - 1 else "*staff2"
+                clef_row[col]  = "*clefG2" if rank < n_kern - 1 else "*clefF4"
 
         ins = ["\t".join(staff_row) + "\n"]
         if not has_clef:
