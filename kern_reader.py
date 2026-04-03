@@ -2313,19 +2313,27 @@ def render_score(path: str, version: str = "1") -> tuple:
             for note_list in _voices_s.values()
             for nid, _p, _o, _d, _m, onset_q in note_list
         )
+        _offset_tsd = 0.0
         for _i in range(len(_tsd_labels_out)):
-            _t0 = _i * _bar_dur_q_tsd
+            _t0 = _i * _bar_dur_q_tsd + _offset_tsd
             _t1 = _t0 + _bar_dur_q_tsd
             # First choice: any note starting in [t0, t1)
             _anchor = next(
                 (nid for onset_q, nid in _flat if _t0 <= onset_q < _t1), None
             )
-            # Fallback: nearest note within ±one window width (inclusive)
+            # Fallback: prefer nearest note at or after t0 (don't cross barlines backward)
             if _anchor is None:
-                _nearby = [(abs(onset_q - _t0), onset_q, nid) for onset_q, nid in _flat
-                           if abs(onset_q - _t0) <= _bar_dur_q_tsd]
-                if _nearby:
-                    _anchor = min(_nearby)[2]
+                _ahead = sorted((onset_q, nid) for onset_q, nid in _flat if onset_q >= _t0)
+                if _ahead:
+                    _found_onset, _anchor = _ahead[0]
+                    # gap > one window → extra barline; shift all subsequent windows forward
+                    _gap = _found_onset - _t0
+                    if _gap > _bar_dur_q_tsd:
+                        _offset_tsd += round(_gap / _bar_dur_q_tsd) * _bar_dur_q_tsd
+                else:
+                    _behind = sorted((onset_q, nid) for onset_q, nid in _flat if onset_q < _t0)
+                    if _behind:
+                        _anchor = _behind[-1][1]
             _tsd_nids_out.append(_anchor)
     tsd_json      = json.dumps(_tsd_labels_out)
     tsd_nids_json = json.dumps(_tsd_nids_out)
@@ -2341,16 +2349,23 @@ def render_score(path: str, version: str = "1") -> tuple:
             for note_list in _voices_s.values()
             for nid, _p, _o, _d, _m, onset_q in note_list
         )
+        _offset_gen = 0.0
         for _i in range(len(_lbl)):
-            _t0 = _i * _bar_dur_gen
+            _t0 = _i * _bar_dur_gen + _offset_gen
             _anchor = next(
                 (nid for onset_q, nid in _flat_gen if _t0 <= onset_q < _t0 + _bar_dur_gen), None
             )
             if _anchor is None:
-                _nearby = [(abs(onset_q - _t0), onset_q, nid) for onset_q, nid in _flat_gen
-                           if abs(onset_q - _t0) <= _bar_dur_gen]
-                if _nearby:
-                    _anchor = min(_nearby)[2]
+                _ahead = sorted((onset_q, nid) for onset_q, nid in _flat_gen if onset_q >= _t0)
+                if _ahead:
+                    _found_onset_g, _anchor = _ahead[0]
+                    _gap_g = _found_onset_g - _t0
+                    if _gap_g > _bar_dur_gen:
+                        _offset_gen += round(_gap_g / _bar_dur_gen) * _bar_dur_gen
+                else:
+                    _behind = sorted((onset_q, nid) for onset_q, nid in _flat_gen if onset_q < _t0)
+                    if _behind:
+                        _anchor = _behind[-1][1]
             nids_out.append(_anchor)
         return _lbl, nids_out
 
