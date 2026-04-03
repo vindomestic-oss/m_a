@@ -28,11 +28,12 @@ import os, sys, re
 import numpy as np
 from fractions import Fraction
 
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-TSD_TXT      = os.path.join(SCRIPT_DIR, 'TSD.txt')
-TSD_GEN_4    = os.path.join(SCRIPT_DIR, 'TSD_generated_4.txt')
-TSD_GEN_8    = os.path.join(SCRIPT_DIR, 'TSD_generated_8.txt')
-MODEL_PATH   = os.path.join(SCRIPT_DIR, 'tsd_model.npz')
+SCRIPT_DIR       = os.path.dirname(os.path.abspath(__file__))
+TSD_TXT          = os.path.join(SCRIPT_DIR, 'TSD.txt')
+TSD_GEN_4        = os.path.join(SCRIPT_DIR, 'TSD_generated_4.txt')
+TSD_GEN_8        = os.path.join(SCRIPT_DIR, 'TSD_generated_8.txt')
+MODEL_PATH       = os.path.join(SCRIPT_DIR, 'tsd_model.npz')
+LILYPOND_XML_DIR = os.path.join(SCRIPT_DIR, 'lilypond', 'musicxml')
 
 LABEL_IDX    = {'T': 0, 'S': 1, 'D': 2}
 IDX_LABEL    = ['T', 'S', 'D']
@@ -363,6 +364,60 @@ def generate_chorales(net: TSDNet, label_dur_q: float) -> dict:
     print(f"  {ok} ok, {err} errors")
     return results
 
+# ── inference on local XML files ─────────────────────────────────────────────
+
+def generate_local_xml(net: TSDNet, label_dur_q: float,
+                       glob_pattern: str = 'french_suite_*.xml',
+                       skip_filenames: set | None = None) -> dict:
+    """Apply model to local XML files matching glob_pattern in LILYPOND_XML_DIR.
+    Skips filenames already in skip_filenames (e.g. those with manual TSD annotations).
+    Returns {filename: (bar_dur_q, beats_per_bar, [labels])}.
+    """
+    import glob as _glob
+    import music21
+
+    if skip_filenames is None:
+        skip_filenames = set()
+
+    paths = sorted(_glob.glob(os.path.join(LILYPOND_XML_DIR, glob_pattern)))
+    results = {}
+    ok = err = 0
+
+    for path in paths:
+        fname = os.path.basename(path)
+        if fname in skip_filenames:
+            continue
+        try:
+            score = music21.converter.parse(path)
+            ts_list = list(score.parts[0].recurse().getElementsByClass('TimeSignature'))
+            ts = ts_list[0] if ts_list else None
+
+            bar_dur_q = label_dur_q
+            if ts is not None:
+                bar_total_q   = ts.numerator * float(ts.beatDuration.quarterLength)
+                beats_per_bar = max(1, round(bar_total_q / label_dur_q))
+            else:
+                beats_per_bar = round(4.0 / label_dur_q)
+
+            total_dur = float(score.duration.quarterLength)
+            n_labels  = max(1, int(round(total_dur / bar_dur_q)))
+
+            feats = extract_features(path, bar_dur_q, n_labels, beats_per_bar)
+            if feats is None or len(feats) == 0:
+                raise ValueError("no features")
+
+            preds = net.predict(feats)
+            results[fname] = (bar_dur_q, beats_per_bar, list(IDX_LABEL[p] for p in preds))
+            print(f"  [ok]    {fname}")
+            ok += 1
+        except Exception as e:
+            print(f"  [err]   {fname}: {e}")
+            err += 1
+
+    print(f"  {ok} ok, {err} errors")
+    return results
+
+
 # ── output ────────────────────────────────────────────────────────────────────
 
 def write_generated(results: dict, out_path: str):
@@ -409,10 +464,16 @@ if __name__ == '__main__':
     print(f"  Final train accuracy: {train_acc:.1%}")
     net.save(MODEL_PATH)
 
+    annotated = set(tsd_data.keys())   # skip files that already have manual TSD
+
     print("\nGenerating predictions (1/4 granularity):")
     results_4 = generate_chorales(net, label_dur_q=1.0)
+    print("\n  French Suite XML files (1/4):")
+    results_4.update(generate_local_xml(net, label_dur_q=1.0, skip_filenames=annotated))
     write_generated(results_4, TSD_GEN_4)
 
     print("\nGenerating predictions (1/8 granularity):")
     results_8 = generate_chorales(net, label_dur_q=0.5)
+    print("\n  French Suite XML files (1/8):")
+    results_8.update(generate_local_xml(net, label_dur_q=0.5, skip_filenames=annotated))
     write_generated(results_8, TSD_GEN_8)
