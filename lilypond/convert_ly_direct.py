@@ -729,6 +729,10 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
 
         for i, (ev, vc) in enumerate(staff_notes):
             try:
+                # Skip rests that come from a non-home staff (cross-staff filler rests
+                # from the other grand-staff hand should not pollute the home-staff voice).
+                if ev.get('t') == 'R' and ev.get('st') != staff_id:
+                    continue
                 obj = _make_note_or_rest(ev, i)
                 on_frac = _onset_frac(ev['on']) + pickup_shift
                 for threshold_q, extra_q in mid_shifts:

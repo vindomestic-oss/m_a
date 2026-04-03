@@ -1358,6 +1358,14 @@ def _search_motif(query):
     N+1 durations accepted for N intervals; last one checks last note's duration.
     Returns {"occs": [[nid,...], ...], "count": N}, sorted by onset.
     """
+    # strip optional explicit scale prefix: (dur) at very start, e.g. (1/8) or (3/4)
+    explicit_scale_q = None
+    m_scale = re.match(r'^\(([^)]+)\)(.*)', query)
+    if m_scale:
+        _, scale_val = _parse_dur(m_scale.group(1).strip())
+        explicit_scale_q = scale_val
+        query = m_scale.group(2)
+
     parts = query.split(';')
     # strip optional ;inv modifier
     invert = parts[-1].strip().lower() == 'inv'
@@ -1468,7 +1476,17 @@ def _search_motif(query):
             if i < last_end:
                 continue
             # phase of first note, measured in units of the smallest pattern duration
-            if min_dur_q is not None:
+            if explicit_scale_q is not None and min_dur_q is not None:
+                # explicit scale: no caps — use exact n_per_beat from scale/dur ratio
+                n_pb = max(1, round(explicit_scale_q / min_dur_q))
+                pos_in = (seq[i][4] - pickup_dur_q) % explicit_scale_q
+                raw_ph = pos_in / min_dur_q
+                rounded_ph = int(round(raw_ph))
+                if abs(raw_ph - rounded_ph) > 0.35 or rounded_ph >= n_pb:
+                    ph = n_pb  # sentinel — off-grid or at period boundary, never matches
+                else:
+                    ph = rounded_ph
+            elif min_dur_q is not None:
                 ph = _metric_phase(seq[i][4] - pickup_dur_q, min_dur_q, beat_dur_q)
             else:
                 ph = seq[i][5]
@@ -2795,7 +2813,11 @@ function addCustomMotif(occs,queryStr){{
 }}
 
 function _invertQueryStr(q){{
-  // Invert the intervals part of a query string "dur;phase;ivs" → "dur;phase;-ivs"
+  // Invert the intervals part of a query string "[(<scale>)]dur;phase;ivs" → same with -ivs
+  // Preserve optional (scale) prefix.
+  var scalePfx='';
+  var sm=q.match(/^\\([^)]+\\)/);
+  if(sm){{scalePfx=sm[0];q=q.slice(sm[0].length);}}
   var parts=q.split(';');
   if(parts.length<3)return null;
   var ivPart=parts[2];
@@ -2805,7 +2827,7 @@ function _invertQueryStr(q){{
     return(sign==='+' ? '-' : '+')+num;
   }});
   if(invIv===ivPart)return null; // nothing changed (no + or -)
-  return parts[0]+';'+parts[1]+';'+invIv;
+  return scalePfx+parts[0]+';'+parts[1]+';'+invIv;
 }}
 
 function _findDictMatch(query){{
