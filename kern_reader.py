@@ -75,6 +75,7 @@ Select a kern file in the panel.</body></html>""",
     "version":    "0",
     "seqs":       [],   # [(voice_key, interval_seq), ...] for current file
     "beat_dur_q": 1.0,
+    "pickup_dur_q": 0.0,
 }
 _state_lock = threading.Lock()
 
@@ -903,7 +904,14 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
     elif n_per_beat > 4:
         n_per_beat = 4
     pos_in_beat = onset_q % beat_dur_q
-    phase = int(round(pos_in_beat / dur_q)) % n_per_beat
+    raw = pos_in_beat / dur_q
+    # Notes not on the regular note grid (pos/dur ≈ X.5, fractional part > 0.35)
+    # get a sentinel value (n_per_beat) that never equals any valid phase [0..n-1].
+    # This prevents off-grid notes (from ornament/tuplet passages) from accidentally
+    # matching any phase in searches or motif grouping.
+    if abs(raw - round(raw)) > 0.35:
+        return n_per_beat
+    phase = int(round(raw)) % n_per_beat
     return phase
 
 
@@ -973,8 +981,10 @@ def _voice_notes_from_mei(mei_str):
             else:
                 yield child, scale
 
-    voices        = defaultdict(list)
-    measure_onset = 0.0
+    voices          = defaultdict(list)
+    measure_onset   = 0.0
+    pickup_dur_q    = 0.0
+    _first_measure  = True
 
     for measure_el in tree.iter(tag_pfx + 'measure'):
         # Pick up meter changes inside the measure
@@ -1037,9 +1047,12 @@ def _voice_notes_from_mei(mei_str):
         #    verovio doesn't set metcon; mRest filler voices are excluded via pos_real)
         if max_pos > 0 and (measure_el.get('metcon') == 'false' or
                             max_pos < beats_per_measure - 1e-9):
+            if _first_measure:
+                pickup_dur_q = max_pos
             measure_onset += max_pos
         else:
             measure_onset += beats_per_measure
+        _first_measure = False
 
     # Merge tied notes from <tie> elements (MusicXML-sourced MEI).
     # kern-sourced MEI uses tie="i/m/t" attributes (handled in proc_note);
@@ -1089,7 +1102,7 @@ def _voice_notes_from_mei(mei_str):
     result = {}
     for key, notes in voices.items():
         result[key] = _merge_ornamental_slurs(notes, slur_ends)
-    return result, beat_dur_q
+    return result, beat_dur_q, pickup_dur_q
 
 
 def _merge_ornamental_slurs(notes, slur_ends):
@@ -1114,12 +1127,14 @@ def _merge_ornamental_slurs(notes, slur_ends):
     return merged
 
 
-def _interval_seq(notes, beat_dur_q=1.0):
+def _interval_seq(notes, beat_dur_q=1.0, pickup_dur_q=0.0):
     """
     notes: [(nid, pname, oct, dur, midi, onset), ...]
     Returns [(diatonic_interval, dur_of_first_note, nid_first, nid_second, onset_quarters, phase,
               contiguous, dp0), ...]
     dp0: absolute diatonic pitch of the first note (oct*7 + step) — used for transposition tracking.
+    pickup_dur_q: duration of the anacrusis measure (0 if none); subtracted from onset before
+    computing metric phase so beat 1 of measure 1 always has phase 0.
     """
     result = []
     for i in range(len(notes) - 1):
@@ -1127,7 +1142,7 @@ def _interval_seq(notes, beat_dur_q=1.0):
         nid1, pname1, oct1, _,   _, onset1  = notes[i + 1]
         dp0 = oct0 * 7 + _DIATONIC_STEP.get(pname0.lower(), 0)
         dp1 = oct1 * 7 + _DIATONIC_STEP.get(pname1.lower(), 0)
-        phase0 = _metric_phase(onset0, dur0, beat_dur_q)
+        phase0 = _metric_phase(onset0 - pickup_dur_q, dur0, beat_dur_q)
         contiguous = round((onset0 + dur0) * 16) == round(onset1 * 16)
         result.append((dp1 - dp0, dur0, nid0, nid1, onset0, phase0, contiguous, dp0))
     return result
@@ -1294,12 +1309,12 @@ def _get_note_beat_positions(mei_str):
         if c and u:
             bpm = int(c) * 4.0 / int(u)
             break
-    voices, _bdq = _voice_notes_from_mei(mei_str)
+    voices, _bdq, _pdq = _voice_notes_from_mei(mei_str)
     labels = {}
     for _vk, notes in voices.items():
         for nid, _pname, _oct, dur, _midi, onset in notes:
             pos = round((onset % bpm) * 16) / 16
-            phase = _metric_phase(onset, dur, _bdq)
+            phase = _metric_phase(onset - _pdq, dur, _bdq)
             labels[nid] = f'{pos:g}|{phase}'
     return labels
 
@@ -1430,7 +1445,8 @@ def _search_motif(query):
 
     with _state_lock:
         seqs = list(_state.get("seqs", []))
-        beat_dur_q = _state.get("beat_dur_q", 1.0)
+        beat_dur_q   = _state.get("beat_dur_q", 1.0)
+        pickup_dur_q = _state.get("pickup_dur_q", 0.0)
 
     # compute phase using the smallest note duration in the pattern as unit
     # rhythm_only: durs elements are (op, val) → s[1] = val
@@ -1453,7 +1469,7 @@ def _search_motif(query):
                 continue
             # phase of first note, measured in units of the smallest pattern duration
             if min_dur_q is not None:
-                ph = _metric_phase(seq[i][4], min_dur_q, beat_dur_q)
+                ph = _metric_phase(seq[i][4] - pickup_dur_q, min_dur_q, beat_dur_q)
             else:
                 ph = seq[i][5]
             if ph != start_phase:
@@ -1541,10 +1557,10 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     try:
         if mei_str is None:
             mei_str = vtk.getMEI()
-        voices, beat_dur_q = _voice_notes_from_mei(mei_str)
+        voices, beat_dur_q, pickup_dur_q = _voice_notes_from_mei(mei_str)
         if beat_dur_q_override is not None:
             beat_dur_q = beat_dur_q_override
-        all_seqs = [(vk, _interval_seq(notes, beat_dur_q))
+        all_seqs = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
                     for vk, notes in voices.items()
                     if len(notes) >= 4]
         motifs = _find_motifs(all_seqs)
@@ -2192,16 +2208,17 @@ def render_score(path: str, version: str = "1") -> tuple:
 
     # parse voices — separate try so _voices_s survives later errors
     try:
-        _voices_s, _beat_dur_q_s = _voice_notes_from_mei(mei_str)
+        _voices_s, _beat_dur_q_s, _pickup_dur_q_s = _voice_notes_from_mei(mei_str)
         if _beat_override is not None:
             _beat_dur_q_s = _beat_override
     except Exception:
         _voices_s = {}
         _beat_dur_q_s = 1.0
+        _pickup_dur_q_s = 0.0
 
     # compute interval sequences for the /search endpoint + build note label map
     try:
-        all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s))
+        all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                     for vk, notes in _voices_s.items() if len(notes) >= 4]
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
         nid_labels = {}
@@ -2701,6 +2718,7 @@ function highlight(){{
           var inp=document.getElementById('motif-search-input');
           if(inp){{inp.value=qs;}}
         }}
+        /* DISABLED: transposition profile detail row
         var prof=motifs[idx].profile;
         if(prof && prof.length>0){{
           var dtr=document.createElement('tr');
@@ -2721,6 +2739,7 @@ function highlight(){{
           dtr.appendChild(dtd);
           this.parentNode.insertBefore(dtr,this.nextSibling);
         }}
+        */
       }}
     }});
   }});
@@ -3036,15 +3055,15 @@ window.toggleTSDGen8=function(){{
 <div id="score-pages" style="position:relative">{pages}</div>
 </body>
 </html>"""
-    return html, n_pages, version, all_seqs, _beat_dur_q_s
+    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s
 
 # ── background render + update ────────────────────────────────────────────────
 
 def _render_worker(path: str, version: str, queue):
     """Runs in a subprocess to isolate verovio segfaults from the main process."""
     try:
-        html, n_pages, ver, seqs, beat_dur_q = render_score(path, version)
-        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q))
+        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q = render_score(path, version)
+        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q))
     except Exception as e:
         queue.put(('error', str(e)))
 
@@ -3079,12 +3098,13 @@ def load_file_bg(path: str, status_cb):
         status_cb(f"ERROR: {result[1]}", error=True)
         return
 
-    _, html, n_pages, ver, seqs, beat_dur_q = result
+    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q = result
     with _state_lock:
-        _state["html"]       = html
-        _state["version"]    = ver
-        _state["seqs"]       = seqs
-        _state["beat_dur_q"] = beat_dur_q
+        _state["html"]          = html
+        _state["version"]       = ver
+        _state["seqs"]          = seqs
+        _state["beat_dur_q"]    = beat_dur_q
+        _state["pickup_dur_q"]  = pickup_dur_q
     _notify_sse(ver)
     status_cb(f"{n_pages} page{'s' if n_pages != 1 else ''} — {os.path.basename(path)}")
 

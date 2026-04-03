@@ -150,6 +150,23 @@
        ((eq? name 'ContextChange)
         onset)  ;; no-op here; sequential loop handles it
 
+       ;; ── Property set — detect \set Timing.measurePosition for pickup detection
+       ;; \partialPickup = \set Timing.measurePosition = #(ly:make-moment 7/8) pattern
+       ;; emits MP event so Python can compute pickup_shift = measurePosition quarters
+       ((memq name '(PropertySet ContextPropertySet))
+        (let ((sym (ly:music-property m 'symbol #f))
+              (val (ly:music-property m 'value #f)))
+          (when (and %dump-port
+                     (eq? sym 'measurePosition)
+                     (ly:moment? val)
+                     (> (ly:moment-main-numerator val) 0))
+            (dump-write
+             "{\"t\":\"MP\""
+             ",\"on\":\"" (dump-onset onset) "\""
+             ",\"pos\":\"" (dump-onset val) "\""
+             "}")))
+        onset)
+
        ;; ── Volta repeat: \repeat "volta" N { body } [\alternative { { a1 } ... }]
        ;; Emits BAR start-repeat/end-repeat and VOLTA start/stop events.
        ((eq? name 'VoltaRepeatedMusic)

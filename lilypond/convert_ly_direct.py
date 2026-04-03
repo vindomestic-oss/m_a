@@ -362,6 +362,18 @@ def _compute_shifts(note_events: list) -> tuple:
         if bar_q > pickup_q:
             pickup_shift = bar_q - pickup_q
 
+    # \set Timing.measurePosition at start (e.g. \partialPickup — no \partial event)
+    # The MP pos is the offset of the first note within the bar; all note onsets start
+    # from 0, so pickup_shift = pos_q shifts them into the correct position.
+    if not pickup_shift:
+        mp0 = [ev for ev in note_events
+               if ev.get('t') == 'MP' and _onset_frac(ev.get('on', '0')) == Fraction(0)]
+        if mp0:
+            mp_pos_q = _onset_frac(mp0[0]['pos'])
+            bar_q = _bar_q_at(Fraction(0))
+            if Fraction(0) < mp_pos_q < bar_q:
+                pickup_shift = mp_pos_q
+
     # Mid-piece pickup sections (P events at onset > 0)
     # Deduplicate by onset — multiple staves emit identical P events.
     mid_shifts: list[tuple[Fraction, Fraction]] = []
