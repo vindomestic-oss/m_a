@@ -2377,7 +2377,10 @@ def render_score(path: str, version: str = "1") -> tuple:
         # only accumulate offset for files that have implicit pickup measures
         _allow_tsd_offset = (ext in ('xml', 'musicxml', 'mxl')
                              and 'number="-1"' in content)
-        _offset_tsd = 0.0
+        # If label window > pickup duration, TSD labels start from bar 1 (skip pickup)
+        _offset_tsd = (_pickup_dur_q_s
+                       if _pickup_dur_q_s > 0 and _bar_dur_q_tsd > _pickup_dur_q_s
+                       else 0.0)
         for _i in range(len(_tsd_labels_out)):
             _t0 = _i * _bar_dur_q_tsd + _offset_tsd
             _t1 = _t0 + _bar_dur_q_tsd
@@ -2415,7 +2418,10 @@ def render_score(path: str, version: str = "1") -> tuple:
         )
         _allow_gen_offset = (ext in ('xml', 'musicxml', 'mxl')
                              and 'number="-1"' in content)
-        _offset_gen = 0.0
+        # If label window > pickup duration, generated TSD also starts from bar 1
+        _offset_gen = (_pickup_dur_q_s
+                       if _pickup_dur_q_s > 0 and _bar_dur_gen > _pickup_dur_q_s
+                       else 0.0)
         for _i in range(len(_lbl)):
             _t0 = _i * _bar_dur_gen + _offset_gen
             _anchor = next(
