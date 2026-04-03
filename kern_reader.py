@@ -2328,7 +2328,7 @@ def render_score(path: str, version: str = "1") -> tuple:
                     _found_onset, _anchor = _ahead[0]
                     # gap > one window → extra barline; shift all subsequent windows forward
                     _gap = _found_onset - _t0
-                    if _gap > _bar_dur_q_tsd:
+                    if _gap >= _bar_dur_q_tsd:
                         _offset_tsd += round(_gap / _bar_dur_q_tsd) * _bar_dur_q_tsd
                 else:
                     _behind = sorted((onset_q, nid) for onset_q, nid in _flat if onset_q < _t0)
@@ -2360,7 +2360,7 @@ def render_score(path: str, version: str = "1") -> tuple:
                 if _ahead:
                     _found_onset_g, _anchor = _ahead[0]
                     _gap_g = _found_onset_g - _t0
-                    if _gap_g > _bar_dur_gen:
+                    if _gap_g >= _bar_dur_gen:
                         _offset_gen += round(_gap_g / _bar_dur_gen) * _bar_dur_gen
                 else:
                     _behind = sorted((onset_q, nid) for onset_q, nid in _flat_gen if onset_q < _t0)
