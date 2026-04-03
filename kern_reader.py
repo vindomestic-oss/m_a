@@ -2313,6 +2313,9 @@ def render_score(path: str, version: str = "1") -> tuple:
             for note_list in _voices_s.values()
             for nid, _p, _o, _d, _m, onset_q in note_list
         )
+        # only accumulate offset for files that have implicit pickup measures
+        _allow_tsd_offset = (ext in ('xml', 'musicxml', 'mxl')
+                             and 'number="-1"' in content)
         _offset_tsd = 0.0
         for _i in range(len(_tsd_labels_out)):
             _t0 = _i * _bar_dur_q_tsd + _offset_tsd
@@ -2326,9 +2329,9 @@ def render_score(path: str, version: str = "1") -> tuple:
                 _ahead = sorted((onset_q, nid) for onset_q, nid in _flat if onset_q >= _t0)
                 if _ahead:
                     _found_onset, _anchor = _ahead[0]
-                    # gap > one window → extra barline; shift all subsequent windows forward
+                    # gap >= one window → extra barline; shift all subsequent windows forward
                     _gap = _found_onset - _t0
-                    if _gap >= _bar_dur_q_tsd:
+                    if _allow_tsd_offset and _gap >= _bar_dur_q_tsd:
                         _offset_tsd += round(_gap / _bar_dur_q_tsd) * _bar_dur_q_tsd
                 else:
                     _behind = sorted((onset_q, nid) for onset_q, nid in _flat if onset_q < _t0)
@@ -2349,6 +2352,8 @@ def render_score(path: str, version: str = "1") -> tuple:
             for note_list in _voices_s.values()
             for nid, _p, _o, _d, _m, onset_q in note_list
         )
+        _allow_gen_offset = (ext in ('xml', 'musicxml', 'mxl')
+                             and 'number="-1"' in content)
         _offset_gen = 0.0
         for _i in range(len(_lbl)):
             _t0 = _i * _bar_dur_gen + _offset_gen
@@ -2360,7 +2365,7 @@ def render_score(path: str, version: str = "1") -> tuple:
                 if _ahead:
                     _found_onset_g, _anchor = _ahead[0]
                     _gap_g = _found_onset_g - _t0
-                    if _gap_g >= _bar_dur_gen:
+                    if _allow_gen_offset and _gap_g >= _bar_dur_gen:
                         _offset_gen += round(_gap_g / _bar_dur_gen) * _bar_dur_gen
                 else:
                     _behind = sorted((onset_q, nid) for onset_q, nid in _flat_gen if onset_q < _t0)
