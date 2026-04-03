@@ -136,6 +136,43 @@ class Handler(BaseHTTPRequestHandler):
                     pass
 
     def do_POST(self):
+        if self.path == "/load":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                fname = self.rfile.read(length).decode("utf-8").strip()
+                match = None
+                for root, _dirs, files in os.walk(os.path.dirname(os.path.abspath(__file__))):
+                    if fname in files:
+                        match = os.path.join(root, fname)
+                        break
+                if match is None:
+                    try:
+                        import music21.corpus as _c
+                        for p in _c.getCorePaths():
+                            if os.path.basename(str(p)) == fname:
+                                match = str(p); break
+                    except Exception:
+                        pass
+                if match:
+                    import threading
+                    threading.Thread(target=load_file_bg, args=(match, lambda s: None), daemon=True).start()
+                    body = match.encode()
+                    self.send_response(200)
+                else:
+                    body = b"not found"
+                    self.send_response(404)
+                self.send_header("Content-Type","text/plain")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as _e:
+                body = str(_e).encode()
+                self.send_response(500)
+                self.send_header("Content-Type","text/plain")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            return
         if self.path == "/search":
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8").strip()
@@ -747,6 +784,30 @@ def _load_tsd_file() -> dict:
     return data
 
 _TSD_DATA: dict = _load_tsd_file()   # filename → (beat_dur_q, ['T','S','D',...])
+
+def _load_tsd_gen_file(fname: str) -> dict:
+    path = os.path.join(os.path.dirname(__file__), fname)
+    data = {}
+    if not os.path.exists(path):
+        return data
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('\t')
+            if len(parts) < 3:
+                continue
+            filename, metre, tsd_str = parts[0], parts[1], parts[2]
+            num, den = metre.split('/')
+            beat_dur_q = int(num) * 4.0 / int(den)
+            labels = [c for c in tsd_str if c in 'TSD']
+            if labels:
+                data[filename.strip()] = (beat_dur_q, labels)
+    return data
+
+_TSD_GEN_4: dict = _load_tsd_gen_file('TSD_generated_4.txt')
+_TSD_GEN_8: dict = _load_tsd_gen_file('TSD_generated_8.txt')
 
 _DUR_NAMES = {
     4.0: '&#119133;', 3.0: '&#119134;.', 2.0: '&#119134;',
@@ -2079,7 +2140,8 @@ def _mini_staff_svg(notes_info, beam_of=None):
 def render_score(path: str, version: str = "1") -> tuple:
     """Returns (html, n_pages, version). Raises RuntimeError on failure."""
     check_file(path)
-    _has_tsd = os.path.basename(path) in _TSD_DATA
+    _basename_pre = os.path.basename(path)
+    _has_tsd = _basename_pre in _TSD_DATA or _basename_pre in _TSD_GEN_4 or _basename_pre in _TSD_GEN_8
     _vtk.setOptions({
         "pageWidth":        2200,
         "adjustPageHeight": True,
@@ -2107,7 +2169,7 @@ def render_score(path: str, version: str = "1") -> tuple:
         if ext == 'krn':
             content = prepare_grand_staff(content)
             content = add_beam_markers(content)
-        elif ext in ('xml', 'musicxml'):
+        elif ext in ('xml', 'musicxml', 'mxl'):
             content = _fix_implicit_pickup_measures(content)
             content = _fix_musicxml_voice_order(content)
         ok = _vtk.loadData(content)
@@ -2128,11 +2190,17 @@ def render_score(path: str, version: str = "1") -> tuple:
         (v for k, v in _BEAT_DUR_OVERRIDES.items() if k in _path_lower), None)
     motifs = analyze_motifs(_vtk, mei_str=mei_str, beat_dur_q_override=_beat_override)
 
-    # compute interval sequences for the /search endpoint + build note label map
+    # parse voices — separate try so _voices_s survives later errors
     try:
         _voices_s, _beat_dur_q_s = _voice_notes_from_mei(mei_str)
         if _beat_override is not None:
             _beat_dur_q_s = _beat_override
+    except Exception:
+        _voices_s = {}
+        _beat_dur_q_s = 1.0
+
+    # compute interval sequences for the /search endpoint + build note label map
+    try:
         all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s))
                     for vk, notes in _voices_s.items() if len(notes) >= 4]
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
@@ -2142,14 +2210,10 @@ def render_score(path: str, version: str = "1") -> tuple:
                 base = _PITCH_CLASS.get(pname.lower(), 0) + (oct_int + 1) * 12
                 acc = _ACC_SFX.get(midi_val - base, '')
                 nid_labels[nid] = pname.upper() + acc
-        # nid → (nid, pname, oct_int, dur_q, midi_val, onset) for mini-staff SVG
         nid_to_note = {n[0]: n for _ns in _voices_s.values() for n in _ns}
-        # beam group membership: nid → beam_group_id
         beam_of = _beam_groups_from_mei(mei_str)
     except Exception:
         all_seqs = []
-        _beat_dur_q_s = 1.0
-        _voices_s = {}
         nid_labels = {}
         nid_to_note = {}
         beam_of = {}
@@ -2238,7 +2302,7 @@ def render_score(path: str, version: str = "1") -> tuple:
     note_labels_json = json.dumps(nid_labels)
 
     # ── TSD harmony labels ────────────────────────────────────────────────────
-    _basename = os.path.basename(path)
+    _basename = _basename_pre
     _tsd_labels_out = []
     _tsd_nids_out = []
     if _basename in _TSD_DATA:
@@ -2266,6 +2330,37 @@ def render_score(path: str, version: str = "1") -> tuple:
     tsd_json      = json.dumps(_tsd_labels_out)
     tsd_nids_json = json.dumps(_tsd_nids_out)
 
+    # ── TSD generated labels ──────────────────────────────────────────────────
+    def _build_gen_overlay(gen_dict):
+        labels_out, nids_out = [], []
+        if _basename not in gen_dict:
+            return labels_out, nids_out
+        _bar_dur_gen, _lbl = gen_dict[_basename]
+        _flat_gen = sorted(
+            (onset_q, nid)
+            for note_list in _voices_s.values()
+            for nid, _p, _o, _d, _m, onset_q in note_list
+        )
+        for _i in range(len(_lbl)):
+            _t0 = _i * _bar_dur_gen
+            _anchor = next(
+                (nid for onset_q, nid in _flat_gen if _t0 <= onset_q < _t0 + _bar_dur_gen), None
+            )
+            if _anchor is None:
+                _nearby = [(abs(onset_q - _t0), onset_q, nid) for onset_q, nid in _flat_gen
+                           if abs(onset_q - _t0) <= _bar_dur_gen]
+                if _nearby:
+                    _anchor = min(_nearby)[2]
+            nids_out.append(_anchor)
+        return _lbl, nids_out
+
+    _tsd_gen4_labels, _tsd_gen4_nids = _build_gen_overlay(_TSD_GEN_4)
+    _tsd_gen8_labels, _tsd_gen8_nids = _build_gen_overlay(_TSD_GEN_8)
+    tsd_gen4_json      = json.dumps(_tsd_gen4_labels)
+    tsd_gen4_nids_json = json.dumps(_tsd_gen4_nids)
+    tsd_gen8_json      = json.dumps(_tsd_gen8_labels)
+    tsd_gen8_nids_json = json.dumps(_tsd_gen8_nids)
+
     # ── legend panel (always shown — contains search input + table) ───────────
     legend_html = (
         f'<div style="font:12px sans-serif;color:#333;margin-bottom:12px;'
@@ -2284,6 +2379,14 @@ def render_score(path: str, version: str = "1") -> tuple:
            f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
            f'border-radius:4px;background:#f5f5f5;cursor:pointer">TSD</button>'
            if _tsd_labels_out else '')
+        + (f'<button id="tsd-gen4-btn" onclick="window.toggleTSDGen4()" '
+           f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
+           f'border-radius:4px;background:#f5f5f5;cursor:pointer">TSD~4</button>'
+           if _tsd_gen4_labels else '')
+        + (f'<button id="tsd-gen8-btn" onclick="window.toggleTSDGen8()" '
+           f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
+           f'border-radius:4px;background:#f5f5f5;cursor:pointer">TSD~8</button>'
+           if _tsd_gen8_labels else '')
         + f'<span id="motif-search-status" style="font:11px sans-serif;color:#888"></span>'
         f'</div>'
         f'<table id="motif-dict" style="border-collapse:collapse">'
@@ -2744,6 +2847,10 @@ else highlight();
 // ── TSD harmony labels ──────────────────────────────────────────────────────
 var tsdLabels={tsd_json};
 var tsdNids={tsd_nids_json};
+var tsdGen4Labels={tsd_gen4_json};
+var tsdGen4Nids={tsd_gen4_nids_json};
+var tsdGen8Labels={tsd_gen8_json};
+var tsdGen8Nids={tsd_gen8_nids_json};
 var TSD_COLOR={{'T':'#2ecc40','S':'#0074d9','D':'#e74c3c'}};
 var _tsdElems=[];
 var _tsdVisible=false;
@@ -2817,6 +2924,76 @@ window.toggleTSD=function(){{
   if(_tsdVisible){{var sp=document.getElementById('score-pages');if(sp)sp.scrollIntoView({{behavior:'smooth'}});}}
 }};
 
+// ── TSD generated overlays — HTML div approach (no SVG coord conversion) ─────
+// Labels are <div> inside #score-pages (position:relative).
+// Positions use getBoundingClientRect() in pixels — no viewBox math.
+function _buildTsdGenOverlay(labels,nids,rowPx){{
+  var container=document.getElementById('score-pages');
+  if(!container)return[];
+  var elems=[];
+  var _CHAR_W=9; // approx px per char in bold 13px sans-serif
+  var _PAD=3;    // extra gap after each label
+  var _runs=[];var _ri=0;
+  while(_ri<labels.length){{
+    var _rj=_ri+1;
+    while(_rj<labels.length&&labels[_rj]===labels[_ri])_rj++;
+    _runs.push({{lbl:labels[_ri],cnt:_rj-_ri,idx:_ri}});
+    _ri=_rj;
+  }}
+  // track last placed x per y-row (keyed by Math.round(y))
+  var _lastX={{}};
+  for(var _ti=0;_ti<_runs.length;_ti++){{
+    var nid=nids[_runs[_ti].idx];
+    var lbl=_runs[_ti].lbl;
+    var txt=(_runs[_ti].cnt>1?lbl+_runs[_ti].cnt:lbl);
+    if(!nid||!lbl)continue;
+    var el=document.getElementById(nid);if(!el)continue;
+    var svg=el,sys=el;
+    while(svg&&svg.tagName.toLowerCase()!=='svg')svg=svg.parentNode;
+    if(!svg)continue;
+    while(sys&&sys!==svg){{if(sys.getAttribute&&sys.getAttribute('class')==='system')break;sys=sys.parentNode;}}
+    if(!sys||sys===svg)sys=null;
+    var cBCR=container.getBoundingClientRect();
+    var eBCR=el.getBoundingClientRect();
+    var refBCR=(sys||svg).getBoundingClientRect();
+    var x=eBCR.left-cBCR.left+container.scrollLeft;
+    var y=refBCR.bottom-cBCR.top+container.scrollTop+rowPx;
+    var yKey=Math.round(y);
+    if(_lastX[yKey]!==undefined&&x<_lastX[yKey])x=_lastX[yKey];
+    _lastX[yKey]=x+txt.length*_CHAR_W+_PAD;
+    var d=document.createElement('div');
+    d.textContent=txt;
+    d.style.cssText='position:absolute;font:bold 13px sans-serif;opacity:0.65;'
+      +'pointer-events:none;display:none;white-space:nowrap;'
+      +'color:'+(TSD_COLOR[lbl]||'#333')+';'
+      +'left:'+x+'px;top:'+y+'px';
+    container.appendChild(d);
+    elems.push(d);
+  }}
+  return elems;
+}}
+
+var _tsdGen4Elems=[];var _tsdGen4Visible=false;
+var _tsdGen8Elems=[];var _tsdGen8Visible=false;
+
+window.toggleTSDGen4=function(){{
+  if(!_tsdGen4Elems.length)_tsdGen4Elems=_buildTsdGenOverlay(tsdGen4Labels,tsdGen4Nids,4);
+  _tsdGen4Visible=!_tsdGen4Visible;
+  for(var _i=0;_i<_tsdGen4Elems.length;_i++)_tsdGen4Elems[_i].style.display=_tsdGen4Visible?'block':'none';
+  var btn=document.getElementById('tsd-gen4-btn');
+  if(btn){{btn.style.background=_tsdGen4Visible?'#e8f4fd':'#f5f5f5';btn.style.borderColor=_tsdGen4Visible?'#5ba3d0':'#bbb';btn.style.fontWeight=_tsdGen4Visible?'bold':'normal';}}
+  if(_tsdGen4Visible){{var sp=document.getElementById('score-pages');if(sp)sp.scrollIntoView({{behavior:'smooth'}});}}
+}};
+
+window.toggleTSDGen8=function(){{
+  if(!_tsdGen8Elems.length)_tsdGen8Elems=_buildTsdGenOverlay(tsdGen8Labels,tsdGen8Nids,22);
+  _tsdGen8Visible=!_tsdGen8Visible;
+  for(var _i=0;_i<_tsdGen8Elems.length;_i++)_tsdGen8Elems[_i].style.display=_tsdGen8Visible?'block':'none';
+  var btn=document.getElementById('tsd-gen8-btn');
+  if(btn){{btn.style.background=_tsdGen8Visible?'#e8f4fd':'#f5f5f5';btn.style.borderColor=_tsdGen8Visible?'#5ba3d0':'#bbb';btn.style.fontWeight=_tsdGen8Visible?'bold':'normal';}}
+  if(_tsdGen8Visible){{var sp=document.getElementById('score-pages');if(sp)sp.scrollIntoView({{behavior:'smooth'}});}}
+}};
+
 }})();
 </script>"""
 
@@ -2836,7 +3013,7 @@ window.toggleTSD=function(){{
 <div id="motif-tooltip" style="display:none;position:fixed;background:rgba(0,0,0,0.78);color:#fff;font:12px monospace;padding:4px 8px;border-radius:4px;pointer-events:none;z-index:9999;white-space:nowrap"></div>
 <div class="fn">{os.path.basename(path)}</div>
 {legend_html}
-<div id="score-pages">{pages}</div>
+<div id="score-pages" style="position:relative">{pages}</div>
 </body>
 </html>"""
     return html, n_pages, version, all_seqs, _beat_dur_q_s
