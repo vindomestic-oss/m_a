@@ -1045,11 +1045,14 @@ def _voice_notes_from_mei(mei_str):
         # 1. verovio explicitly marks metcon='false' (kern pickup bars), OR
         # 2. actual note content < full measure (MusicXML implicit measures where
         #    verovio doesn't set metcon; mRest filler voices are excluded via pos_real)
-        if max_pos > 0 and (measure_el.get('metcon') == 'false' or
-                            max_pos < beats_per_measure - 1e-9):
+        # Cap at beats_per_measure: MusicXML cross-measure tied chords can produce
+        # max_pos > beats_per_measure with metcon='false' — those are NOT short measures.
+        eff_pos = min(max_pos, beats_per_measure)
+        if eff_pos > 0 and (measure_el.get('metcon') == 'false' or
+                            eff_pos < beats_per_measure - 1e-9):
             if _first_measure:
-                pickup_dur_q = max_pos
-            measure_onset += max_pos
+                pickup_dur_q = eff_pos
+            measure_onset += eff_pos
         else:
             measure_onset += beats_per_measure
         _first_measure = False
