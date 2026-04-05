@@ -261,11 +261,41 @@
 
        ;; ── Simultaneous music: voice splits or staff layout
        ((eq? name 'SimultaneousMusic)
-        (let ((elts (ly:music-property m 'elements '())))
+        (let* ((elts (ly:music-property m 'elements '()))
+               ;; Detect grand-staff layout: SimultaneousMusic with 2+ anonymous Staff children.
+               ;; In LilyPond 2.24+, \new Staff no longer sets create-new-context=#t, so we
+               ;; detect and pre-assign staff IDs here instead of inside ContextSpeccedMusic.
+               ;; We require 2+ anonymous Staff children to avoid false-positives from
+               ;; \clef/\key expansions (also ContextSpeccedMusic{Staff}) inside a single voice.
+               (has-staff-children
+                (let scan ((es elts) (cnt 0))
+                  (if (>= cnt 2) #t
+                      (if (null? es) #f
+                          (let* ((e (car es))
+                                 (is-anon-staff
+                                  (and (ly:music? e)
+                                       (eq? (ly:music-property e 'name) 'ContextSpeccedMusic)
+                                       (memq (ly:music-property e 'context-type 'x)
+                                             '(Staff TabStaff DrumStaff RhythmicStaff))
+                                       (string-null? (ly:music-property e 'context-id "")))))
+                            (scan (cdr es) (if is-anon-staff (+ cnt 1) cnt)))))))) ;; closes: body/let*/inner-if/outer-if/let-scan/binding-pair/binding-list
           (let loop ((es elts) (v 1) (max-end onset))
             (if (null? es) max-end
-                (let* ((new-voice (string-append voice "." (number->string v)))
-                       (end (dump-traverse (car es) onset staff new-voice)))
+                (let* ((e (car es))
+                       (new-voice (string-append voice "." (number->string v)))
+                       ;; Pre-assign staff ID for anonymous Staff children of a grand-staff block
+                       (new-staff
+                        (if (and has-staff-children
+                                 (ly:music? e)
+                                 (eq? (ly:music-property e 'name) 'ContextSpeccedMusic)
+                                 (memq (ly:music-property e 'context-type 'x)
+                                       '(Staff TabStaff DrumStaff RhythmicStaff))
+                                 (string-null? (ly:music-property e 'context-id "")))
+                            (begin
+                              (set! %dump-staff-counter (+ %dump-staff-counter 1))
+                              (number->string %dump-staff-counter))
+                            staff))
+                       (end (dump-traverse e onset new-staff new-voice)))
                   (loop (cdr es) (+ v 1)
                         (if (ly:moment<? max-end end) end max-end)))))))
 
@@ -278,13 +308,12 @@
                (new-staff
                 (if is-staff
                     (if (string-null? cid)
-                        ;; Only auto-number for \new Staff (create-new-context=#t).
-                        ;; Property overrides (create-new-context=#f) keep current staff.
-                        (if is-new
-                            (begin
-                              (set! %dump-staff-counter (+ %dump-staff-counter 1))
-                              (number->string %dump-staff-counter))
-                            staff)
+                        ;; Use staff ID pre-assigned by SimultaneousMusic for grand-staff layouts.
+                        ;; In LilyPond 2.24+, \new Staff no longer sets create-new-context=#t,
+                        ;; so we rely on SimultaneousMusic to pre-assign IDs via the staff param.
+                        ;; For sequential contexts (\clef, \key, etc.), staff param is already
+                        ;; the current staff ID, so using it directly is correct.
+                        staff
                         cid)
                     staff))
                (new-voice
