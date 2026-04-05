@@ -30,9 +30,9 @@ right =  {
         \mergeDifferentlyDottedOn
         \voiceOne
         la4\mordent sib8 la dod re |
-        sol, la sib2\mordent( |
+        sol, la sib2\mordent~( |
         sib8) la sol mi' la, sib16 sol |
-        fad8\prall sol la2\mordent( |
+        fad8\prall sol la2\mordent~( |
         la8) re sib la sol fad |
         sol la16 sib la8 sol fa! mi\prall |
         re fa sib sol mib' dod |
@@ -42,9 +42,9 @@ right =  {
             \relative do' \new Voice {
         \voiceTwo
         fa4 sol fa |
-        mi mi2( |
+        mi mi2~( |
         mi4) mi mi |
-        re re2( |
+        re re2~( |
         re4) re re |
         dod dod dod |
         re r4 sol |
@@ -60,7 +60,7 @@ right =  {
         
         << { \voiceOne \relative do''
              mi 4 mi <re fa>\arpeggio | 
-             dod dod2 | do!4 do8 sib << { mib4( |
+             dod dod2 | do!4 do8 sib << { mib4~( |
              mib8) re do fad\mordent sol\turn  la | }
                                         \\ { do,4 | s2. } >>
              sib'4 sib sib |
@@ -68,9 +68,9 @@ right =  {
              fad sol sib la sol fa |
              sol4 sol2 |
              mi4 <re fa>8 <do mi> <mi sol> <fa la> |
-             <mi sib> <do fa> fa2\arpeggio( |
+             <mi sib> <do fa> fa2\arpeggio~( |
              fa8) mi re si' mi, re |
-             dod\prall re mi2\mordent( |
+             dod\prall re mi2\mordent~( |
              mi8) la fa mi re do |
              sib! sol' dod, sib la sol |
              fa sib sold la fa' mi |
@@ -88,7 +88,7 @@ right =  {
              <re fad> <re sol> <re sol> | <re sol>8 do mib re do sib |
              la sib re do sib la |
              sib4 <sib re>2 |
-             <sol do>4 sol sol( |
+             <sol do>4 sol sol~( |
              sol8) fa <la do>2\arpeggio |
              si4 si si |
              la la2 |
@@ -116,15 +116,15 @@ left =  {
           << \relative do'
             { \voiceOne
               re4 re re |
-              sib8 la sol2( |
-              sol8) mi la4 la( |
-              la8) sol8 fad2( |
+              sib8 la sol2~( |
+              sol8) mi la4 la~( |
+              la8) sol8 fad2~( |
               fad4) sol sol |
               la mi la8 sol |
               fa4 sol~( sol8) mi! |
               fa re mi2 |
               la,4 sib8 la dod re |
-              sol, la sib2( |
+              sol, la sib2~( |
               sib8) la sol mib' la, sol |
               fad la <mib' fad >2 |
               s2. |
@@ -156,7 +156,7 @@ left =  {
               s2. |
               s |
               s |
-              s4 la2( |
+              s4 la2~( |
               \stemUp la8) re sib la sol\prall fa! |
               mib4 r8 sib' do re |
               \stemDown mib4 re re, |
