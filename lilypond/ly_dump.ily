@@ -350,6 +350,8 @@
      (let ((port (open-file ly:dump-output-file
                             (if (= %dump-score 1) "w" "a"))))
        (set! %dump-port port)
+       ;; Emit score-boundary marker so Python can split multi-score books
+       (dump-write "{\"t\":\"SCORE\",\"score\":" %dump-score "}")
        (dump-traverse (ly:score-music score)
                       (ly:make-moment 0) "1" "1")
        (close-output-port port)

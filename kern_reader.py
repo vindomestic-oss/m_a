@@ -9,6 +9,7 @@ Kern Score Reader
 
 import json
 import math
+import time
 import multiprocessing
 import os
 import queue
@@ -59,20 +60,21 @@ _vtk.setResourcePath(VEROVIO_DATA)
 
 # ── shared state ──────────────────────────────────────────────────────────────
 
+_START_VERSION = str(int(time.time()))  # unique per server start → browser always reloads on restart
 _state = {
-    "html":       """<!DOCTYPE html><html><head><meta charset="utf-8">
+    "html":       f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <script>
-(function(){
-  var cur="0";
+(function(){{
+  var cur="{_START_VERSION}";
   var es=new EventSource('/events');
-  es.onmessage=function(e){
-    if(e.data!==cur){ es.close(); window.location.replace('/?t='+Date.now()); }
-  };
-})();
+  es.onmessage=function(e){{
+    if(e.data!==cur){{ es.close(); window.location.replace('/?t='+Date.now()); }}
+  }};
+}})();
 </script>
 </head><body style='font:16px sans-serif;padding:40px;color:#888'>
 Select a kern file in the panel.</body></html>""",
-    "version":    "0",
+    "version":    _START_VERSION,
     "seqs":       [],   # [(voice_key, interval_seq), ...] for current file
     "beat_dur_q": 1.0,
     "pickup_dur_q": 0.0,
@@ -200,6 +202,13 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         if path == "/events":
             self.do_GET_events()
+            return
+        if path == "/shutdown":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"bye")
+            threading.Thread(target=lambda: os._exit(0), daemon=True).start()
             return
         with _state_lock:
             if path == "/version":
@@ -1870,13 +1879,41 @@ def prepare_grand_staff(content: str) -> str:
 
     first_split = split_idxs[0]
 
+    # If the 2-spine structure created by the first *^ collapses back to 1 spine
+    # later (a line where every token is *v), the grand-staff conversion would
+    # cause empty bars beyond that point. Skip conversion for such files — verovio
+    # will render them as a single-staff voice-split piece.
+    for i in range(first_split + 1, len(lines)):
+        raw = lines[i].rstrip("\n\r")
+        if not raw or raw.startswith("!"):
+            continue
+        tokens = raw.split("\t")
+        if all(t == "*v" for t in tokens):
+            return content  # full merge-back: 2-spine structure is temporary
+
+    # Detect original clef (before first *^) to preserve instrument register
+    orig_clef = None
+    for i in range(header_idx + 1, first_split):
+        raw = lines[i].rstrip("\n\r")
+        if raw.startswith("*clef"):
+            orig_clef = raw.split("\t")[0]
+            break
+
     # ── build 2-spine grand-staff file ───────────────────────────────────────
     result = []
 
     # New header: 2 **kern spines + staff + clef
-    result.append("**kern\t**kern\n")
-    result.append("*staff1\t*staff2\n")
-    result.append("*clefG2\t*clefF4\n")
+    # For F-clef instruments (cello, bass): both spines in bass clef;
+    # right subspine (after *^) = higher voice → staff1 (top).
+    # For G-clef or no clef (piano/WTC preludes): treble + bass as before.
+    if orig_clef and 'F' in orig_clef:
+        result.append("**kern\t**kern\n")
+        result.append("*staff2\t*staff1\n")
+        result.append(f"{orig_clef}\t{orig_clef}\n")
+    else:
+        result.append("**kern\t**kern\n")
+        result.append("*staff1\t*staff2\n")
+        result.append("*clefG2\t*clefF4\n")
 
     # Duplicate single-column header records before the first *^
     for i in range(header_idx + 1, first_split):
@@ -3395,6 +3432,15 @@ if __name__ == "__main__":
     if not os.path.isdir(KERN_DIR):
         print(f"kern/ directory not found: {KERN_DIR}")
         raise SystemExit(1)
+
+    # Kill any existing instance on the same port before binding
+    try:
+        import urllib.request
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{SERVER_PORT}/shutdown", timeout=2)
+        time.sleep(0.8)  # wait for old process to exit
+    except Exception:
+        pass  # no old instance running — that's fine
 
     # start HTTP server
     threading.Thread(target=start_server, daemon=True).start()

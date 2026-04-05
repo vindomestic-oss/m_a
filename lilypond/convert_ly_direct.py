@@ -145,6 +145,82 @@ def run_lilypond(ly_path: Path) -> list[dict] | None:
 
 # ── note data → music21 ───────────────────────────────────────────────────────
 
+def _split_by_score(events: list) -> list[list]:
+    """Split event list at SCORE markers; returns one sub-list per score."""
+    groups: list[list] = []
+    cur: list = []
+    for ev in events:
+        if ev.get('t') == 'SCORE':
+            if cur:
+                groups.append(cur)
+            cur = []
+        else:
+            cur.append(ev)
+    if cur:
+        groups.append(cur)
+    return groups if groups else [events]
+
+
+def _shift_multi_score_events(events: list) -> list:
+    """
+    When a JSONL file contains multiple scores (from a \\book with multiple
+    \\score blocks), each score resets its internal clock to onset 0.  This
+    function detects SCORE boundary markers and shifts each score's events so
+    they are concatenated end-to-end in quarter-note time.
+
+    Returns a new event list with 'on' and 'dur' fields adjusted.
+    """
+    # Split into per-score groups at SCORE markers
+    groups: list[list] = []
+    cur: list = []
+    for ev in events:
+        if ev.get('t') == 'SCORE':
+            if cur:
+                groups.append(cur)
+            cur = []
+        else:
+            cur.append(ev)
+    if cur:
+        groups.append(cur)
+
+    if len(groups) <= 1:
+        return events  # single score — nothing to shift
+
+    def _frac_of(s: str) -> Fraction:
+        if '/' in s:
+            n, d = s.split('/')
+            return Fraction(int(n), int(d))
+        return Fraction(int(s))
+
+    def _frac_to_str(f: Fraction) -> str:
+        return str(f.numerator) if f.denominator == 1 else f'{f.numerator}/{f.denominator}'
+
+    def _end_of_group(group: list) -> Fraction:
+        """Return the end time of the group in LilyPond whole-note units."""
+        end = Fraction(0)
+        for ev in group:
+            if ev.get('t') in ('N', 'R'):
+                on  = _frac_of(ev.get('on', '0'))
+                dur = _frac_of(ev.get('dur', '0'))
+                end = max(end, on + dur)
+        return end
+
+    result = []
+    cumulative = Fraction(0)
+    for group in groups:
+        if cumulative == 0:
+            result.extend(group)
+        else:
+            for ev in group:
+                shifted = dict(ev)
+                if 'on' in ev:
+                    shifted['on'] = _frac_to_str(_frac_of(ev['on']) + cumulative)
+                result.append(shifted)
+        cumulative += _end_of_group(group)
+
+    return result
+
+
 def _onset_frac(on_str: str) -> Fraction:
     """Parse "n/d" or "n" onset string → Fraction (in quarter notes)."""
     # LilyPond moments are in whole notes; music21 offsets are in quarter notes → ×4
@@ -617,6 +693,23 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
     if not by_voice:
         return m21.stream.Score()
 
+    # Merge sparse voices (≤5 notes) into the dominant voice on the same staff.
+    # These arise from SimultaneousMusic chords creating one sub-voice per note.
+    for st in set(k[0] for k in by_voice):
+        # Find dominant voice on this staff (most notes)
+        st_voices = {vc: evs for (s, vc), evs in by_voice.items() if s == st}
+        if len(st_voices) <= 1:
+            continue
+        main_vc = max(st_voices, key=lambda v: sum(1 for e in st_voices[v] if e.get('t') == 'N'))
+        main_n  = sum(1 for e in st_voices[main_vc] if e.get('t') == 'N')
+        for vc, evs in list(st_voices.items()):
+            if vc == main_vc:
+                continue
+            n = sum(1 for e in evs if e.get('t') == 'N')
+            if n <= 5 or n < main_n * 0.05:
+                by_voice[(st, main_vc)].extend(evs)
+                del by_voice[(st, vc)]
+
     # Build score: one Part per staff, one voice layer per voice
     score = m21.stream.Score()
 
@@ -1004,17 +1097,28 @@ def main():
             err += 1
             continue
 
+        # Split by SCORE markers — multi-score books get one file per movement
+        score_groups = _split_by_score(events)
+
         # Build MusicXML
         try:
-            score = notes_to_score(events)
-            score.write('musicxml', str(xml_out))
-            # Fix pickup measures in the written XML
-            pickup_shift, _ms, section_pickup_offsets = _compute_shifts(events)
-            if pickup_shift > 0 or section_pickup_offsets:
-                _postprocess_pickup_xml(str(xml_out), float(pickup_shift),
-                                        section_pickup_offsets)
+            if len(score_groups) <= 1:
+                targets = [(xml_out, events)]
+            else:
+                targets = [
+                    (xml_out.with_name(f'{stem}_{i + 1}.xml'), grp)
+                    for i, grp in enumerate(score_groups)
+                ]
+            for out_path, evs in targets:
+                score = notes_to_score(evs)
+                score.write('musicxml', str(out_path))
+                pickup_shift, _ms, section_pickup_offsets = _compute_shifts(evs)
+                if pickup_shift > 0 or section_pickup_offsets:
+                    _postprocess_pickup_xml(str(out_path), float(pickup_shift),
+                                            section_pickup_offsets)
             n_parts = len(score.parts)
-            print(f'  OK {stem}  notes={n_notes}  parts={n_parts}')
+            suffix = f'  ({len(score_groups)} movements)' if len(score_groups) > 1 else ''
+            print(f'  OK {stem}  notes={n_notes}  parts={n_parts}{suffix}')
             ok += 1
         except Exception as e:
             print(f'  ERROR xml {stem}: {e}')
