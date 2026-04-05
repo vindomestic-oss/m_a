@@ -452,6 +452,30 @@ def _split_wide_range_part(score: m21.stream.Score) -> None:
 
 from music21 import clef as m21clef
 
+
+def _assign_stem_directions(score: m21.stream.Score) -> None:
+    """
+    In each measure that has multiple voices, assign explicit stem directions:
+    voice ranked highest by average pitch → 'up', next → 'down', rest → 'up'/'down' alternating.
+    Single-voice measures are left untouched (verovio auto-stems).
+    """
+    for part in score.parts:
+        for meas in part.getElementsByClass('Measure'):
+            voices = list(meas.getElementsByClass('Voice'))
+            if len(voices) < 2:
+                continue
+            # Rank voices by average pitch descending (highest pitch → stems up)
+            def voice_avg(v):
+                pitches = [n.pitch.midi for n in v.flatten().notes
+                           if isinstance(n, m21note.Note)]
+                return sum(pitches) / len(pitches) if pitches else 0
+            ranked = sorted(voices, key=voice_avg, reverse=True)
+            for i, v in enumerate(ranked):
+                direction = 'up' if i == 0 else 'down'
+                for n in v.flatten().notesAndRests:
+                    if isinstance(n, (m21note.Note, m21chord.Chord)):
+                        n.stemDirection = direction
+
 def _add_auto_clefs(part: m21.stream.Part) -> None:
     """
     Insert clef objects into the Part based on local pitch range.
@@ -1081,6 +1105,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
         score.append(combined_part)
 
     _split_wide_range_part(score)
+    _assign_stem_directions(score)
     _apply_repeats(score, note_events, pickup_shift, mid_shifts)
     return score
 

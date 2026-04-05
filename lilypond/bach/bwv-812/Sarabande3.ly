@@ -62,7 +62,7 @@ right =  {
              mi 4 mi <re fa>\arpeggio | 
              dod dod2 | do!4 do8 sib << { mib4~( |
              mib8) re do fad\mordent sol\turn  la | }
-                                        \\ { do,4 | s2. } >>
+                                        \\ { do,4 | s2. } >> \stemUp
              sib'4 sib sib |
              sib8 la do sib la sol |
              fad sol sib la sol fa |
