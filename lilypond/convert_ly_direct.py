@@ -335,25 +335,24 @@ def _split_wide_range_part(score: m21.stream.Score) -> None:
     MIN_GAP  = 7    # minimum gap (semitones) between groups to justify a split
     BASS_MAX = 60   # lower group must have avg below this to be considered bass
 
-    # Merge near-empty parts back into the first part before checking.
-    # A "near-empty" part has < 5% of total notes — this happens when all main voices
-    # ended up in Part1 via cross-staff heuristic but a few stray chord-tones remain
-    # in Part2 (e.g. the final << re2. \\ re,2. >> in Menuet1 left hand).
+    # Merge truly-stray parts back into the first part before checking.
+    # Only absorbs Part2 with ≤ 2 notes — these arise when a single stray chord
+    # (e.g. the final << re2. \\ re,2. >> in Menuet1 left hand) gets home_staff="two"
+    # while all real voices landed in Part1 via cross-staff heuristic.
+    # A threshold of ≤ 2 notes is conservative enough to avoid absorbing any
+    # legitimate (even sparse) bass line.
     if len(score.parts) >= 2:
-        total_notes = sum(sum(1 for _ in p.flatten().notes) for p in score.parts)
-        if total_notes > 0:
-            for p in list(score.parts[1:]):
-                part_notes = sum(1 for _ in p.flatten().notes)
-                if part_notes / total_notes < 0.05:
-                    # Absorb this part's notes into Part1 then remove
-                    p1 = score.parts[0]
-                    for m in p.getElementsByClass('Measure'):
-                        mnum = m.number
-                        target = p1.measure(mnum)
-                        if target is not None:
-                            for v in m.getElementsByClass('Voice'):
-                                target.insert(0, copy.deepcopy(v))
-                    score.remove(p)
+        for p in list(score.parts[1:]):
+            part_notes = sum(1 for _ in p.flatten().notes)
+            if part_notes <= 2:
+                p1 = score.parts[0]
+                for m in p.getElementsByClass('Measure'):
+                    mnum = m.number
+                    target = p1.measure(mnum)
+                    if target is not None:
+                        for v in m.getElementsByClass('Voice'):
+                            target.insert(0, copy.deepcopy(v))
+                score.remove(p)
 
     if len(score.parts) != 1:
         return
