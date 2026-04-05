@@ -75,6 +75,78 @@ def short_name(ly_path: Path) -> str:
     return stem[:80]
 
 
+_INC_RE   = re.compile(r'\\include\s+"([^"]+)"')
+_TITLE_RE = re.compile(r'\btitle\s*=\s*"([^"]+)"')
+_SUB_RE   = re.compile(r'\bsubtitle\s*=\s*"([^"]+)"')
+_PIECE_RE = re.compile(r'\bpiece\s*=\s*"([^"]+)"')
+
+
+def _parse_ly_titles(ly_path: Path) -> tuple[str, list[str]]:
+    """Return (global_title, [piece1, piece2, ...]) from a LilyPond file.
+    Expands one level of \\include from the same directory.
+    global_title combines title + subtitle when both are present.
+    If no global title is found in the file itself, searches sibling .ly files
+    in the same directory for one that includes this file (hub/master file).
+    piece list follows document order (one entry per \\score block's \\header).
+    """
+    text = ly_path.read_text(encoding='utf-8', errors='replace')
+    for m in _INC_RE.finditer(text):
+        inc_path = ly_path.parent / m.group(1)
+        if inc_path.exists():
+            text += inc_path.read_text(encoding='utf-8', errors='replace')
+
+    title_m    = _TITLE_RE.search(text)
+    subtitle_m = _SUB_RE.search(text)
+    title    = title_m.group(1).strip()    if title_m    else ''
+    subtitle = subtitle_m.group(1).strip() if subtitle_m else ''
+
+    # If no global title found, look for a hub file in the same directory
+    # that \\include's this file and carries the suite-level title.
+    if not title and not subtitle:
+        fname = ly_path.name
+        for sibling in ly_path.parent.glob('*.ly'):
+            if sibling == ly_path:
+                continue
+            try:
+                sib_text = sibling.read_text(encoding='utf-8', errors='replace')
+            except Exception:
+                continue
+            # Check if the sibling includes this file
+            if not any(m.group(1) == fname for m in _INC_RE.finditer(sib_text)):
+                continue
+            t_m = _TITLE_RE.search(sib_text)
+            s_m = _SUB_RE.search(sib_text)
+            title    = t_m.group(1).strip() if t_m else ''
+            subtitle = s_m.group(1).strip() if s_m else ''
+            if title or subtitle:
+                break  # found a hub with a title
+
+    if title and subtitle and subtitle.lower() != title.lower():
+        global_title = f'{title}, {subtitle}'
+    else:
+        global_title = title or subtitle
+
+    pieces = [p.strip() for p in _PIECE_RE.findall(text)]
+    return global_title, pieces
+
+
+def _patch_xml_title(xml_path: str, title: str) -> None:
+    """Replace <movement-title> in a MusicXML file with the given title."""
+    try:
+        import xml.etree.ElementTree as ET
+        ET.register_namespace('', '')
+        text = Path(xml_path).read_text(encoding='utf-8')
+        import re as _re
+        text = _re.sub(
+            r'<movement-title>[^<]*</movement-title>',
+            f'<movement-title>{title}</movement-title>',
+            text, count=1
+        )
+        Path(xml_path).write_text(text, encoding='utf-8')
+    except Exception:
+        pass
+
+
 # ── LilyPond runner ──────────────────────────────────────────────────────────
 
 def _make_wrapper(ly_path: Path, notes_path: Path) -> Path:
@@ -261,7 +333,27 @@ def _split_wide_range_part(score: m21.stream.Score) -> None:
     if gap >= MIN_GAP semitones and the lower group has avg < BASS_MAX.
     """
     MIN_GAP  = 7    # minimum gap (semitones) between groups to justify a split
-    BASS_MAX = 55   # lower group must have avg below this to be considered bass
+    BASS_MAX = 60   # lower group must have avg below this to be considered bass
+
+    # Merge near-empty parts back into the first part before checking.
+    # A "near-empty" part has < 5% of total notes — this happens when all main voices
+    # ended up in Part1 via cross-staff heuristic but a few stray chord-tones remain
+    # in Part2 (e.g. the final << re2. \\ re,2. >> in Menuet1 left hand).
+    if len(score.parts) >= 2:
+        total_notes = sum(sum(1 for _ in p.flatten().notes) for p in score.parts)
+        if total_notes > 0:
+            for p in list(score.parts[1:]):
+                part_notes = sum(1 for _ in p.flatten().notes)
+                if part_notes / total_notes < 0.05:
+                    # Absorb this part's notes into Part1 then remove
+                    p1 = score.parts[0]
+                    for m in p.getElementsByClass('Measure'):
+                        mnum = m.number
+                        target = p1.measure(mnum)
+                        if target is not None:
+                            for v in m.getElementsByClass('Voice'):
+                                target.insert(0, copy.deepcopy(v))
+                    score.remove(p)
 
     if len(score.parts) != 1:
         return
@@ -308,6 +400,14 @@ def _split_wide_range_part(score: m21.stream.Score) -> None:
         return
 
     if not treble_vids or not bass_vids:
+        return
+
+    # Require the lower group to be a real melodic part, not just isolated chord tones.
+    # If it has fewer than 25% of total notes it is a chord-fill voice (e.g. cello suite
+    # melodyTwo) and should stay on the same staff as the upper voice.
+    total_lower = sum(len(voice_midis.get(v, [])) for v in bass_vids)
+    total_all   = sum(len(ms) for ms in voice_midis.values())
+    if total_all > 0 and total_lower / total_all < 0.25:
         return
 
     # Build treble and bass Parts
@@ -758,19 +858,46 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
                 seen_vc.add(vc)
                 voice_ids_for_staff.append(vc)
 
-        # Mark tie-stop: for each voice the next note after a tie=true note
+        # Mark tie-stop: for each original voice, the next note after a tie=true note.
+        # Use ev['vc'] (original sub-voice) rather than the merged voice key so that
+        # ties within chords (e.g. one note of a SimultaneousMusic chord) resolve to
+        # the correct continuation note in the same sub-voice.
+        # Cross-voice fallback: if the same-voice next note has a different pitch,
+        # search all voices for a note with the same pitch at onset = (tie_start_onset + dur).
         tie_stop_indices: set = set()
         by_vc: dict[str, list] = {}
         for i, (ev, vc) in enumerate(staff_notes):
-            by_vc.setdefault(vc, []).append(i)
+            orig_vc = ev.get('vc', vc)
+            by_vc.setdefault(orig_vc, []).append(i)
+        # Build pitch+onset lookup for cross-voice resolution
+        _onset_pitch_idx: dict[tuple, list] = {}
+        for i, (ev, _vc) in enumerate(staff_notes):
+            if ev.get('t', 'N') == 'N':
+                _pkey = (_onset_frac(ev['on']), ev.get('step'), ev.get('oct'))
+                _onset_pitch_idx.setdefault(_pkey, []).append(i)
         for vc, indices in by_vc.items():
             for j, i in enumerate(indices):
-                if staff_notes[i][0].get('tie') and staff_notes[i][0].get('t', 'N') == 'N':
+                ev_i = staff_notes[i][0]
+                if ev_i.get('tie') and ev_i.get('t', 'N') == 'N':
+                    step_i, oct_i = ev_i.get('step'), ev_i.get('oct')
+                    # Expected onset of tie destination = onset + dur
+                    exp_on = _onset_frac(ev_i['on']) + _onset_frac(ev_i['dur'])
+                    # First try: same original voice, pitch must match
+                    found = False
                     for k in range(j + 1, len(indices)):
                         ni = indices[k]
-                        if staff_notes[ni][0].get('t', 'N') == 'N':
+                        ni_ev = staff_notes[ni][0]
+                        if ni_ev.get('t', 'N') != 'N':
+                            continue
+                        if ni_ev.get('step') == step_i and ni_ev.get('oct') == oct_i:
                             tie_stop_indices.add(ni)
-                            break
+                            found = True
+                        break  # only check first note in same voice (whether pitch matches or not)
+                    if not found:
+                        # Cross-voice: find same pitch at expected onset
+                        candidates = _onset_pitch_idx.get((exp_on, step_i, oct_i), [])
+                        if candidates:
+                            tie_stop_indices.add(candidates[0])
 
         def _make_note_or_rest(ev, i):
             """Return a music21 Note or Rest from a JSON event dict."""
@@ -867,13 +994,12 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             for off, nlist in offset_notes.items():
                 if len(nlist) < 2:
                     continue
-                # Build a Chord from all notes at this offset
+                # Build a Chord from all notes at this offset.
+                # Individual note ties are already set in _make_note_or_rest;
+                # do NOT set chord.tie (that would override per-note ties and
+                # mark all notes in the chord as tied, not just the intended one).
                 chord = m21chord.Chord(nlist)
                 chord.duration = nlist[0].duration
-                # Handle ties: if any note is tie-start, mark chord
-                tie_starts = [n for n in nlist if n.tie and n.tie.type in ('start', 'continue')]
-                if tie_starts:
-                    chord.tie = m21tie.Tie('start')
                 for n in nlist:
                     flat.remove(n)
                 flat.insert(off, chord)
@@ -1100,22 +1226,36 @@ def main():
         # Split by SCORE markers — multi-score books get one file per movement
         score_groups = _split_by_score(events)
 
+        # Parse human-readable titles from the source file
+        global_title, pieces = _parse_ly_titles(ly)
+
         # Build MusicXML
         try:
             if len(score_groups) <= 1:
-                targets = [(xml_out, events)]
+                targets = [(xml_out, events, 0)]
             else:
                 targets = [
-                    (xml_out.with_name(f'{stem}_{i + 1}.xml'), grp)
+                    (xml_out.with_name(f'{stem}_{i + 1}.xml'), grp, i)
                     for i, grp in enumerate(score_groups)
                 ]
-            for out_path, evs in targets:
+            for out_path, evs, score_idx in targets:
                 score = notes_to_score(evs)
                 score.write('musicxml', str(out_path))
                 pickup_shift, _ms, section_pickup_offsets = _compute_shifts(evs)
                 if pickup_shift > 0 or section_pickup_offsets:
                     _postprocess_pickup_xml(str(out_path), float(pickup_shift),
                                             section_pickup_offsets)
+                # Patch movement title
+                piece = pieces[score_idx] if score_idx < len(pieces) else ''
+                if global_title and piece:
+                    xml_title = f'{global_title}, {piece}'
+                elif global_title:
+                    xml_title = global_title
+                elif piece:
+                    xml_title = piece
+                else:
+                    xml_title = stem.replace('_', ' ')
+                _patch_xml_title(str(out_path), xml_title)
             n_parts = len(score.parts)
             suffix = f'  ({len(score_groups)} movements)' if len(score_groups) > 1 else ''
             print(f'  OK {stem}  notes={n_notes}  parts={n_parts}{suffix}')
