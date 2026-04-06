@@ -208,6 +208,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(b"bye")
+            print("[kern_reader] shutdown requested — new instance starting", flush=True)
             threading.Thread(target=lambda: os._exit(0), daemon=True).start()
             return
         with _state_lock:
@@ -524,9 +525,10 @@ def find_lilypond_files():
     xml_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
     if not os.path.isdir(xml_dir):
         return []
+    _EXCLUDED = {'bwv1013.xml'}
     files = []
     for fname in sorted(os.listdir(xml_dir)):
-        if fname.endswith('.xml'):
+        if fname.endswith('.xml') and fname not in _EXCLUDED:
             full = os.path.join(xml_dir, fname)
             files.append((f'lilypond/{fname}', full))
     return files

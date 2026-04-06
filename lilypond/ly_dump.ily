@@ -17,7 +17,7 @@
 #(define %dump-port  #f)
 #(define %dump-score 0)
 #(define %dump-staff-counter 0)
-#(define %cur-staff "1")   ;; mutable: updated by ContextChange at any nesting depth
+#(define %cur-staff "1")   %% mutable: updated by ContextChange at any nesting depth
 
 %% ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -362,11 +362,15 @@
 %% ── score handler hook ───────────────────────────────────────────────────────
 
 #(define (%has-layout-outdef? score)
-   ;; Returns #t if score has at least one layout (non-MIDI) output-def.
+   ;; Returns #t if score has at least one layout (non-MIDI) output-def,
+   ;; OR if the score has no explicit output-defs (uses book's default layout).
+   ;; Returns #f only when all output-defs are MIDI (mm = ()).
    ;; Layout output-defs have 'mm = 1.0; MIDI output-defs have 'mm = ().
-   (any (lambda (od)
-          (number? (ly:output-def-lookup od 'mm)))
-        (ly:score-output-defs score)))
+   (let ((ods (ly:score-output-defs score)))
+     (or (null? ods)
+         (any (lambda (od)
+                (number? (ly:output-def-lookup od 'mm)))
+              ods))))
 
 #(define (%dump-one-score score)
    ;; Dump notes from a single score to the output file.

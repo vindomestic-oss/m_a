@@ -196,7 +196,8 @@ def run_lilypond(ly_path: Path) -> list[dict] | None:
          '-o', str(TMP_DIR / ly_path.stem),
          str(wrapper_ly)],
         capture_output=True, text=True,
-        cwd=str(ly_path.parent)
+        cwd=str(ly_path.parent),
+        timeout=120,
     )
 
     if not notes_path.exists():
