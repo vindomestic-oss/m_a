@@ -818,6 +818,25 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
 
     # Merge sparse voices (≤5 notes) into the dominant voice on the same staff.
     # These arise from SimultaneousMusic chords creating one sub-voice per note.
+    # Guard: only merge if doing so won't create time-overlapping notes — overlapping
+    # notes indicate genuine polyphony (voice splits) rather than chord artifacts.
+    def _notes_overlap(evs_a: list, evs_b: list) -> bool:
+        """Return True if any note in evs_a overlaps in time with any note in evs_b."""
+        b_ivs = []
+        for ev in evs_b:
+            if ev.get('t') == 'N':
+                on = _onset_frac(ev['on'])
+                b_ivs.append((on, on + _onset_frac(ev['dur'])))
+        for ev in evs_a:
+            if ev.get('t') != 'N':
+                continue
+            a_on = _onset_frac(ev['on'])
+            a_end = a_on + _onset_frac(ev['dur'])
+            for b_on, b_end in b_ivs:
+                if a_on < b_end and a_end > b_on:
+                    return True
+        return False
+
     for st in set(k[0] for k in by_voice):
         # Find dominant voice on this staff (most notes)
         st_voices = {vc: evs for (s, vc), evs in by_voice.items() if s == st}
@@ -830,8 +849,11 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
                 continue
             n = sum(1 for e in evs if e.get('t') == 'N')
             if n <= 5 or n < main_n * 0.05:
-                by_voice[(st, main_vc)].extend(evs)
-                del by_voice[(st, vc)]
+                # st_voices[main_vc] is the same list object as by_voice[(st, main_vc)],
+                # so it reflects any previous merges in this loop iteration.
+                if not _notes_overlap(evs, st_voices[main_vc]):
+                    by_voice[(st, main_vc)].extend(evs)
+                    del by_voice[(st, vc)]
 
     # Build score: one Part per staff, one voice layer per voice
     score = m21.stream.Score()

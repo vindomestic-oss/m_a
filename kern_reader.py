@@ -1680,13 +1680,20 @@ def add_beam_markers(content: str) -> str:
         if any('L' in t or 'J' in t for t in line.split()):
             return content
 
-    # Beat duration in quarter notes (from time signature)
+    # Beat duration in quarter notes (from time signature).
+    # Compound meters (mc%3==0 and mu>=8, e.g. 6/8, 6/16, 9/8): beat = dotted note = 3 subdivisions.
+    # Simple meters: beat = one note of the denominator value, capped at one quarter note.
     beat_dur = 1.0
     for line in lines:
         for tok in line.strip().split('\t'):
-            m = re.match(r'^\*M\d+/(\d+)$', tok)
+            m = re.match(r'^\*M(\d+)/(\d+)$', tok)
             if m:
-                beat_dur = 4.0 / int(m.group(1))
+                mc, mu = int(m.group(1)), int(m.group(2))
+                sub = 4.0 / mu          # one subdivision in quarter notes
+                if mc % 3 == 0 and mu >= 8:
+                    beat_dur = sub * 3  # compound: dotted note per beat
+                else:
+                    beat_dur = min(sub, 1.0)  # simple: cap at quarter note
                 break
 
     # Spine count from header
@@ -2380,8 +2387,8 @@ def render_score(path: str, version: str = "1") -> tuple:
             f'<b>M{i+1}</b>{phase_html}</td>'
             f'<td style="padding:3px 16px 3px 0">'
             f'<div style="display:flex;align-items:center;gap:8px">'
-            f'<span style="font-family:monospace;font-size:11px;white-space:nowrap">'
-            f'{" &nbsp; ".join(m["pattern"])}</span>'
+            # f'<span style="font-family:monospace;font-size:11px;white-space:nowrap">'
+            # f'{" &nbsp; ".join(m["pattern"])}</span>'
             f'{staff_svg}</div></td>'
             f'<td style="padding:5px 10px 5px 0;text-align:center">&times;{cnt_html}</td>'
             f'<td style="padding:5px 8px 5px 0;text-align:center;color:#888">{m["length"]}</td>'
