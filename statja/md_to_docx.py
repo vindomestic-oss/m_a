@@ -6,7 +6,7 @@ Handles: headings H1-H3, paragraphs, bold/italic inline,
 import re
 from docx import Document
 from docx.shared import Pt, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import copy
@@ -31,16 +31,25 @@ def set_run_fmt(run, bold=False, italic=False):
 
 
 def add_inline(para, text):
-    """Add text with inline **bold** and *italic* markers."""
-    # Pattern: **bold**, *italic*, or plain
-    pattern = re.compile(r'\*\*(.+?)\*\*|\*(.+?)\*|([^*]+)')
-    for m in pattern.finditer(text):
-        if m.group(1):
-            r = para.add_run(m.group(1)); r.bold = True
-        elif m.group(2):
-            r = para.add_run(m.group(2)); r.italic = True
+    """Add text with inline **bold**, *italic*, and ==highlight== markers."""
+    segments = re.split(r'(==.+?==)', text, flags=re.DOTALL)
+    for seg in segments:
+        if seg.startswith('==') and seg.endswith('==') and len(seg) > 4:
+            inner = seg[2:-2]
+            highlighted = True
         else:
-            para.add_run(m.group(3))
+            inner = seg
+            highlighted = False
+        pattern = re.compile(r'\*\*(.+?)\*\*|\*(.+?)\*|([^*]+)', re.DOTALL)
+        for m in pattern.finditer(inner):
+            if m.group(1):
+                r = para.add_run(m.group(1)); r.bold = True
+            elif m.group(2):
+                r = para.add_run(m.group(2)); r.italic = True
+            else:
+                r = para.add_run(m.group(3))
+            if highlighted:
+                r.font.color.rgb = RGBColor(0, 140, 0)
 
 
 def add_table(doc, lines):

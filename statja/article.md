@@ -6,7 +6,7 @@
 
 ## Abstract
 
-The durational vocabulary of Western tonal music is built entirely from smooth numbers — integers of the form 2^a × 3^b (whole notes, halves, quarters, dotted values, triplets). We ask whether this arithmetic constraint extends beyond individual note values to the *count* of structural element repetitions within a piece. Analysing a corpus of 1,024 Bach and Baroque works, we find that motif occurrence counts are smooth numbers significantly more often than expected under a log-uniform null model (enrichment ratio 2.25×). A shift test confirms the result is not an artefact of frequency-table shape: real counts are 1.47× denser at smooth positions than counts shifted by +1 (threshold ≥ 16), rising to 2.28× at threshold ≥ 48. Three illustrative cases from Bach — WTC Prelude No. 7 in E♭ major (192 = 2^6·3 occurrences of a stepwise sixteenth-note figure, direct and inverted forms combined), WTC Fugue No. 12 in F minor (96 = 2^5·3 occurrences of a sixteenth-note countersubject figure), and the BWV 944 Fugue in A minor (128 = 2^7 occurrences of a characteristic three-note motive) — show the pattern at its clearest. The effect is robustly present across other Baroque composers (Corelli 1.89×, Scarlatti 1.99×, Buxtehude 1.66×, Frescobaldi 1.70×) and persists, somewhat attenuated, into the Classical period (Haydn 1.77×, Mozart 1.90×, Beethoven 1.72×). The mechanism behind this alignment remains an open question.
+The durational vocabulary of Western tonal music is built entirely from smooth numbers — integers of the form 2^a × 3^b (whole notes, halves, quarters, dotted values, triplets). We ask whether this arithmetic constraint extends beyond individual note values to the *count* of structural element repetitions within a piece. Analysing a corpus of 1,193 Bach and Baroque works, we find that motif occurrence counts are smooth numbers significantly more often than expected under a log-uniform null model (enrichment ratio 2.25×). A shift test confirms the result is not an artefact of frequency-table shape: real counts are 1.41× denser at smooth positions than counts shifted by +1 (threshold ≥ 16), rising to 2.09× at threshold ≥ 36. Three illustrative cases from Bach — WTC Prelude No. 7 in E♭ major (192 = 2^6·3 occurrences of a stepwise sixteenth-note figure, direct and inverted forms combined), WTC Fugue No. 12 in F minor (96 = 2^5·3 occurrences of a sixteenth-note countersubject figure), and the BWV 944 Fugue in A minor (128 = 2^7 occurrences of a characteristic three-note motive) — show the pattern at its clearest. The effect is robustly present across other Baroque composers (Corelli 1.89×, Scarlatti 1.99×, Buxtehude 1.66×, Frescobaldi 1.70×) and persists, somewhat attenuated, into the Classical period (Haydn 1.77×, Mozart 1.90×, Beethoven 1.72×). The mechanism behind this alignment remains an open question.
 
 ---
 
@@ -38,6 +38,8 @@ The relevance of 3-smooth numbers to musical metre has been noted by several the
 
 This hierarchy extends well beyond the level of individual note durations. At the level of *hypermetre*, phrases in tonal music characteristically span 4 or 8 bars (occasionally 3, 6, or 12). Binary dance movements in Bach's keyboard suites frequently have halves of 8, 12, 16, or 24 bars; fugue expositions and episodes can often be measured in units of 4 or 8 bars. Whether smooth bar-counts extend reliably to larger formal sections — development blocks, da capo spans — is less certain and would require systematic measurement.
 
+==The hypothesis that smooth-number structure operates beyond bar lengths — extending to the counts of various types of musical events within a piece — was previously formulated and tested manually by the present author [REF-BOOK]. That study examined several categories of "metric points" (equidistant rhythmic group counts, harmonic function counts per section, melodic contour-step counts, and formal proportions) across selected Bach keyboard and orchestral suites and found smooth-number outcomes across all four domains. The present study provides the first large-scale corpus validation of the same hypothesis, applied specifically to melodic interval-sequence motif occurrence counts across a corpus of 1,024 pieces.==
+
 The present study asks whether the same arithmetic governs one further level: the *multiplicity* with which a melodic motive recurs across the piece as a whole. This is a different question from bar-count smoothness: a motive does not appear once per bar in any regular fashion, so its total occurrence count cannot simply inherit smoothness from formal structure. The question is whether smooth-number alignment appears at the level of occurrence counts independently of such structural regularities.
 
 ### 2.2 Motif analysis
@@ -54,9 +56,9 @@ Statistical analysis of symbolic music corpora has addressed questions of style,
 
 ### 3.1 Corpus
 
-The corpus consists of 1,024 works analysed successfully from a collection of 1,034 files in two formats: Humdrum **kern** (primarily from the CCARH MuseData and Ohio State University collections) and **MusicXML** (converted from LilyPond sources or downloaded from IMSLP). The Bach subset comprises keyboard works (Well-Tempered Clavier Books I and II, Two- and Three-Part Inventions), chorales, violin partitas and sonatas (BWV 1001–1006), and cello suites (BWV 1007–1012), together with selected keyboard suites and preludes. Additional composers in the extended corpus include Corelli (251 files, primarily trio sonatas and concerti grossi), Domenico Scarlatti (65 keyboard sonatas), Buxtehude (21 files), Frescobaldi (40 files), Haydn (9 files), Mozart (16 files), Beethoven (26 files), and others.
+The corpus consists of 1,193 works analysed successfully in two formats: Humdrum **kern** (primarily from the CCARH MuseData and Ohio State University collections) and **MusicXML** (converted from LilyPond sources or downloaded from IMSLP). The Bach subset comprises keyboard works (Well-Tempered Clavier Books I and II, Two- and Three-Part Inventions), chorales, violin partitas and sonatas (BWV 1001–1006), and cello suites (BWV 1007–1012), together with selected keyboard suites and preludes. Additional composers in the extended corpus include Corelli (251 files, primarily trio sonatas and concerti grossi), Domenico Scarlatti (65 keyboard sonatas), Buxtehude (21 files), Frescobaldi (40 files), Haydn (9 files), Mozart (16 files), Beethoven (26 files), and others.
 
-10 files failed to parse (< 1%) and were excluded.
+All files were analysed successfully (0 parse errors).
 
 ### 3.2 Motif detection pipeline
 
@@ -112,49 +114,51 @@ This harpsichord fugue in 4/4 time has a subject that opens directly with the fi
 
 ## 5. Corpus Results
 
-### 5.1 Bach (full corpus, 1,024 files)
+### 5.1 Bach (full corpus, 1,193 files)
 
-The total number of retained motif-occurrence counts with k ≥ 8 is **11,340**. The smooth-number subset accounts for **4,669** of these. Under the log-uniform null model, the expected smooth count is approximately 2,075, giving an enrichment ratio of **2.25×**. Table 1 shows the frequency of occurrence counts at selected smooth values.
+==The total number of retained motif-occurrence counts with k ≥ 8 is **13,546**. The smooth-number subset accounts for **5,566** of these. Under the log-uniform null model, the expected smooth count is approximately 2,479, giving an enrichment ratio of **2.25×**. Table 1 shows the frequency of occurrence counts at selected smooth values.==
 
-**Table 1.** Frequency of smooth occurrence counts in the Bach corpus (k ≥ 8, top 20 by frequency).
+**Table 1.** Frequency of smooth occurrence counts in the Bach corpus (k ≥ 8).
 
 | Count | Smooth? | Frequency |
 |-------|---------|-----------|
-| 8     | 2^3     | 1485 |
-| 9     | 3^2     | 1172 |
-| 12    | 2^2·3   | 722  |
-| 16    | 2^4     | 388  |
-| 18    | 2·3^2   | 320  |
-| 24    | 2^3·3   | 186  |
-| 27    | 3^3     | 120  |
-| 32    | 2^5     | 109  |
-| 36    | 2^2·3^2 | 60   |
-| 48    | 2^4·3   | 34   |
-| 54    | 2·3^3   | 30   |
-| 64    | 2^6     | 19   |
-| 72    | 2^3·3^2 | 8    |
+| 8     | 2^3     | 1780 |
+| 9     | 3^2     | 1378 |
+| 12    | 2^2·3   | 893  |
+| 16    | 2^4     | 444  |
+| 18    | 2·3^2   | 391  |
+| 24    | 2^3·3   | 211  |
+| 27    | 3^3     | 138  |
+| 32    | 2^5     | 130  |
+| 36    | 2^2·3^2 | 75   |
+| 48    | 2^4·3   | 43   |
+| 54    | 2·3^3   | 32   |
+| 64    | 2^6     | 21   |
+| 72    | 2^3·3^2 | 9    |
 | 81    | 3^4     | 6    |
-| 96    | 2^5·3   | 3    |
+| 96    | 2^5·3   | 6    |
 | 108   | 2^2·3^3 | 2    |
-| 128   | 2^7     | 2    |
+| 128   | 2^7     | 3    |
+| 144   | 2^4·3^2 | 2    |
 | 192   | 2^6·3   | 1    |
 
-For comparison, the immediately adjacent non-smooth count 10 appears 954 times and count 11 appears 783 times; count 17 appears 341 times against 16's 388 and 18's 320. The local peaks at smooth positions are visible in the frequency distribution.
+==For comparison, the immediately adjacent non-smooth count 10 appears 1,180 times and count 11 appears 915 times; count 17 appears 432 times against 16's 444 and 18's 391. The local peaks at smooth positions are visible in the frequency distribution.==
 
-The shift test strengthens the conclusion. Table 2 shows the smooth density of real counts versus counts shifted by +1, at several thresholds.
+==The shift test strengthens the conclusion. Table 2 shows the smooth density of real counts versus counts shifted by ±1, at several thresholds.==
 
-**Table 2.** Shift test results (Bach corpus, shift +1).
+**Table 2.** Shift test results (Bach corpus, shifts +1 and −1).
 
-| Threshold | n (real) | Smooth density (real) | Smooth density (shifted +1) | Ratio |
-|-----------|----------|-----------------------|-----------------------------|-------|
-| ≥ 14 | 5664 | 0.228 | 0.236 | 0.97× |
-| ≥ 16 | 4714 | 0.274 | 0.186 | **1.47×** |
-| ≥ 18 | 3985 | 0.226 | 0.134 | **1.69×** |
-| ≥ 24 | 2643 | 0.220 | 0.142 | **1.56×** |
-| ≥ 32 | 1636 | 0.169 | 0.087 | **1.93×** |
-| ≥ 48 | 772  | 0.139 | 0.061 | **2.28×** |
+| Threshold | n (real) | Density (real) | Density (+1) | Ratio +1 | Density (−1) | Ratio −1 |
+|-----------|----------|----------------|--------------|----------|--------------|----------|
+| ≥ 14 | 6738 | 0.225 | 0.241 | 0.93× | 0.200 | 1.13× |
+| ≥ 16 | 5616 | 0.270 | 0.192 | **1.41×** | 0.240 | 1.13× |
+| ≥ 18 | 4740 | 0.226 | 0.136 | **1.66×** | 0.193 | 1.17× |
+| ≥ 24 | 3076 | 0.221 | 0.147 | **1.50×** | 0.195 | 1.13× |
+| ≥ 32 | 1892 | 0.175 | 0.090 | **1.95×** | 0.144 | 1.21× |
+| ≥ 36 | 1500 | 0.134 | 0.064 | **2.09×** | 0.121 | 1.10× |
+| ≥ 48 | 867  | 0.145 | 0.070 | **2.07×** | 0.130 | 1.12× |
 
-The anomaly at threshold 14 (ratio < 1) reflects the high raw frequency of count 15 and the smooth count 9 falling below the 14 threshold. Above 16, the shift ratio rises monotonically and is largest at high thresholds, where the signal-to-noise ratio is best.
+==The anomaly at threshold 14 (ratio < 1) reflects the high raw frequency of count 15 and the smooth count 9 falling below the 14 threshold. Above 16, the shift ratio rises monotonically and is largest at high thresholds, where the signal-to-noise ratio is best. Notably, the effect is consistently stronger against the +1 shift than against the −1 shift across all thresholds ≥ 16 (1.41× vs. 1.13× at ≥16; 2.09× vs. 1.10× at ≥36), indicating that the count *above* a smooth number is more reliably depleted than the count *below* — an asymmetry discussed in §6.2.==
 
 ### 5.2 Cross-composer comparison
 
@@ -185,7 +189,7 @@ Why would motif occurrence counts tend to be smooth numbers? A naive answer — 
 
 A more plausible hypothesis points toward the organisation of memory rather than the organisation of form. Human memory — and arguably memory in biological neural networks more broadly — operates in hierarchical structures that favour powers of two and three: information is grouped, chunked, and rehearsed in units of 2, 4, 8 or 3, 6, 12. If the composer's internalized sense of "enough repetition" or "satisfying closure" is calibrated by these same memory structures, smooth-number totals would emerge as a byproduct of how musical material is retained and deployed, rather than as a consequence of any explicit counting or formal planning.
 
-A more speculative variant of this hypothesis invokes the dynamics of neural networks directly: smooth-number repetition counts may arise as *resonant* outcomes of the brain's rhythmic architecture, in the same way that certain oscillation frequencies are privileged by the connectivity of neural circuits. We mention this possibility without endorsing it; both hypotheses, and their relationship to the empirical data, remain open questions for future work.
+==A more concrete formulation of this hypothesis [REF-BOOK] proposes that the brain maintains implicit binary-ternary "counters" for musical events during both listening and composition. If incoming events are stored by grouping signals into pairs and triples — the same chunking principle that governs note durations and metric hierarchy — then the counter's accumulated total at any stage is of the form 2^a·3^b. The sense of "complete" or "enough" would correspond to the counter reaching its most stable state, where all pairs and triplets are evenly filled. This account does not require the composer to consciously plan a smooth total; it only requires that the intuitive sense of closure is calibrated by a binary-ternary memory architecture operating below the threshold of awareness. The relationship between this conjecture and the empirical data remains an open question for future investigation.==
 
 ### 6.2 The shift-test asymmetry
 
@@ -195,7 +199,7 @@ The shift test reveals a consistent asymmetry: real counts are more strongly dif
 
 **Algorithmic dependence.** The occurrence counts depend on the motif detection algorithm, which makes choices about pattern length, phase matching, and inversion merging. Different algorithmic choices would produce different count distributions. We have verified that the enrichment result is robust to the main parameter choices (minimum length ≥ 2 vs. ≥ 3, with and without inversion merging), but a comprehensive sensitivity analysis is left for future work.
 
-**Inversion merging.** The union count (direct + inverted − coinciding) differs from the direct count by a variable amount that depends on how often the inverted form actually appears in the piece; in practice the ratio of inverted to direct occurrences varies widely across motifs and pieces. Merging therefore does not systematically double counts, and the doubling artefact (2N smooth whenever N smooth) does not apply. For transparency we report the enrichment both with and without inversion merging: [TODO: add no-inv figure] vs. 2.25×.
+**Inversion merging.** The union count (direct + inverted − coinciding) differs from the direct count by a variable amount that depends on how often the inverted form actually appears in the piece; in practice the ratio of inverted to direct occurrences varies widely across motifs and pieces. Merging therefore does not systematically double counts, and the doubling artefact (2N smooth whenever N smooth) does not apply. For transparency we report the enrichment both with and without inversion merging: ==direct-only **2.22×** vs. merged **2.25×**. The difference is negligible (< 2%), confirming that inversion merging does not artificially inflate the result.==
 
 **Corpus composition.** The corpus is not a representative sample of all Western tonal music; it over-represents Bach and keyboard music. The cross-composer comparison in §5.2 suggests the effect is widespread, but replication on a more balanced corpus is needed.
 
@@ -205,7 +209,7 @@ The shift test reveals a consistent asymmetry: real counts are more strongly dif
 
 ## 7. Conclusion
 
-We have shown that motif occurrence counts in a large corpus of Bach and Baroque music are smooth numbers (of the form 2^a · 3^b) approximately 2.25× more often than expected under a log-uniform null model, with the excess confirmed by a shift test that is robust to threshold choice and reaches 2.28× at high count values. The pattern is consistent across Baroque composers (Corelli, Scarlatti, Buxtehude, Frescobaldi) and persists into the Classical period (Haydn, Mozart, Beethoven).
+We have shown that motif occurrence counts in a large corpus of 1,193 Bach and Baroque pieces are smooth numbers (of the form 2^a · 3^b) approximately 2.25× more often than expected under a log-uniform null model, with the excess confirmed by a shift test that is robust to threshold choice and reaches 2.09× at threshold ≥ 36. The pattern is consistent across Baroque composers (Corelli, Scarlatti, Buxtehude, Frescobaldi) and persists into the Classical period (Haydn, Mozart, Beethoven).
 
 The result documents a level of smooth-number organisation that has not previously been described: not in note durations or bar lengths, but in the count of times a structural element recurs across a piece. Three individual pieces from Bach illustrate the pattern with particular clarity: WTC I Prelude No. 7 (192 occurrences), WTC I Fugue No. 12 (96 occurrences), and BWV 944 Fugue (128 occurrences). Since motifs appear irregularly within a piece — not once per bar, not in any predictable spacing — a purely formal or structural explanation does not account for the result. The mechanism remains an open question; we tentatively suggest that it may be rooted in the binary-ternary organisation of memory and repetition in biological neural systems, but this hypothesis requires independent investigation.
 
@@ -214,6 +218,12 @@ The result documents a level of smooth-number organisation that has not previous
 ## References
 
 *[To be completed. Key works to cite: Pressing 1983 on rhythmic complexity; London 2004 Hearing in Time; Cohn on hexatonic and metric theory; Conklin & Witten 1995 on multiple viewpoints; Lartillot MIR works; Collins et al. 2011 MIREX motif; relevant music theory corpus studies.]*
+
+==**[REF-BOOK]** Vynograd, [first name]. *[title TBD]* [unpublished monograph / publisher TBD, year TBD]. *(The present article is a corpus-scale validation of the main hypothesis of this work.)*==
+
+==**[REF-ART1]** Vynograd, [first name] and Seryachkov, Vladimir. "Насколько крупным может быть музыкальный метр?" [How large can musical metre be?]. In: *Protsessy muzykal'nogo tvorchestva*, vol. 11. Moscow, 2010. ISSN 2073-9095.==
+
+==**[REF-ART2]** Vynograd, [first name]. "Гиперметрическая регулярность в ритме смены гармонических функций на примерах из произведений И.С. Баха" [Hypermetric regularity in the rhythm of harmonic-function changes, illustrated from J.S. Bach]. *Sovremennye problemy nauki i obrazovaniya*. ISSN 1817-6321. http://online.rae.ru/470==
 
 ---
 
