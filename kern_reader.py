@@ -896,6 +896,7 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
       8th in 9/8  (beat=1.5): n_per_beat=3 → phase 0, 1, or 2
       triplet 1/3 in 4/4:     n_per_beat=3 → phase 0, 1, or 2
       triplet 1/6 in 4/4:     n_per_beat=6 → phase % 3 (0,1,2) — groups of 3
+      16th in 12/8 (beat=1.5): n_per_beat=6 → kept at 6 (phase 0 = beat only)
       32nd in 3/4 (beat=1.0): n_per_beat=8 → capped to 4 → phase 0-3 (same as 16th)
     """
     if dur_q <= 0 or beat_dur_q <= 0:
@@ -903,11 +904,18 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
     n_per_beat = max(1, round(beat_dur_q / dur_q))
     if n_per_beat <= 1:
         return 0
-    # For triplet notes (n_per_beat divisible by 3), phase within the triplet
-    # group is what matters rhythmically: phase 0 and phase 3 are both
-    # "first of triplet group" → collapse to phase % 3.
+    # Compound meter detection: beat_dur_q is a multiple of 3/4 (e.g. 1.5 for 6/8,9/8,12/8).
+    # round(beat_dur_q * 4) divisible by 3 identifies compound beats (1.5→6, 0.75→3, etc.).
+    is_compound = (round(beat_dur_q * 4) % 3 == 0)
     if n_per_beat % 3 == 0:
-        n_per_beat = 3
+        if is_compound and n_per_beat >= 6:
+            # Compound meter (e.g. 16th in 12/8): keep up to 6 phases so that
+            # phase 0 only hits beat boundaries, not also dotted-eighth positions.
+            n_per_beat = min(n_per_beat, 6)
+        else:
+            # Simple meter triplets (1/3, 1/6 …): collapse — "first of triplet group"
+            # is the musically meaningful position, not beat start.
+            n_per_beat = 3
     # Cap binary subdivisions at 4 phases (same resolution as 16th notes).
     # Prevents 32nd/64th notes from generating excessive phase slots.
     elif n_per_beat > 4:

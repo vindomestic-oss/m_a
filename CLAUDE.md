@@ -121,7 +121,7 @@ Two null models for smooth-number enrichment among counts ≥ 8:
 - **Uniform prior**: every integer in [8, max] equally likely → 3.61x (misleading)
 - **Log-uniform prior**: weight 1/k → **1.80x** (modest enrichment)
 
-**Note on inversion effect**: adding inversion merging raised enrichment from 0.84x → 1.80x. Likely artifact: inversion tends to approximately double counts, and 2N is more often smooth than N. The count used is always the union (no double-counting of positions where both forms coincide).
+**Note on inversion effect**: adding inversion merging raised enrichment from 0.84x → 1.80x. The count used is always the union (no double-counting of positions where both forms coincide). Motifs appear irregularly within a piece (scattered across voices, sections, entries at unpredictable bars), so smooth union counts are non-trivial — the smoothness cannot be explained away by piece-length structure and is genuine signal.
 
 ## Manual motif search
 
@@ -217,6 +217,8 @@ Three-way count `×N_dir ⇅N_inv ⊕N_all` — each span is individually clicka
 **2/2 time**: `_parse_meter` previously returned `beat_dur_q = 4.0/mu` giving 2.0 for 2/2 (alla breve). This produced 8 phase slots for 1/16 notes (phases 0-7). Fix: `min(4.0/mu, 1.0)` caps simple-meter beat at one quarter note. Compound meters (6/8, 9/8, 12/8) are unaffected.
 
 **32nd notes (and shorter)**: `_metric_phase` computed `n_per_beat=8` for 32nd notes in 3/4 (phases 0-7), allowing phase=5 which is meaningless. Fix: binary subdivisions (n_per_beat not divisible by 3) are capped at 4 → same resolution as 16th notes. Triplet patterns (n_per_beat divisible by 3) are collapsed to 3 phases as before.
+
+**Compound meter 16th notes (12/8, 9/8, 6/8)**: `n_per_beat=6` for 16th notes in compound meter was collapsed to 3, making phase 0 land on BOTH beat positions AND dotted-eighth positions (0.75, 2.25, 3.75, 5.25 into the bar). Fix: when `round(beat_dur_q * 4) % 3 == 0` (compound meter) and `n_per_beat >= 6`, keep `n_per_beat = min(n_per_beat, 6)` so that phase 0 = beat starts only. Triplet 16ths in simple meter (beat_dur_q=1.0) still collapse to 3 phases.
 
 ## LilyPond → MusicXML converter (no MIDI)
 
