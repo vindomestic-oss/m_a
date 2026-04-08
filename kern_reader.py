@@ -41,6 +41,8 @@ KERN_ALLOWED = (
     os.path.join("osu", "classical", "bach", "wtc-2"),             # WTC2 fugues
     os.path.join("osu", "classical", "bach", "inventions"),        # Inventions
     os.path.join("musedata", "bach", "chorales"),                   # Chorales
+    os.path.join("craigsapp", "bach", "chorales-370"),             # 370 Chorales (craigsapp)
+    os.path.join("craigsapp", "bach", "musical-offering"),         # Musical Offering BWV 1079
     os.path.join("users", "craig", "classical", "bach", "violin"), # Violin sonatas & partitas
     os.path.join("users", "craig", "classical", "bach", "cello"),  # Cello suites
     "permut",                                                       # Permuted files
@@ -317,7 +319,10 @@ _KERN_COMPOSER = {
     'buxtehude':   'Buxtehude',
     'frescobaldi': 'Frescobaldi',
     'handel':      'Handel',
+    'telemann':    'Telemann',
     'monteverdi':  'Monteverdi',
+    'mozart':      'Mozart',
+    'beethoven':   'Beethoven',
 }
 
 # ── Bach cycle grouping ────────────────────────────────────────────────────────
@@ -338,12 +343,14 @@ _BACH_CYCLE_ORDER = [
     'Violin Sonatas with Keyboard',
     'Brandenburg Concertos',
     'Concertos',
+    'Orchestral Suites',
     'Organ Sonatas',
     'Orgelbüchlein',
     'Organ Mass (Clavier-Übung III)',
     'Chorale Preludes',
     'Chorale Harmonizations',
     'Cantatas',
+    'Passions & Oratorios',
     'Motets & Masses',
     'Notebook for A.M. Bach',
     'Toccatas & Preludes',
@@ -391,6 +398,27 @@ def _bach_cycle(rel: str) -> str:
             return _bwv_to_cycle(n)
 
     # ── lilypond XML / MXL files ───────────────────────────────────────────────
+    # musedata pattern: musedata_{section}_BWV_{N}[_{mvt}]
+    mm = _re.match(r'musedata_(\w+)_bwv_(\d+\w*)', stem, _re.I)
+    if mm:
+        section, bwv_str = mm.group(1), mm.group(2)
+        try:
+            n = int(_re.match(r'\d+', bwv_str).group())
+        except Exception:
+            return 'Other Bach'
+        if section == 'cant':   return f'Cantata BWV {n}'
+        if section == 'organ':  return _bwv_to_cycle(n)
+        if section == 'orch':   return _bwv_to_cycle(n)
+        if section == 'vocal':  return _bwv_to_cycle(n)
+        if section == 'chamb':  return _bwv_to_cycle(n)
+        if section == 'canon':  return 'Art of Fugue'
+        return _bwv_to_cycle(n)
+
+    # IMSLP pattern: bach-42-src_bach-42-score → BWV 42
+    mb_src = _re.match(r'bach-(\d+)-', stem)
+    if mb_src:
+        return _bwv_to_cycle(int(mb_src.group(1)))
+
     # Named non-BWV files
     if 'contrapunctus' in stem or stem.startswith('f9') or 'duetto' in stem:
         return 'Art of Fugue'
@@ -402,13 +430,16 @@ def _bach_cycle(rel: str) -> str:
         return 'Cello Suites'
     if stem.startswith('concerto_in') or 'concerto_in' in stem:
         return 'Concertos'
-    if stem.startswith('brandenbur'):
+    if stem.startswith('brandenbur') or _re.match(r'brand\d', stem):
         return 'Brandenburg Concertos'
     if stem in ('air', 'air_tromb'):
         return 'Concertos'
     if 'sonataiv' in stem.replace('_', ''):
         return 'Violin Sonatas with Keyboard'
     if 'cantata' in stem:
+        mcan = _re.match(r'cantata[_\s](\d+)', stem)
+        if mcan:
+            return f'Cantata BWV {int(mcan.group(1))}'
         return 'Cantatas'
     if stem in ('bistdubeimiir', 'bistdubeimiir') or 'bistdu' in stem:
         return 'Notebook for A.M. Bach'
@@ -423,6 +454,8 @@ def _bach_cycle(rel: str) -> str:
         return 'Chorale Preludes'
     if any(s in stem for s in ('bistdu', 'bist_du')):
         return 'Notebook for A.M. Bach'
+    if 'anna_magdalena' in stem or 'anna magdalena' in stem:
+        return 'Notebook for A.M. Bach'
 
     # Notebook Anna Magdalena
     notebook_bwvs = set(range(508, 519)) | {690, 691, 515, 516, 510, 511, 512}
@@ -435,6 +468,9 @@ def _bach_cycle(rel: str) -> str:
             return 'Notebook for A.M. Bach'
         # bwv_117.4 style → cantata movement/chorale; skip keyboard-work override
         if _re.search(r'bwv[-_]?\d+\.\d', stem):
+            mb = _re.search(r'bwv[-_]?(\d+)', stem)
+            if mb:
+                return f'Cantata BWV {int(mb.group(1))}'
             return 'Cantatas'
         return _bwv_to_cycle(n)
 
@@ -480,10 +516,330 @@ def _bwv_to_cycle(n: int) -> str:
     if 989 <= n <= 1000: return 'Small Keyboard Works'
     # Keyboard arrangements sharing BWV numbers with cantatas
     if n in (117, 118, 119, 120, 121, 127, 128): return 'Small Keyboard Works'
+    # Orchestral suites
+    if 1066 <= n <= 1071: return 'Orchestral Suites'
+    # Passions & large choral works
+    if n in (244, 245, 247, 248): return 'Passions & Oratorios'
     # Cantatas
-    if 1 <= n <= 200:    return 'Cantatas'
+    if 1 <= n <= 224:    return f'Cantata BWV {n}'
     if 225 <= n <= 249:  return 'Motets & Masses'
     return 'Other Bach'
+
+
+_DANCE_SHORT = {
+    'allemande': 'Allem.', 'courante': 'Cour.', 'sarabande': 'Sarab.',
+    'gigue': 'Gigue', 'menuet': 'Men.', 'minuet': 'Men.',
+    'gavotte': 'Gav.', 'bourree': 'Bourr.', 'loure': 'Loure',
+    'polonaise': 'Pol.', 'prelude': 'Prél.', 'preludio': 'Prél.',
+    'praeludium': 'Präl.', 'praeludien': 'Präl.',
+    'fugue': 'Fuga', 'fuga': 'Fuga', 'aria': 'Aria',
+    'andante': 'And.', 'adagio': 'Adagio', 'sicilian': 'Sic.',
+    'chaconne': 'Chac.', 'passacag': 'Passac.', 'ricercar': 'Ricer.',
+    'invention': 'Inv.', 'sinfonia': 'Sinf.', 'trio': 'Trio',
+}
+
+
+def _dance_short(s: str) -> str:
+    """Return abbreviated dance/movement label found in string s, or ''."""
+    for key, val in _DANCE_SHORT.items():
+        if key in s:
+            return val
+    return ''
+
+
+def _display_title(rel: str) -> str:
+    """Return a clean human-readable title for a music file path."""
+    import re as _re
+    fname = os.path.basename(rel)
+    stem  = fname.rsplit('.', 1)[0]
+    s     = stem.lower()
+
+    # ── Goldberg Variations ───────────────────────────────────────────────────
+    if 'bwv_988' in s or 'bwv988' in s:
+        mv = _re.search(r'_v(\d+)', s)
+        if mv:  return f"Var. {int(mv.group(1))}"
+        if 'aria' in s:  return 'Aria'
+        return 'BWV 988'
+
+    # ── Art of Fugue ──────────────────────────────────────────────────────────
+    mc = _re.match(r'contrapunctus([ivxlcdm]+)', s)
+    if mc:  return f"Ctrp. {mc.group(1).upper()}"
+    if s in ('rectus', 'inversus', 'duetto', 'ricercare', 'ricercare6'):
+        return stem[0].upper() + stem[1:]
+
+    # ── musedata_{section}_BWV_{N}[_{mvt}] ───────────────────────────────────
+    mm = _re.match(r'musedata_\w+_bwv_(\d+\w?)(?:_(\d+))?$', s)
+    if mm:
+        bwv = mm.group(1).lstrip('0') or '0'
+        mvt = mm.group(2)
+        return f"BWV {bwv}/{mvt}" if mvt else f"BWV {bwv}"
+
+    # ── IMSLP bach-N-src cantata/ensemble ────────────────────────────────────
+    mb_src = _re.match(r'bach-(\d+)-', s)
+    if mb_src:  return f"BWV {mb_src.group(1)}"
+
+    # ── Brandenburg Concertos ─────────────────────────────────────────────────
+    mb1 = _re.match(r'brandenbur(?:g)?(\d)[_-](\d+)', s)
+    if mb1:
+        return f"Brandenb. {mb1.group(1)}/{mb1.group(2)}"
+    mb2 = _re.match(r'brand(\d)[_-](\d+)', s)
+    if mb2:
+        return f"Brandenb. {mb2.group(1)}/{mb2.group(2)}"
+
+    # ── Cantata_16_no_5 pattern ───────────────────────────────────────────────
+    mcan = _re.match(r'cantata[_\s](\d+)[_\s]no[_\s](\d+)', s)
+    if mcan:  return f"Cant. {mcan.group(1)}/No.{mcan.group(2)}"
+
+    # ── Anna Magdalena ────────────────────────────────────────────────────────
+    mam = _re.match(r'anna_magdalena_(\w+)', s)
+    if mam:  return f"A.M. {mam.group(1).lstrip('0') or '0'}"
+
+    # ── Inventions ────────────────────────────────────────────────────────────
+    mi = _re.match(r'bach_invention_?0*(\d+)', s)
+    if mi:  return f"Inv. {mi.group(1)}"
+
+    # ── French / English Suite ────────────────────────────────────────────────
+    mf = _re.search(r'french_suite[_\s](\d)', s)
+    if mf:
+        dance = _dance_short(s)
+        return f"Fr. Suite {mf.group(1)}" + (f" {dance}" if dance else '')
+    me = _re.search(r'english_suite[_\s](\d)', s)
+    if me:
+        dance = _dance_short(s)
+        return f"En. Suite {me.group(1)}" + (f" {dance}" if dance else '')
+
+    # ── Cello suite by name ───────────────────────────────────────────────────
+    mcs = _re.match(r'cellosuite(\d+)_cellosuite\d+_(\d+)', s)
+    if mcs:  return f"Suite {mcs.group(1)}/{mcs.group(2)}"
+    mcs2 = _re.match(r'cellosuite(\d+)_cellosuite\d+', s)
+    if mcs2:  return f"Suite {mcs2.group(1)}"
+
+    # ── Numbered partita (partita_1_1_violin) ─────────────────────────────────
+    mps = _re.match(r'partita_(\d+)_(\d+)', s)
+    if mps:  return f"Part. {mps.group(1)}/{mps.group(2)}"
+
+    # ── Concerto in d/e ───────────────────────────────────────────────────────
+    mco = _re.match(r'concerto_in_([a-z])_(minor|major)', s)
+    if mco:
+        key  = mco.group(1).upper()
+        mode = 'moll' if mco.group(2) == 'minor' else 'dur'
+        mov  = _re.search(r'_(\d+)$', s)
+        return f"Conc. {key}-{mode}" + (f"/{mov.group(1)}" if mov else '')
+
+    # ── mv4_Partita_bwv828, mv14_canons_bwv_1087 ─────────────────────────────
+    if 'canons_bwv' in s or ('canon' in s and 'bwv' in s):
+        mbwv_c = _re.search(r'bwv[-_]?(\d+)', s)
+        bwv_c  = mbwv_c.group(1) if mbwv_c else '1087'
+        if s.endswith(f'_bwv_{bwv_c}') or s.endswith(f'_bwv{bwv_c}') or s.endswith(f'-{bwv_c}'):
+            return f"Canons BWV {bwv_c}"
+        mov_end = _re.search(r'_(\d+)$', s)
+        return f"Canon {bwv_c}/{mov_end.group(1)}" if mov_end else f"Canons BWV {bwv_c}"
+
+    mmv = _re.match(r'mv\d+_[^_]+_bwv[-_]?(\d+[a-z]?)(?:_(\d+))?', s)
+    if mmv:
+        mov = f"/{int(mmv.group(2))}" if mmv.group(2) else ''
+        return f"BWV {mmv.group(1)}{mov}"
+
+    # ── SonataIV ──────────────────────────────────────────────────────────────
+    msi = _re.match(r'sonata(iv|iii|ii|i|v)_sonata\1(?:_(\d+))?', s)
+    if msi:
+        mov = f"/{msi.group(2)}" if msi.group(2) else ''
+        return f"Sonata {msi.group(1).upper()}{mov}"
+
+    # ── Bach_ chorale names ───────────────────────────────────────────────────
+    if stem.startswith('Bach_'):
+        name = stem[5:]
+        name = _re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', name)
+        return name
+
+    # ── BWV number extraction ─────────────────────────────────────────────────
+    mbwv = _re.search(r'bwv[-_]?0*(\d+[a-z]?)', s)
+    if mbwv:
+        raw_n  = mbwv.group(1)
+        suffix = s[mbwv.end():]
+        # Remove repeated bwv reference (e.g. BWV_827_BWV_827_1 → just _1)
+        suffix = _re.sub(r'_?bwv[-_]?\d+[a-z]?', '', suffix)
+        # First movement number in suffix
+        mov_m = _re.search(r'[-_]0*(\d+)', suffix)
+        mov   = f"/{int(mov_m.group(1))}" if mov_m else ''
+        # Dance/part descriptor from full string
+        dance = _dance_short(s)
+        return f"BWV {raw_n}{mov}" + (f" {dance}" if dance else '')
+
+    # ── Fallback: clean up filename ───────────────────────────────────────────
+    title = stem.replace('_', ' ').replace('-', ' ')
+    return title[0].upper() + title[1:] if title else stem
+
+
+_HANDEL_WORK_MAP = {
+    'semele':    'Semele',
+    'rada':      'Radamisto',
+    'ariodan':   'Ariodante',
+    'atalan':    'Atalanta',
+    'poro':      'Poro',
+    'mes':       'Messiah',
+    'clori':     'Clori',
+    'jmac':      'Jmac',
+    'ott':       'Ott',
+}
+
+
+def _handel_cycle(stem: str) -> str | None:
+    import re as _re
+    stem = _re.sub(r'_\d+$', '', stem)      # strip trailing movement number
+    if not stem.startswith('handel_'):
+        return None
+    parts = stem[7:].split('_')              # after 'handel_'
+    for part in parts:
+        if part in ('op06', 'op6') or _re.match(r'op6n\d+$', part, _re.I):
+            return 'Concerti Grossi Op. 6'
+        if part == 'op02': return 'Op. 2 Sonatas'
+        if part == 'op03': return 'Op. 3 Concerti'
+        if part == 'op05': return 'Op. 5 Sonatas'
+    for part in reversed(parts):
+        if part in _HANDEL_WORK_MAP:
+            return _HANDEL_WORK_MAP[part]
+        base = _re.sub(r'(\d+|-new)$', '', part)
+        if base in _HANDEL_WORK_MAP:
+            return _HANDEL_WORK_MAP[base]
+    if any(_re.match(r'hwv\d+', p, _re.I) for p in parts):
+        return 'Concertos'
+    return None
+
+
+_TELEMANN_ORATORIO_MAP = {
+    'orpheus': 'Orpheus',
+    'seren':   'Serenade',
+}
+
+
+def _telemann_cycle(stem: str) -> str | None:
+    import re as _re
+    stem = _re.sub(r'_\d+$', '', stem)      # strip trailing movement number
+    if not stem.startswith('telemann_'):
+        return None
+    parts = stem[9:].split('_')              # after 'telemann_'
+    if not parts:
+        return None
+    t = parts[0]
+    if t == 'oratorio':
+        name = parts[1] if len(parts) > 1 else ''
+        return _TELEMANN_ORATORIO_MAP.get(name, name.capitalize())
+    if t == 'chamb' and len(parts) > 1:
+        sub = parts[1]
+        if sub.startswith('ris-t'):
+            return 'RISM T' + sub[5:]        # 'ris-t394' → 'RISM T394'
+        if sub == 'vln':
+            return 'Violin Sonatas'
+    return None
+
+
+_VIVALDI_OP_NAMES = {
+    'op1':      'Op. 1',
+    'op2':      'Op. 2',
+    'op3':      'Op. 3 (L\'estro armonico)',
+    'op4':      'Op. 4 (La stravaganza)',
+    'op5':      'Op. 5',
+    'op7':      'Op. 7',
+    'op8':      'Op. 8 (Il cimento)',
+    'op09':     'Op. 9 (La cetra)',
+    'op9':      'Op. 9 (La cetra)',
+    'op10':     'Op. 10',
+    'op10.old': 'Op. 10 (old ed.)',
+    'op11':     'Op. 11',
+    'op12':     'Op. 12',
+}
+
+
+def _vivaldi_cycle(stem: str) -> str | None:
+    import re as _re
+    stem = _re.sub(r'_\d+$', '', stem)
+    if not stem.startswith('vivaldi_'):
+        return None
+    parts = stem[8:].split('_')   # after 'vivaldi_'
+    # parts[0] = edition (dawson/dover/lecene/micro/roger/op5/autogr)
+    # parts[1] = opus or sub-collection
+    if not parts:
+        return None
+    edition = parts[0]
+    if edition == 'autogr':
+        return 'Autograph MS'
+    if len(parts) > 1:
+        op = parts[1].lower()
+        if op in _VIVALDI_OP_NAMES:
+            return _VIVALDI_OP_NAMES[op]
+        if op == 'misc':
+            return 'Misc.'
+    # depth-2: vivaldi_op5_rvXXX → parts[0] = 'op5'
+    op = edition.lower()
+    if op in _VIVALDI_OP_NAMES:
+        return _VIVALDI_OP_NAMES[op]
+    return None
+
+
+_MOZART_GENRE = {
+    'conc':   'Concertos',
+    'divert': 'Divertimenti',
+    'duos':   'Duos',
+    'qrtets': 'String Quartets',
+    'sym':    'Symphonies',
+    'trios':  'Trios',
+    'opera':  'Operas',
+    'piano':  'Piano',
+}
+
+_BEETHOVEN_GENRE = {
+    'conc':  'Concertos',
+    'orch':  'Symphonies',
+    'qrtet': 'String Quartets',
+    'qrtets':'String Quartets',
+}
+
+
+def _mozart_cycle(stem: str) -> str | None:
+    import re as _re
+    stem = _re.sub(r'_\d+$', '', stem)
+    if not stem.startswith('mozart_'): return None
+    parts = stem[7:].split('_')
+    genre = parts[1].lower() if len(parts) > 1 else ''
+    return _MOZART_GENRE.get(genre)
+
+
+def _beethoven_cycle(stem: str) -> str | None:
+    import re as _re
+    stem = _re.sub(r'_\d+$', '', stem)
+    if not stem.startswith('beethoven_'): return None
+    parts = stem[10:].split('_')
+    genre = parts[1].lower() if len(parts) > 1 else ''
+    return _BEETHOVEN_GENRE.get(genre)
+
+
+def _cycle_from_rel(rel: str, composer: str) -> str | None:
+    if composer == 'Bach':
+        return _bach_cycle(rel)
+    parts = rel.replace('\\', '/').split('/')
+    fname = parts[-1]
+    stem  = fname.rsplit('.', 1)[0].lower()
+    # music21 corpus files: use path segments for cycle detection
+    if parts[0] == 'music21':
+        if composer == 'Beethoven':
+            return 'String Quartets'   # all bundled Beethoven are string quartets
+        if composer == 'Mozart':
+            # k545 is the piano sonata; everything else in the bundle is quartets
+            if any('k545' in p.lower() for p in parts):
+                return 'Piano'
+            return 'String Quartets'
+    if composer == 'Handel':
+        return _handel_cycle(stem)
+    if composer == 'Telemann':
+        return _telemann_cycle(stem)
+    if composer == 'Vivaldi':
+        return _vivaldi_cycle(stem)
+    if composer == 'Mozart':
+        return _mozart_cycle(stem)
+    if composer == 'Beethoven':
+        return _beethoven_cycle(stem)
+    return None
 
 
 def _composer_from_rel(rel: str) -> str:
@@ -494,6 +850,11 @@ def _composer_from_rel(rel: str) -> str:
     for part in parts:
         if part.lower() in _KERN_COMPOSER:
             return _KERN_COMPOSER[part.lower()]
+    # lilypond/ XML files — check filename prefix (e.g. telemann_chamb_...xml)
+    fname = parts[-1].lower()
+    for key, name in _KERN_COMPOSER.items():
+        if fname.startswith(key + '_'):
+            return name
     return 'Bach'
 
 
@@ -521,16 +882,82 @@ def find_generated_files():
 
 
 def find_lilypond_files():
-    """Return [(rel, full), ...] for MusicXML files in lilypond/musicxml/."""
+    """Return [(rel, full), ...] for MusicXML files in lilypond/musicxml/.
+
+    Deduplicates: if a plain bwv_N.xml exists for a given BWV number, any
+    other longer filename covering the same BWV without a distinct movement
+    number is skipped (e.g. engraving_files_bwv-568.xml is dropped when
+    bwv_568.xml is present).
+    """
+    import re as _re
     xml_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
     if not os.path.isdir(xml_dir):
         return []
-    _EXCLUDED = {'bwv1013.xml'}
+    _EXCLUDED = {'bwv1013.xml', 'bwv1017.xml'}
+
+    all_fnames = sorted(f for f in os.listdir(xml_dir)
+                        if f.endswith('.xml') and f not in _EXCLUDED)
+
+    # Build set of BWV numbers covered by "plain" files (stem == bwv_N or bwvN)
+    plain_bwv: set = set()
+    for fname in all_fnames:
+        stem = fname.rsplit('.', 1)[0]
+        if _re.match(r'^bwv[-_]?\d+[a-z]?$', stem, _re.I):
+            m = _re.search(r'(\d+[a-z]?)', stem, _re.I)
+            if m:
+                plain_bwv.add(m.group(1).lower())
+
+    # ── Instrument-part exclusion ─────────────────────────────────────────────
+    # Explicit single-file exclusions (bare file superseded by score splits)
+    _PART_FILES = {'concerto_in_d_minor.xml', 'concerto_in_e_major.xml', 'air_tromb.xml'}
+
+    # Group rules: file starts with prefix → keep only stems matching allowed_re
+    _SCORE_GROUPS = {
+        'Brandenburg1_1_':                      r'score(_\d+)?$',
+        'Brandenburg1_2_':                      r'score(_\d+)?$',
+        'brand5_3_':                            r'score(_\d+)?$',
+        'bach_air_bach_air_':                   r'score(_\d+)?$',
+        'Cantata_16_no_5_':                     r'score(_\d+)?$',
+        'concerto_in_d_minor_':                 r'score(_\d+)?$',
+        'concerto_in_e_major_':                 r'score(_\d+)?$',
+        'BWV1056R_Schreck_BWV1056R_Schreck_':  r'conductor(_\d+)?$',
+        'Passacaglia_':                         r'passacag(_\d+)?$',
+    }
+
     files = []
-    for fname in sorted(os.listdir(xml_dir)):
-        if fname.endswith('.xml') and fname not in _EXCLUDED:
-            full = os.path.join(xml_dir, fname)
-            files.append((f'lilypond/{fname}', full))
+    for fname in all_fnames:
+        stem = fname.rsplit('.', 1)[0]
+        # Skip if a plain bwv_N.xml already covers the same BWV with no
+        # additional movement suffix (digits after the BWV number)
+        if not _re.match(r'^bwv[-_]?\d+[a-z]?$', stem, _re.I):
+            m = _re.search(r'bwv[-_]?(\d+[a-z]?)', stem, _re.I)
+            if m and m.group(1).lower() in plain_bwv:
+                rest = stem[m.end():]
+                if not _re.search(r'\d', rest):  # no movement digits → duplicate
+                    continue
+
+        # Skip explicit part files
+        if fname in _PART_FILES:
+            continue
+
+        # Skip standard WTC pieces (BWV 846-893, no letter suffix) — covered by .krn collection
+        m_wtc = _re.search(r'bwv[-_]?(\d+)([a-z]?)', stem, _re.I)
+        if m_wtc and not m_wtc.group(2) and 846 <= int(m_wtc.group(1)) <= 893:
+            continue
+
+        # Skip instrument parts when a full score exists for the same group
+        skip = False
+        for prefix, allowed_re in _SCORE_GROUPS.items():
+            if stem.startswith(prefix):
+                suffix = stem[len(prefix):]
+                if not _re.match(allowed_re, suffix, _re.I):
+                    skip = True
+                break
+        if skip:
+            continue
+
+        full = os.path.join(xml_dir, fname)
+        files.append((f'lilypond/{fname}', full))
     return files
 
 
@@ -1267,7 +1694,7 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
     def _is_window_shift(p, q):
         if len(p) != len(q):
             return False
-        return any(p[k:] == q[:-k] for k in range(1, len(p)))
+        return any(p[k:] + p[:k] == q for k in range(1, len(p)))
 
     selected        = []
     selected_bodies = []
@@ -3342,7 +3769,7 @@ class FileBrowser(tk.Tk):
         order: list = []
         for rel, full in file_list:
             composer = _composer_from_rel(rel)
-            cycle = _bach_cycle(rel) if composer == 'Bach' else None
+            cycle = _cycle_from_rel(rel, composer)
             key = (composer, cycle)
             if key not in groups:
                 groups[key] = []
@@ -3350,18 +3777,72 @@ class FileBrowser(tk.Tk):
             groups[key].append((rel, full))
 
         def _group_sort_key(key):
+            import re as _re
             composer, cycle = key
             if composer == 'Bach':
-                return (0, _BACH_CYCLE_IDX.get(cycle or '', 99), cycle or '')
-            return (1, 0, composer or '')
+                mc = _re.match(r'Cantata BWV (\d+)$', cycle or '')
+                if mc:
+                    return (0, _BACH_CYCLE_IDX.get('Cantatas', 99), int(mc.group(1)), '')
+                return (0, _BACH_CYCLE_IDX.get(cycle or '', 99), 0, cycle or '')
+            return (1, 0, 0, composer or '', cycle or '')
 
+        import re as _re2
         sorted_order = sorted(order, key=_group_sort_key)
         total = 0
         use_headers = len(sorted_order) > 1 or (
             sorted_order and sorted_order[0][1] is not None)
-        for key in sorted_order:
-            composer, cycle = key
-            group_files = groups[key]
+        i = 0
+        while i < len(sorted_order):
+            composer, cycle = sorted_order[i]
+            # Non-Bach composer with cycles: 3-level nesting (Composer → Cycle → files)
+            if use_headers and composer != 'Bach' and cycle is not None:
+                comp_keys = []
+                while i < len(sorted_order) and sorted_order[i][0] == composer and sorted_order[i][1] is not None:
+                    comp_keys.append(sorted_order[i])
+                    i += 1
+                comp_total = sum(len(groups[k]) for k in comp_keys)
+                comp_node = self._tree.insert('', tk.END,
+                                              text=f'{composer}  ({comp_total})',
+                                              values=(), tags=('group',))
+                self._tree.item(comp_node, open=False)
+                for k in comp_keys:
+                    _, cy = k
+                    gfiles = groups[k]
+                    child = self._tree.insert(comp_node, tk.END,
+                                              text=f'{cy}  ({len(gfiles)})',
+                                              values=(), tags=('group',))
+                    self._tree.item(child, open=False)
+                    for rel, full in gfiles:
+                        self._tree.insert(child, tk.END,
+                                          text=os.path.basename(rel), values=(full,))
+                    total += len(gfiles)
+                continue
+            # Cantatas: 3-level nesting (Cantatas → Cantata BWV N → files)
+            if use_headers and _re2.match(r'Cantata BWV \d+$', cycle or ''):
+                cant_keys = []
+                while i < len(sorted_order) and _re2.match(
+                        r'Cantata BWV \d+$', sorted_order[i][1] or ''):
+                    cant_keys.append(sorted_order[i])
+                    i += 1
+                cant_total = sum(len(groups[k]) for k in cant_keys)
+                cant_node = self._tree.insert('', tk.END,
+                                              text=f'Cantatas  ({cant_total})',
+                                              values=(), tags=('group',))
+                self._tree.item(cant_node, open=False)
+                for k in cant_keys:
+                    _, cy = k
+                    gfiles = groups[k]
+                    child = self._tree.insert(cant_node, tk.END,
+                                              text=f'{cy}  ({len(gfiles)})',
+                                              values=(), tags=('group',))
+                    self._tree.item(child, open=False)
+                    for rel, full in gfiles:
+                        self._tree.insert(child, tk.END,
+                                          text=os.path.basename(rel), values=(full,))
+                    total += len(gfiles)
+                continue
+            # Normal 2-level
+            group_files = groups[(composer, cycle)]
             if use_headers:
                 label = cycle if cycle else (composer or 'Other')
                 header = f'{label}  ({len(group_files)})'
@@ -3374,6 +3855,7 @@ class FileBrowser(tk.Tk):
                 self._tree.insert(parent, tk.END,
                                   text=os.path.basename(rel), values=(full,))
             total += len(group_files)
+            i += 1
         self._count_var.set(f"{total} file{'s' if total != 1 else ''}")
 
     def _focus_tree(self, _=None):

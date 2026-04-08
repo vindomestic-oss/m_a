@@ -63,6 +63,16 @@ def patch_rutger_common(text: str) -> str:
                   '(define (make-thumb-bracket-props ', text)
     text = re.sub(r'\bmake-thumb-bracket-props\s+(?:loc(?:ation)?\b|\(\*location\*\))\s*',
                   'make-thumb-bracket-props ', text)
+    # 9. ly:parser-include-string removed in 2.24.
+    #    Replace includeOnce definition with a no-op; replace \includeOnce with \include.
+    #    Double-inclusion of these files is harmless (paper/layout blocks are idempotent).
+    text = re.sub(
+        r'includeOnce\s*=\s*\n#\(define-void-function.*?#t\)\)\)\)\)',
+        'includeOnce =\n#(define-void-function (filename) (string?) #t)',
+        text, flags=re.DOTALL,
+    )
+    # \includeOnce "foo" → \include "foo"
+    text = re.sub(r'\\includeOnce\b', r'\\include', text)
     return text
 
 
@@ -178,9 +188,13 @@ def process_zip(zip_path: Path, dry_run=False) -> list[str]:
                 out_name = f'{zip_stem}_{ly_stem}.xml' if ly_stem not in zip_stem else f'{zip_stem}.xml'
                 out_path = OUT_DIR / out_name
 
-                if out_path.exists():
-                    print(f'    [skip] {out_name} already exists', flush=True)
-                    created.append(out_name)
+                # Check if any output files already exist (single or multi-movement)
+                mv1_path = OUT_DIR / (out_path.stem + '_1.xml')
+                if out_path.exists() or mv1_path.exists():
+                    existing = sorted(p.name for p in OUT_DIR.glob(out_path.stem + '*.xml'))
+                    for e in existing:
+                        print(f'    [skip] {e} already exists', flush=True)
+                    created.extend(existing)
                     continue
 
                 try:
@@ -192,14 +206,32 @@ def process_zip(zip_path: Path, dry_run=False) -> list[str]:
                     print(f'    [fail] {name}', flush=True)
                     continue
 
-                score = cld.notes_to_score(events)
-                if score is None:
-                    print(f'    [empty] {name}')
-                    continue
-
-                score.write('musicxml', fp=str(out_path))
-                print(f'    [ok] -> {out_name}', flush=True)
-                created.append(out_name)
+                try:
+                    score_groups = cld._split_by_score(events)
+                    if len(score_groups) <= 1:
+                        score = cld.notes_to_score(events)
+                        if score is None:
+                            print(f'    [empty] {name}')
+                            continue
+                        score.write('musicxml', fp=str(out_path))
+                        print(f'    [ok] -> {out_name}', flush=True)
+                        created.append(out_name)
+                    else:
+                        for i, grp in enumerate(score_groups, 1):
+                            mv_path = OUT_DIR / (out_path.stem + f'_{i}.xml')
+                            try:
+                                score_mv = cld.notes_to_score(grp)
+                                if score_mv is None:
+                                    print(f'    [empty] {name} movement {i}')
+                                    continue
+                                score_mv.write('musicxml', fp=str(mv_path))
+                            except Exception as e:
+                                print(f'    [error] {name} mvt {i}: {e}', flush=True)
+                                continue
+                            print(f'    [ok] -> {mv_path.name}', flush=True)
+                            created.append(mv_path.name)
+                except Exception as e:
+                    print(f'    [error] {name} (score build): {e}', flush=True)
 
     return created
 

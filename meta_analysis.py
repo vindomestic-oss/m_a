@@ -134,6 +134,9 @@ def main():
     parser.add_argument('--filter', default=None,
                         help='Only analyse files whose rel path contains this substring '
                              '(comma-separated → OR logic, e.g. "wtc,inventions")')
+    parser.add_argument('--composer', default=None,
+                        help='Only analyse files whose composer matches (e.g. "Bach", '
+                             '"Telemann"; uses _composer_from_rel)')
     parser.add_argument('--output', default=None,
                         help='Output report file path (default: meta_report.txt)')
     parser.add_argument('--lo', type=int, default=8,
@@ -143,12 +146,14 @@ def main():
     _xml_files = kr.find_lilypond_files()
 
     all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files() + _xml_files
-    if args.filter:
-        terms = [t.strip().lower() for t in args.filter.split(',')]
-        # lilypond/ files are all Bach (BWV); include them when filtering for Bach
+    if args.composer:
+        target = args.composer.strip()
         files = [(r, f) for r, f in all_files
-                 if r.startswith('lilypond/')
-                 or any(t in r.lower() or t in os.path.basename(f).lower()
+                 if kr._composer_from_rel(r) == target]
+    elif args.filter:
+        terms = [t.strip().lower() for t in args.filter.split(',')]
+        files = [(r, f) for r, f in all_files
+                 if any(t in r.lower() or t in os.path.basename(f).lower()
                         for t in terms)]
     else:
         files = [(r, f) for r, f in all_files if not r.startswith('music21/')]
@@ -156,7 +161,9 @@ def main():
     lo = args.lo
 
     total = len(files)
-    print(f"Found {total} kern files{f' matching {args.filter!r}' if args.filter else ''}. Starting analysis…")
+    label = f' for composer {args.composer!r}' if args.composer else \
+            f' matching {args.filter!r}' if args.filter else ''
+    print(f"Found {total} files{label}. Starting analysis…")
 
     results = {}          # path → list of motif dicts (or None)
     n_ok = 0

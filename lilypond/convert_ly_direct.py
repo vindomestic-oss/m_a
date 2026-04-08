@@ -856,6 +856,29 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
                     by_voice[(st, main_vc)].extend(evs)
                     del by_voice[(st, vc)]
 
+    # Orchestral promotion: when a single staff "1" holds many named-instrument
+    # voices (e.g. old-style \context Voice = SoloViolinI directly under StaffGroup),
+    # promote each voice to its own staff so music21 creates separate Parts.
+    # Condition: only one staff "1", >= 3 voices, at least one voice ID contains a
+    # letter segment after the first dot (e.g. "1.SoloViolinI" vs "1.1" for numbered).
+    def _has_instrument_name(vc: str) -> bool:
+        segs = vc.split('.')[1:]
+        return any(re.search(r'[A-Za-z]', seg) for seg in segs)
+
+    all_staves = set(k[0] for k in by_voice)
+    if all_staves == {'1'}:
+        voice_keys = [vc for (st, vc) in by_voice if st == '1']
+        if len(voice_keys) >= 3 and any(_has_instrument_name(vc) for vc in voice_keys):
+            new_by_voice = {}
+            for (st, vc), evs in by_voice.items():
+                # Use voice ID as the staff ID so each instrument gets its own Part.
+                # Strip leading "1." prefix that encodes the default staff.
+                new_st = vc.lstrip('1').lstrip('.') or vc
+                new_by_voice[(new_st, vc)] = evs
+                for ev in evs:
+                    ev['st'] = new_st
+            by_voice = new_by_voice
+
     # Build score: one Part per staff, one voice layer per voice
     score = m21.stream.Score()
 
@@ -868,6 +891,21 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             if st not in seen:
                 seen.add(st)
                 staff_ids.append(st)
+
+    # Compute total score duration (whole-note units, same as music21 stream offsets)
+    # so all Parts get the same refStreamOrTimeRange.
+    # This avoids music21's makeTies bug when a short Part has rests filled in
+    # across a time-signature boundary during write().
+    _max_end: float = 0.0
+    for ev in note_events:
+        if ev.get('t') == 'N' and ev.get('dur'):
+            try:
+                _end = float(_onset_frac(ev['on']) + _onset_frac(ev['dur']))
+                if _end > _max_end:
+                    _max_end = _end
+            except Exception:
+                pass
+    _ref_range = [0.0, _max_end] if _max_end > 0 else None
 
     # Build time sig map: onset_frac → (num, den)
     ts_map = {}
@@ -1054,7 +1092,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             # Single voice: simple path
             flat = voice_flats[voice_ids_for_staff[0]]
             try:
-                part = flat.makeMeasures(inPlace=False)
+                part = flat.makeMeasures(refStreamOrTimeRange=_ref_range, inPlace=False)
                 part.makeTies(inPlace=True)
                 _fix_pickup_measure(part, float(pickup_shift))
                 try:
@@ -1072,7 +1110,7 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
         voice_made: dict[str, m21.stream.Part] = {}
         for vc_id in voice_ids_for_staff:
             try:
-                vm = voice_flats[vc_id].makeMeasures(inPlace=False)
+                vm = voice_flats[vc_id].makeMeasures(refStreamOrTimeRange=_ref_range, inPlace=False)
                 vm.makeTies(inPlace=True)
                 voice_made[vc_id] = vm
             except Exception:
