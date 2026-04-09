@@ -1427,10 +1427,12 @@ def _voice_notes_from_mei(mei_str):
             else:
                 yield child, scale
 
-    voices          = defaultdict(list)
-    measure_onset   = 0.0
-    pickup_dur_q    = 0.0
-    _first_measure  = True
+    voices           = defaultdict(list)
+    measure_onset    = 0.0
+    pickup_dur_q     = 0.0
+    _first_measure   = True
+    rpt_section_start = 0.0   # onset where current repeat section started
+    repeat_ranges    = []     # list of (start_onset, end_onset) for single-play repeats
 
     for measure_el in tree.iter(tag_pfx + 'measure'):
         # Pick up meter changes inside the measure
@@ -1494,6 +1496,7 @@ def _voice_notes_from_mei(mei_str):
         # Cap at beats_per_measure: MusicXML cross-measure tied chords can produce
         # max_pos > beats_per_measure with metcon='false' — those are NOT short measures.
         eff_pos = min(max_pos, beats_per_measure)
+        onset_before_update = measure_onset
         if eff_pos > 0 and (measure_el.get('metcon') == 'false' or
                             eff_pos < beats_per_measure - 1e-9):
             if _first_measure:
@@ -1502,6 +1505,14 @@ def _voice_notes_from_mei(mei_str):
         else:
             measure_onset += beats_per_measure
         _first_measure = False
+        # Detect repeat barlines for section-repeat tracking
+        _left  = measure_el.get('left', '')
+        _right = measure_el.get('right', '')
+        if _left == 'rptstart':
+            rpt_section_start = onset_before_update
+        if _right == 'rptend':
+            repeat_ranges.append((rpt_section_start, measure_onset))
+            rpt_section_start = measure_onset
 
     # Merge tied notes from <tie> elements (MusicXML-sourced MEI).
     # kern-sourced MEI uses tie="i/m/t" attributes (handled in proc_note);
@@ -1551,7 +1562,7 @@ def _voice_notes_from_mei(mei_str):
     result = {}
     for key, notes in voices.items():
         result[key] = _merge_ornamental_slurs(notes, slur_ends)
-    return result, beat_dur_q, pickup_dur_q
+    return result, beat_dur_q, pickup_dur_q, repeat_ranges
 
 
 def _merge_ornamental_slurs(notes, slur_ends):
@@ -1758,7 +1769,7 @@ def _get_note_beat_positions(mei_str):
         if c and u:
             bpm = int(c) * 4.0 / int(u)
             break
-    voices, _bdq, _pdq = _voice_notes_from_mei(mei_str)
+    voices, _bdq, _pdq, _rr = _voice_notes_from_mei(mei_str)
     labels = {}
     for _vk, notes in voices.items():
         for nid, _pname, _oct, dur, _midi, onset in notes:
@@ -1901,9 +1912,10 @@ def _search_motif(query):
         pattern_inv = None
 
     with _state_lock:
-        seqs = list(_state.get("seqs", []))
+        seqs         = list(_state.get("seqs", []))
         beat_dur_q   = _state.get("beat_dur_q", 1.0)
         pickup_dur_q = _state.get("pickup_dur_q", 0.0)
+        repeat_ranges = list(_state.get("repeat_ranges", []))
 
     # compute phase using the smallest note duration in the pattern as unit
     # rhythm_only: durs elements are (op, val) → s[1] = val
@@ -1991,8 +2003,50 @@ def _search_motif(query):
             last_end = i + n + 1  # greedy: skip overlapping positions in this voice
 
     occs_with_onset.sort(key=lambda x: x[0])
+    # Apply repeat_pairs from unfolded seqs: seqs already contain play-2 copies
+    repeat_pairs = []
+    if len(repeat_ranges) == 1:
+        rpt_start_q = repeat_ranges[0][0]
+        rpt_end_q   = repeat_ranges[0][1]
+        shift_q     = rpt_end_q - rpt_start_q
+        play2_end_q = rpt_end_q + shift_q
+
+        def _strip_p2(nid):
+            return nid[:-4] if nid.endswith('__p2') else nid
+
+        p1_idxs = [j for j, (o, _) in enumerate(occs_with_onset)
+                   if rpt_start_q - 1e-9 <= o < rpt_end_q - 1e-9]
+        p2_idxs = [j for j, (o, _) in enumerate(occs_with_onset)
+                   if rpt_end_q - 1e-9 <= o < play2_end_q - 1e-9]
+        p_set   = set(p1_idxs) | set(p2_idxs)
+        nr_idxs = [j for j in range(len(occs_with_onset)) if j not in p_set]
+
+        if p2_idxs:
+            p1_by_oq16 = {round(occs_with_onset[j][0] * 16): j for j in p1_idxs}
+            pairs = []
+            for j2 in p2_idxs:
+                o2 = occs_with_onset[j2][0]
+                j1 = p1_by_oq16.get(round((o2 - shift_q) * 16))
+                if j1 is not None:
+                    pairs.append((j1, j2))
+            idx_order = p1_idxs + p2_idxs + nr_idxs
+            occs_with_onset = [occs_with_onset[j] for j in idx_order]
+            p1_count = len(p1_idxs)
+            p2_count = len(p2_idxs)
+            p1_pos   = {j1: k       for k, j1 in enumerate(p1_idxs)}
+            p2_pos   = {j2: p1_count + k for k, j2 in enumerate(p2_idxs)}
+            repeat_pairs = [(p1_pos[j1], p2_pos[j2])
+                            for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos]
+            # strip __p2 suffix from nids in play-2 slots
+            stripped = []
+            for k, (o, nids) in enumerate(occs_with_onset):
+                if p1_count <= k < p1_count + p2_count:
+                    stripped.append((o, [_strip_p2(nid) for nid in nids]))
+                else:
+                    stripped.append((o, nids))
+            occs_with_onset = stripped
     occs = [nids for _, nids in occs_with_onset]
-    return {"occs": occs, "count": len(occs)}
+    return {"occs": occs, "count": len(occs), "repeat_pairs": repeat_pairs}
 
 
 def _mdl_score(n, L, transforms):
@@ -2024,11 +2078,33 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     try:
         if mei_str is None:
             mei_str = vtk.getMEI()
-        voices, beat_dur_q, pickup_dur_q = _voice_notes_from_mei(mei_str)
+        voices, beat_dur_q, pickup_dur_q, repeat_ranges = _voice_notes_from_mei(mei_str)
         if beat_dur_q_override is not None:
             beat_dur_q = beat_dur_q_override
+
+        # ── Unfold single-section repeat before motif detection ──────────────────
+        # Insert play-2 copies (same nids, shifted onsets) so _find_motifs sees
+        # the true melodic context including cross-boundary patterns.
+        rpt_start = rpt_end = shift = 0.0
+        if len(repeat_ranges) == 1:
+            rpt_start, rpt_end = repeat_ranges[0]
+            shift = rpt_end - rpt_start
+            unfolded = {}
+            for vk, notes in voices.items():
+                pre  = [n for n in notes if n[5] < rpt_start]
+                rep  = [n for n in notes if rpt_start <= n[5] < rpt_end]
+                post = [n for n in notes if n[5] >= rpt_end]
+                # play-2: same pitches/durations but unique nids (suffix __p2) so
+                # _deoverlap doesn't discard them as duplicates of play-1
+                rep_p2  = [(n[0] + '__p2', n[1], n[2], n[3], n[4], n[5] + shift) for n in rep]
+                post_sh = [(n[0], n[1], n[2], n[3], n[4], n[5] + shift) for n in post]
+                unfolded[vk] = pre + rep + rep_p2 + post_sh
+            seq_voices = unfolded
+        else:
+            seq_voices = voices
+
         all_seqs = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
-                    for vk, notes in voices.items()
+                    for vk, notes in seq_voices.items()
                     if len(notes) >= 4]
         motifs = _find_motifs(all_seqs)
         result = []
@@ -2036,8 +2112,6 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             steps = [_interval_label(iv, dur) for iv, dur in m['pattern']]
             phase = m.get('phase', 0)
             phase_pfx = {0: '', 1: '_|', 2: '_|_|'}.get(phase, '')
-            # build transposition profile: (transp, dist) per occurrence
-            # dist expressed in units of the motif's minimum note duration
             transforms = m.get('transforms', [])
             min_dur_q = min((p[1] for p in m['pattern']), default=0.25)
             profile = []
@@ -2056,20 +2130,70 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 prev_oq = oq
             n_occ = len(m['occurrences'])
             L_pat = len(m['pattern'])
+            # ── Separate play-1 / play-2 / non-repeat by onset range ─────────────
+            # _find_motifs already ran on the unfolded sequence, so play-2
+            # occurrences exist with shifted onsets.
+            # Order output: [play-1..., play-2..., non-repeat...]
+            repeat_pairs   = []
+            occs_out       = list(m['occurrences'])
+            transforms_out = transforms
+            _nd = m.get('n_direct_only', n_occ)
+            _ni = m.get('n_inv_only', 0)
+            _nb = m.get('n_both', 0)
+            if shift > 0:
+                rpt_start_16  = rpt_start * 16
+                rpt_end_16    = rpt_end   * 16
+                shift_16      = shift * 16
+                play2_end_16  = rpt_end_16 + shift_16
+                p1_idxs  = [j for j, t in enumerate(transforms)
+                            if rpt_start_16 <= t['onset_q'] < rpt_end_16]
+                p2_idxs  = [j for j, t in enumerate(transforms)
+                            if rpt_end_16 <= t['onset_q'] < play2_end_16]
+                p_set    = set(p1_idxs) | set(p2_idxs)
+                nr_idxs  = [j for j in range(len(transforms)) if j not in p_set]
+                if p2_idxs:
+                    # Match each play-2 to its play-1 by shifted onset
+                    p1_by_oq = {transforms[j]['onset_q']: j for j in p1_idxs}
+                    pairs = []
+                    for j2 in p2_idxs:
+                        j1 = p1_by_oq.get(transforms[j2]['onset_q'] - shift_16)
+                        if j1 is not None:
+                            pairs.append((j1, j2))
+                    idx_order      = p1_idxs + p2_idxs + nr_idxs
+                    # strip __p2 suffix from play-2 nids so they point to real SVG elements
+                    def _strip_p2(nid):
+                        return nid[:-4] if nid.endswith('__p2') else nid
+                    occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
+                                for j in idx_order]
+                    transforms_out = [transforms[j] for j in idx_order]
+                    p1_pos = {j1: k       for k, j1 in enumerate(p1_idxs)}
+                    p2_pos = {j2: len(p1_idxs) + k for k, j2 in enumerate(p2_idxs)}
+                    repeat_pairs   = [(p1_pos[j1], p2_pos[j2])
+                                      for j1, j2 in pairs
+                                      if j1 in p1_pos and j2 in p2_pos]
+                    n_occ = len(occs_out)
+                    # filter: skip motifs that only appear because the section repeats
+                    # (structural = p1 + nr + unpaired-p2; must be >= 2)
+                    paired_p2 = {j2 for _, j2 in pairs}
+                    unpaired_p2 = [j for j in p2_idxs if j not in paired_p2]
+                    structural = len(p1_idxs) + len(nr_idxs) + len(unpaired_p2)
+                    if structural < 2:
+                        continue
             result.append({
                 'color':          _MOTIF_COLORS[i % len(_MOTIF_COLORS)],
-                'occs':           m['occurrences'],
+                'occs':           occs_out,
                 'count':          n_occ,
                 'length':         L_pat + 1,
                 'pattern':        steps,
                 'phase_pfx':      phase_pfx,
-                'transforms':     transforms,
-                'n_direct_only':  m.get('n_direct_only', n_occ),
-                'n_inv_only':     m.get('n_inv_only', 0),
-                'n_both':         m.get('n_both', 0),
+                'transforms':     transforms_out,
+                'n_direct_only':  _nd,
+                'n_inv_only':     _ni,
+                'n_both':         _nb,
                 'queryStr':       _pattern_to_query(m['pattern'], phase),
                 'profile':        profile,
-                'mdl':            _mdl_score(n_occ, L_pat, transforms),
+                'repeat_pairs':   repeat_pairs,
+                'mdl':            _mdl_score(n_occ, L_pat, transforms_out),
             })
         return result
     except Exception as e:
@@ -2733,7 +2857,7 @@ def render_score(path: str, version: str = "1") -> tuple:
 
     # parse voices — separate try so _voices_s survives later errors
     try:
-        _voices_s, _beat_dur_q_s, _pickup_dur_q_s = _voice_notes_from_mei(mei_str)
+        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s = _voice_notes_from_mei(mei_str)
         if _beat_override is not None:
             _beat_dur_q_s = _beat_override
     except Exception:
@@ -2743,8 +2867,23 @@ def render_score(path: str, version: str = "1") -> tuple:
 
     # compute interval sequences for the /search endpoint + build note label map
     try:
-        all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
-                    for vk, notes in _voices_s.items() if len(notes) >= 4]
+        # unfold single repeat so /search finds cross-boundary patterns (same as analyze_motifs)
+        if len(_rr_s) == 1:
+            _rpt_s, _rpt_e = _rr_s[0]
+            _sh = _rpt_e - _rpt_s
+            _uf = {}
+            for vk, notes in _voices_s.items():
+                _pre   = [n for n in notes if n[5] < _rpt_s]
+                _rep   = [n for n in notes if _rpt_s <= n[5] < _rpt_e]
+                _post  = [n for n in notes if n[5] >= _rpt_e]
+                _rep2  = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_sh) for n in _rep]
+                _post2 = [(n[0], n[1], n[2], n[3], n[4], n[5]+_sh) for n in _post]
+                _uf[vk] = _pre + _rep + _rep2 + _post2
+            all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
+                        for vk, notes in _uf.items() if len(notes) >= 4]
+        else:
+            all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
+                        for vk, notes in _voices_s.items() if len(notes) >= 4]
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
         nid_labels = {}
         for _notes in _voices_s.values():
@@ -2838,7 +2977,8 @@ def render_score(path: str, version: str = "1") -> tuple:
                    "transforms": m.get("transforms", []),
                    "queryStr": m.get("queryStr", ""),
                    "profile": m.get("profile", []),
-                   "mdl": m.get("mdl", 0)}
+                   "mdl": m.get("mdl", 0),
+                   "repeat_pairs": m.get("repeat_pairs", [])}
                   for m in motifs]
     motif_json = json.dumps(motif_data)
     note_labels_json = json.dumps(nid_labels)
@@ -2996,7 +3136,17 @@ function clientToSVG(svg,cx,cy){{
 
 function drawBoxes(m){{
   clearRects();
+  // repeat_pairs: [[play1_idx, play2_idx], ...] — same physical notes, second playthrough
+  var extraNum={{}};   // play1_idx -> play2_num (1-based)
+  var skipDraw={{}};   // play2_idx -> true
+  if(m.repeat_pairs){{
+    m.repeat_pairs.forEach(function(pair){{
+      extraNum[pair[0]]=pair[1]+1;
+      skipDraw[pair[1]]=true;
+    }});
+  }}
   m.occs.forEach(function(occ,occIdx){{
+    if(skipDraw[occIdx])return;
     var svgList=[]; var svgSysGroups=[];
     occ.forEach(function(id){{
       var el=document.getElementById(id); if(!el)return;
@@ -3012,10 +3162,15 @@ function drawBoxes(m){{
           sys=sys.parentNode;
         }}
         if(!sys||sys===svg)sys=null;
+        // Search from end: add to the most-recent group for this sys,
+        // unless there's a backward x-jump (cross-boundary motif) — then start a new sub-group.
         var found=false;
-        for(var gi=0;gi<svgSysGroups[si].length;gi++){{
+        for(var gi=svgSysGroups[si].length-1;gi>=0;gi--){{
           if(svgSysGroups[si][gi].sys===sys){{
-            svgSysGroups[si][gi].rects.push(cr); found=true; break;
+            var grp=svgSysGroups[si][gi];
+            var lastR=grp.rects[grp.rects.length-1];
+            if(cr.right < lastR.left - 10)break; // backward jump → fall through to new group
+            grp.rects.push(cr); found=true; break;
           }}
         }}
         if(!found)svgSysGroups[si].push({{sys:sys, rects:[cr]}});
@@ -3066,7 +3221,9 @@ function drawBoxes(m){{
         if(isVeryFirst||isOnly){{
           var numSz=ypad*1.5;
           var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-          txt.textContent=String(occIdx+1);
+          txt.textContent=extraNum[occIdx]!==undefined
+            ? String(occIdx+1)+'('+extraNum[occIdx]+')'
+            : String(occIdx+1);
           txt.setAttribute('x', String(x1+numSz*0.1));
           txt.setAttribute('y', String(y1-numSz*0.15));
           txt.setAttribute('fill', m.color);
@@ -3210,7 +3367,8 @@ function highlight(){{
         if(row){{row.style.background='#e8f0fe';row.setAttribute('data-active','1');}}
         colorMotif(motifs[idx]);
         var occs=_filteredOccs(idx,filter);
-        drawBoxes({{occs:occs,color:motifs[idx].color}});
+        var rp=(filter==='all')?motifs[idx].repeat_pairs:[];
+        drawBoxes({{occs:occs,color:motifs[idx].color,repeat_pairs:rp}});
         scrollToFirst({{occs:occs}});
         _highlightFilter(idx,filter);
         if(st2){{
@@ -3276,10 +3434,12 @@ function highlight(){{
   }});
 }}
 
-function addCustomMotif(occs,queryStr){{
+function addCustomMotif(occs,queryStr,repeat_pairs,displayCount){{
   var cidx=customMotifs.length;
   var color=CUSTOM_COLORS[cidx%CUSTOM_COLORS.length];
-  customMotifs.push({{color:color,occs:occs}});
+  repeat_pairs=repeat_pairs||[];
+  var cnt=occs.length;
+  customMotifs.push({{color:color,occs:occs,repeat_pairs:repeat_pairs}});
   occs.forEach(function(occ){{
     occ.forEach(function(id){{
       var el=document.getElementById(id);
@@ -3300,7 +3460,7 @@ function addCustomMotif(occs,queryStr){{
     'background:'+color+';margin-right:5px;vertical-align:middle"></span>'+
     '<b>M_'+(cidx+1)+'</b></td>'+
     '<td style="padding:5px 16px 5px 0;font-family:monospace;font-size:11px">'+esc+'</td>'+
-    '<td style="padding:5px 10px 5px 0;text-align:center">\xd7'+(isSmooth(occs.length)&&occs.length>=8?'<b>'+occs.length+'</b>':occs.length)+'</td>'+
+    '<td style="padding:5px 10px 5px 0;text-align:center">\xd7'+(isSmooth(cnt)&&cnt>=8?'<b>'+cnt+'</b>':String(cnt))+'</td>'+
     '<td style="padding:5px 0;text-align:center;color:#888">'+nNotes+'</td>';
   tbody.insertBefore(tr,tbody.firstChild);
   tr.addEventListener('click',function(){{
@@ -3321,7 +3481,7 @@ function addCustomMotif(occs,queryStr){{
   activeKey='custom:'+cidx;
   tr.style.background='#e8f0fe';
   tr.setAttribute('data-active','1');
-  drawBoxes({{color:color,occs:occs}});
+  drawBoxes({{color:color,occs:occs,repeat_pairs:repeat_pairs}});
   scrollToFirst({{occs:occs}});
 }}
 
@@ -3380,7 +3540,8 @@ function _activateDictRow(match, st){{
   row.scrollIntoView({{behavior:'smooth',block:'nearest'}});
   colorMotif(motifs[idx]);
   var occs=_filteredOccs(idx,filter);
-  drawBoxes({{occs:occs,color:motifs[idx].color}});
+  var rp2=(filter==='all')?motifs[idx].repeat_pairs:[];
+  drawBoxes({{occs:occs,color:motifs[idx].color,repeat_pairs:rp2}});
   scrollToFirst({{occs:occs}});
   _highlightFilter(idx,filter);
   // Status badge
@@ -3410,7 +3571,7 @@ window.searchMotif=function(){{
     st.style.color='#888';
     if(data.count===0){{st.textContent='\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e';return;}}
     st.textContent='';
-    addCustomMotif(data.occs,query);
+    addCustomMotif(data.occs,query,data.repeat_pairs,data.count);
   }})
   .catch(function(e){{st.style.color='#c0392b';st.textContent=String(e);}});
 }};
@@ -3590,15 +3751,15 @@ window.toggleTSDGen8=function(){{
 <div id="score-pages" style="position:relative">{pages}</div>
 </body>
 </html>"""
-    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s
+    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s, _rr_s
 
 # ── background render + update ────────────────────────────────────────────────
 
 def _render_worker(path: str, version: str, queue):
     """Runs in a subprocess to isolate verovio segfaults from the main process."""
     try:
-        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q = render_score(path, version)
-        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q))
+        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges = render_score(path, version)
+        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges))
     except Exception as e:
         queue.put(('error', str(e)))
 
@@ -3633,13 +3794,14 @@ def load_file_bg(path: str, status_cb):
         status_cb(f"ERROR: {result[1]}", error=True)
         return
 
-    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q = result
+    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges = result
     with _state_lock:
-        _state["html"]          = html
-        _state["version"]       = ver
-        _state["seqs"]          = seqs
-        _state["beat_dur_q"]    = beat_dur_q
-        _state["pickup_dur_q"]  = pickup_dur_q
+        _state["html"]           = html
+        _state["version"]        = ver
+        _state["seqs"]           = seqs
+        _state["beat_dur_q"]     = beat_dur_q
+        _state["pickup_dur_q"]   = pickup_dur_q
+        _state["repeat_ranges"]  = repeat_ranges
     _notify_sse(ver)
     status_cb(f"{n_pages} page{'s' if n_pages != 1 else ''} — {os.path.basename(path)}")
 
@@ -3746,6 +3908,7 @@ class FileBrowser(tk.Tk):
         self._tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0))
         sb.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 4))
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
+        self._tree.bind("<Key>", self._on_tree_key)
 
         self._count_var = tk.StringVar()
         ttk.Label(outer, textvariable=self._count_var,
@@ -3858,6 +4021,42 @@ class FileBrowser(tk.Tk):
             i += 1
         self._count_var.set(f"{total} file{'s' if total != 1 else ''}")
 
+    def _all_groups(self):
+        """Return all group header item IDs in tree order."""
+        result = []
+        def _walk(parent=''):
+            for iid in self._tree.get_children(parent):
+                if 'group' in self._tree.item(iid, 'tags'):
+                    result.append(iid)
+                    _walk(iid)
+        _walk()
+        return result
+
+    def _on_tree_key(self, event):
+        ch = event.char
+        if not ch or not ch.isprintable() or len(ch) != 1:
+            return
+        ch = ch.lower()
+        groups = self._all_groups()
+        matching = [iid for iid in groups
+                    if self._tree.item(iid, 'text').lower().startswith(ch)]
+        if not matching:
+            return 'break'
+        sel = self._tree.selection()
+        cur = sel[0] if sel else None
+        if cur in matching:
+            target = matching[(matching.index(cur) + 1) % len(matching)]
+        else:
+            target = matching[0]
+        parent = self._tree.parent(target)
+        while parent:
+            self._tree.item(parent, open=True)
+            parent = self._tree.parent(parent)
+        self._tree.selection_set(target)
+        self._tree.focus(target)
+        self._tree.see(target)
+        return 'break'
+
     def _focus_tree(self, _=None):
         self._tree.focus_set()
         children = self._tree.get_children()
@@ -3951,7 +4150,7 @@ if __name__ == "__main__":
     _bw  = _sw - 480   # browser fills the left part
 
     _url = f"http://127.0.0.1:{SERVER_PORT}/"
-    _browser_opened = False
+    _browser_proc = None
     for _exe in [
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
@@ -3960,12 +4159,20 @@ if __name__ == "__main__":
     ]:
         if os.path.exists(_exe):
             import subprocess
-            subprocess.Popen([_exe, "--new-window",
+            _browser_proc = subprocess.Popen([_exe, "--new-window",
                               "--window-position=0,0",
                               f"--window-size={_bw},{_sh}", _url])
-            _browser_opened = True
             break
-    if not _browser_opened:
+    if _browser_proc is None:
         webbrowser.open(_url)
 
+    def _on_close():
+        if _browser_proc is not None:
+            try:
+                _browser_proc.kill()
+            except Exception:
+                pass
+        _app.destroy()
+
+    _app.protocol("WM_DELETE_WINDOW", _on_close)
     _app.mainloop()
