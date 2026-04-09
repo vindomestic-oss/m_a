@@ -2288,17 +2288,8 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                     c_v1 = sum(1 for j in p1_idxs if _v1s16 <= transforms[j]['onset_q'] < _v1e16)
                     c_v2 = sum(1 for j in p2_idxs if _v2s16 <= transforms[j]['onset_q'] < _v2e16)
                     volta_diff = (c_v1 != c_v2)
-                if volta_diff:
-                    # Different volta counts → sum all heard occurrences, no pairing
-                    n_occ = len(m['occurrences'])
-                    if n_occ < 2:
-                        continue
-                    occs_out = [[_strip_p2(nid) for nid in occ]
-                                for occ in m['occurrences']]
-                    transforms_out = transforms
-                    repeat_pairs = []
-                elif p2_idxs:
-                    # Equal volta counts (or simple repeat) → pair p1 with p2
+                if p2_idxs:
+                    # Pair p1 with p2 (same logic for both equal and different volta counts)
                     p1_by_oq = {transforms[j]['onset_q']: j for j in p1_idxs}
                     pairs = []
                     for j2 in p2_idxs:
@@ -2316,13 +2307,18 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                                       for j1, j2 in pairs
                                       if j1 in p1_pos and j2 in p2_pos]
                     n_occ = len(occs_out)
-                    # filter: skip motifs that only appear because the section repeats
-                    # (structural = p1 + nr + unpaired-p2; must be >= 2)
-                    paired_p2 = {j2 for _, j2 in pairs}
-                    unpaired_p2 = [j for j in p2_idxs if j not in paired_p2]
-                    structural = len(p1_idxs) + len(nr_idxs) + len(unpaired_p2)
-                    if structural < 2:
-                        continue
+                    if volta_diff:
+                        # Different volta counts → skip structural filter;
+                        # show as long as total heard count >= 2
+                        if n_occ < 2:
+                            continue
+                    else:
+                        # Equal volta counts (or simple repeat) → structural filter
+                        paired_p2 = {j2 for _, j2 in pairs}
+                        unpaired_p2 = [j for j in p2_idxs if j not in paired_p2]
+                        structural = len(p1_idxs) + len(nr_idxs) + len(unpaired_p2)
+                        if structural < 2:
+                            continue
             result.append({
                 'color':          _MOTIF_COLORS[i % len(_MOTIF_COLORS)],
                 'occs':           occs_out,
