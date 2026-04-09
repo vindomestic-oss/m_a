@@ -963,6 +963,304 @@ def find_lilypond_files():
     return files
 
 
+def _tobis_movements(path):
+    """Return [(title, start_mnum, end_mnum), ...] for a tobis MusicXML file.
+    Returns [] if no movement markers found (treat as single piece)."""
+    import xml.etree.ElementTree as ET
+    import re as _re
+    try:
+        tree = ET.parse(path)
+    except ET.ParseError:
+        return []
+    root = tree.getroot()
+    first_part = root.find('part')
+    if first_part is None:
+        return []
+    all_mnums = [m.get('number', '') for m in first_part.findall('measure')]
+    if not all_mnums:
+        return []
+    mnum_to_idx = {mn: i for i, mn in enumerate(all_mnums)}
+
+    # Collect movement markers across all parts; key = (mnum, seq) to avoid dups
+    seen: dict = {}  # (mnum, seq) → title
+    for part in root.findall('part'):
+        for msr in part.findall('measure'):
+            mnum = msr.get('number', '')
+            for words_el in msr.findall('.//direction-type/words'):
+                text = (words_el.text or '').strip()
+                m = _re.match(r'^(\d+)\.\s+(\S)', text)
+                if not m:
+                    continue
+                seq = int(m.group(1))
+                key = (mnum, seq)
+                if key not in seen:
+                    title = _re.sub(r'\s+', ' ', text.rstrip('. '))
+                    seen[key] = title
+
+    if len(seen) <= 1:
+        return []
+
+    # Sort by measure position, then seq
+    entries = sorted(seen.items(), key=lambda x: (mnum_to_idx.get(x[0][0], 0), x[0][1]))
+
+    result = []
+    for i, ((mnum, seq), title) in enumerate(entries):
+        if i + 1 < len(entries):
+            next_mnum = entries[i + 1][0][0]
+            next_idx = mnum_to_idx.get(next_mnum, len(all_mnums))
+            end_mnum = all_mnums[next_idx - 1] if next_idx > 0 else mnum
+        else:
+            end_mnum = all_mnums[-1]
+        result.append((title, mnum, end_mnum))
+    return result
+
+
+def _infer_time_sig_from_content(measures, divs, fname=''):
+    """Infer time signature from measure note content.
+    Returns ET.Element for <time> or None if unable to infer.
+    Uses note type distribution and dance-form name hint to resolve ambiguous cases
+    (3/2 vs 12/8 for 6-quarter-per-bar measures; both are musically distinct)."""
+    import xml.etree.ElementTree as ET
+    from collections import Counter
+
+    dur_list = []
+    note_types = Counter()
+    for m in measures:
+        per_voice: dict = {}
+        for child in m:
+            if child.tag != 'note':
+                continue
+            dur_el = child.find('duration')
+            voice_el = child.find('voice')
+            chord_el = child.find('chord')
+            if dur_el is None or chord_el is not None:
+                continue
+            v = voice_el.text if voice_el is not None else '1'
+            per_voice[v] = per_voice.get(v, 0) + int(dur_el.text)
+        if per_voice:
+            dur_list.append(Counter(per_voice.values()).most_common(1)[0][0])
+        for n in m.iter('note'):
+            typ = n.find('type')
+            chord = n.find('chord')
+            if typ is not None and chord is None:
+                note_types[typ.text] += 1
+
+    if not dur_list:
+        return None
+    mode_dur = Counter(dur_list).most_common(1)[0][0]
+    qn = round(mode_dur / divs, 6)
+
+    total_notes = sum(note_types.values()) or 1
+    half_frac = note_types.get('half', 0) / total_notes
+    fname_lower = fname.lower()
+    is_gigue = 'gigue' in fname_lower
+    is_courante = 'courante' in fname_lower or 'corrente' in fname_lower
+
+    if abs(qn - 1.5) < 0.01:
+        beats, bt = 3, 8
+    elif abs(qn - 2.0) < 0.01:
+        beats, bt = 2, 4
+    elif abs(qn - 3.0) < 0.01:
+        beats, bt = 3, 4
+    elif abs(qn - 4.0) < 0.01:
+        beats, bt = 4, 4
+    elif abs(qn - 4.5) < 0.01:
+        beats, bt = 9, 8
+    elif abs(qn - 6.0) < 0.01:
+        # Courantes are always 3/2; Gigues in compound meter → 12/8;
+        # other movements (Sarabande, Double) → 3/2 if half notes substantial
+        if is_courante or (not is_gigue and half_frac > 0.08):
+            beats, bt = 3, 2
+        else:
+            beats, bt = 12, 8
+    else:
+        return None
+
+    t = ET.Element('time')
+    b_el = ET.SubElement(t, 'beats')
+    b_el.text = str(beats)
+    bt_el = ET.SubElement(t, 'beat-type')
+    bt_el.text = str(bt)
+    return t
+
+
+def _extract_movement(xml_str: str, start_mnum: str, end_mnum: str,
+                      fname: str = '') -> str:
+    """Extract measures [start_mnum..end_mnum] from score-partwise XML.
+    Carries forward last-seen key/time/clef/divisions into the first extracted
+    measure so verovio has all attributes it needs.
+    Time signature is inferred from note content (not blindly inherited) to
+    correct for source files that never emit time-sig changes between movements."""
+    import xml.etree.ElementTree as ET
+    import copy
+    try:
+        root = ET.fromstring(xml_str)
+    except ET.ParseError:
+        return xml_str
+
+    first_part = root.find('part')
+    if first_part is None:
+        return xml_str
+    all_mnums = [m.get('number', '') for m in first_part.findall('measure')]
+    try:
+        start_idx = all_mnums.index(start_mnum)
+    except ValueError:
+        return xml_str
+    try:
+        end_idx = all_mnums.index(end_mnum)
+    except ValueError:
+        end_idx = len(all_mnums) - 1
+
+    keep_set = set(all_mnums[start_idx: end_idx + 1])
+
+    for part in root.findall('part'):
+        measures = part.findall('measure')
+        # Accumulate attribute elements seen before start_mnum
+        acc_divs = acc_key = acc_time = acc_staves = None
+        acc_clefs: dict = {}
+        for msr in measures:
+            if msr.get('number', '') == start_mnum:
+                break
+            attrs = msr.find('attributes')
+            if attrs is None:
+                continue
+            for child in attrs:
+                if child.tag == 'divisions':
+                    acc_divs = copy.deepcopy(child)
+                elif child.tag == 'key':
+                    acc_key = copy.deepcopy(child)
+                elif child.tag == 'time':
+                    acc_time = copy.deepcopy(child)
+                elif child.tag == 'staves':
+                    acc_staves = copy.deepcopy(child)
+                elif child.tag == 'clef':
+                    acc_clefs[child.get('number', '1')] = copy.deepcopy(child)
+
+        # Drop out-of-range measures
+        for msr in list(measures):
+            if msr.get('number', '') not in keep_set:
+                part.remove(msr)
+
+        if start_idx == 0:
+            continue  # first movement — attributes already in place
+
+        first_msr = part.find('measure')
+        if first_msr is None:
+            continue
+
+        # Ensure <attributes> exists as first child
+        existing = first_msr.find('attributes')
+        if existing is None:
+            existing = ET.Element('attributes')
+            first_msr.insert(0, existing)
+
+        # Build set of tags already present
+        have: set = set()
+        for child in existing:
+            if child.tag == 'clef':
+                have.add(f'clef_{child.get("number","1")}')
+            else:
+                have.add(child.tag)
+
+        # Insert missing elements in MusicXML canonical order
+        # For time: infer from note content rather than blindly inheriting the
+        # previous movement's time sig (which is wrong when the first movement
+        # never emits subsequent time-sig changes, as with CapToMusic.py exports)
+        if 'time' not in have and acc_divs is not None:
+            divs_val = int(acc_divs.text)
+            kept = part.findall('measure')
+            inferred_time = _infer_time_sig_from_content(kept, divs_val, fname)
+            if inferred_time is not None:
+                acc_time = inferred_time
+
+        insert_pos = 0
+        for tag, elem in [('divisions', acc_divs), ('key', acc_key),
+                           ('time', acc_time), ('staves', acc_staves)]:
+            if tag not in have and elem is not None:
+                existing.insert(insert_pos, elem)
+                insert_pos += 1
+        for n, elem in sorted(acc_clefs.items()):
+            if f'clef_{n}' not in have:
+                existing.append(elem)
+
+    return ET.tostring(root, encoding='unicode')
+
+
+def find_tobis_files():
+    """Return [(rel, full), ...] for pre-split XML files under tobis-notenarchiv.de/split/."""
+    split_base = os.path.join(os.path.dirname(__file__), 'tobis-notenarchiv.de', 'split')
+    if not os.path.isdir(split_base):
+        return []
+    files = []
+    for subdir in sorted(os.listdir(split_base)):
+        subpath = os.path.join(split_base, subdir)
+        if not os.path.isdir(subpath):
+            continue
+        def _mvt_key(fn):
+            import re as _r
+            m = _r.match(r'(BWV_\d+[a-z]?)_(\d+)', fn, _r.I)
+            return (m.group(1).upper() if m else fn, int(m.group(2)) if m else 0)
+        for fname in sorted(os.listdir(subpath), key=_mvt_key):
+            if fname.lower().endswith('.xml'):
+                full = os.path.join(subpath, fname)
+                files.append((f'tobis/{subdir}/{fname}', full))
+    return files
+
+
+def _regen_tobis_splits(subdir='engl-suites'):
+    """Regenerate pre-split XML files for one tobis source subdirectory.
+    Reads from tobis-notenarchiv.de/<subdir>/*.xml, writes to
+    tobis-notenarchiv.de/split/<subdir>/.
+    Safe to re-run; overwrites existing split files."""
+    import re as _re
+    import unicodedata as _ud
+
+    def _ascii(s):
+        """Transliterate accented characters to ASCII (é→e, etc.)."""
+        return ''.join(
+            c for c in _ud.normalize('NFKD', s)
+            if _ud.category(c) != 'Mn' and ord(c) < 128
+        )
+
+    base = os.path.join(os.path.dirname(__file__), 'tobis-notenarchiv.de')
+    src_dir = os.path.join(base, subdir)
+    out_dir = os.path.join(base, 'split', subdir)
+    os.makedirs(out_dir, exist_ok=True)
+
+    for src_fname in sorted(os.listdir(src_dir)):
+        if not src_fname.lower().endswith('.xml'):
+            continue
+        src_path = os.path.join(src_dir, src_fname)
+        with open(src_path, encoding='utf-8') as f:
+            xml_str = f.read()
+
+        movements = _tobis_movements(src_path)
+        if not movements:
+            print(f'  {src_fname}: no movement markers, skipping')
+            continue
+
+        # BWV number for output filename prefix
+        bwv_m = _re.match(r'(BWV_\d+[a-z]?)\.xml', src_fname, _re.I)
+        bwv_prefix = bwv_m.group(1) if bwv_m else src_fname.rsplit('.', 1)[0]
+
+        for i, (title, start_mnum, end_mnum) in enumerate(movements, 1):
+            # Strip leading "N. " sequence number from title (e.g. "6. Gavotte I" → "Gavotte I")
+            clean = _re.sub(r'^\d+\.\s*', '', title).strip()
+            clean = _ascii(clean)                          # é→e, ö→o, etc.
+            safe_title = _re.sub(r'[^\w\s-]', '', clean).strip()
+            safe_title = _re.sub(r'\s+', '_', safe_title)
+            out_fname = f'{bwv_prefix}_{i}_{safe_title}.xml'
+            out_path = os.path.join(out_dir, out_fname)
+            extracted = _extract_movement(xml_str, start_mnum, end_mnum,
+                                          fname=out_fname)
+            with open(out_path, 'w', encoding='utf-8') as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                f.write(extracted)
+            print(f'  {out_fname}')
+
+    print(f'Done: {subdir}')
+
+
 def find_imslp_files():
     """Return [(rel, full), ...] for .mxl files in musicxml/imslp_bach/, using manifest.json."""
     imslp_dir = os.path.join(os.path.dirname(__file__), 'musicxml', 'imslp_bach')
@@ -1434,6 +1732,7 @@ def _voice_notes_from_mei(mei_str):
     pickup_dur_q     = 0.0
     _first_measure   = True
     rpt_section_start = 0.0   # onset where current repeat section started
+    _rpt_active       = False  # True after a rptstart has been seen
     repeat_ranges    = []     # list of (start_onset, end_onset) for single-play repeats
     _measure_starts  = {}     # measure xml:id -> onset at start (for volta detection)
     _measure_ends    = {}     # measure xml:id -> onset at end
@@ -1519,7 +1818,15 @@ def _voice_notes_from_mei(mei_str):
         _right = measure_el.get('right', '')
         if _left == 'rptstart':
             rpt_section_start = onset_before_update
+            _rpt_active = True
         if _right == 'rptend':
+            repeat_ranges.append((rpt_section_start, measure_onset))
+            rpt_section_start = measure_onset
+            _rpt_active = False
+        elif _right == 'dblheavy' and _rpt_active:
+            # Verovio merges a backward+forward repeat pair into a single dblheavy
+            # barline.  This means two independent repeat sections (||:A:||||:B:||).
+            # Split here so both sections are tracked as separate ranges → no unfolding.
             repeat_ranges.append((rpt_section_start, measure_onset))
             rpt_section_start = measure_onset
 
@@ -1543,8 +1850,12 @@ def _voice_notes_from_mei(mei_str):
                 if nid in tie_start_to_end:
                     extra_dur = 0.0
                     cur = nid
+                    _visited = {cur}
                     while cur in tie_start_to_end:
                         eid = tie_start_to_end[cur]
+                        if eid in _visited:   # self-loop or cycle → stop
+                            break
+                        _visited.add(eid)
                         if eid in id_to_idx:
                             j = id_to_idx[eid]
                             extra_dur += notes[j][3]
@@ -1589,7 +1900,7 @@ def _voice_notes_from_mei(mei_str):
             for _el in tree.iter(tag_pfx + 'ending'):
                 _eid = _el.get(_XML_ID, '')
                 if _eid:
-                    _ending_n[_eid] = _el.get('n', '')
+                    _ending_n[_eid] = _el.get('n', '').strip().rstrip('.')
             # Compute onset range for each section/ending by its direct-child measures
             _sec_range = {}
             for _tag in ('section', 'ending'):
@@ -1667,14 +1978,16 @@ def _interval_seq(notes, beat_dur_q=1.0, pickup_dur_q=0.0):
     return result
 
 
-def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=None):
+def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=None,
+                 beat_dur_q=1.0, pickup_dur_q=0.0):
     """
     all_seqs: [(voice_key, interval_seq), ...]
     Returns list of {'pattern': tuple, 'occurrences': [[nid, ...], ...]}
 
     Pattern key = (body, start_phase) where:
       - body = tuple of (interval, dur) pairs — rhythm+pitch content
-      - start_phase = metric phase of the first note (0/1 for binary, 0/1/2 for triplets)
+      - start_phase = metric phase of the first note, measured in units of the
+        *minimum* note duration in the body (same unit as _search_motif uses)
     Two occurrences of the same body at different metric phases are treated as distinct motifs.
     Window-shift and sub-pattern dominance deduplication operate on body only.
     """
@@ -1685,51 +1998,45 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
         if n < min_len:
             continue
         for start in range(n):
-            start_phase = seq[start][5]
-            dp0_first   = seq[start][7]
+            onset0    = seq[start][4]
+            dp0_first = seq[start][7]
             max_ln = (n - start) if max_pat_len is None else min(max_pat_len, n - start)
             for ln in range(min_len, max_ln + 1):
                 if not all(seq[start + k][6] for k in range(ln)):
                     break
-                body  = tuple((s[0], s[1]) for s in seq[start:start + ln])
-                key   = (body, start_phase)
-                nids  = [seq[start][2]] + [seq[start + k][3] for k in range(ln)]
-                onset = seq[start][4]
-                pat_voice_raw[key][vi].append((start, nids, onset, dp0_first))
+                body = tuple((s[0], s[1]) for s in seq[start:start + ln])
+                # Phase uses min body duration as unit — same as _search_motif
+                min_body_dur = min(s[1] for s in seq[start:start + ln])
+                start_phase  = _metric_phase(onset0 - pickup_dur_q, min_body_dur, beat_dur_q)
+                key  = (body, start_phase)
+                nids = [seq[start][2]] + [seq[start + k][3] for k in range(ln)]
+                pat_voice_raw[key][vi].append((start, nids, onset0, dp0_first))
 
-    # Step 2: greedy non-overlapping selection per voice + cross-voice same-beat dedup
-    pat_occs = defaultdict(list)   # key -> [(nids, dp0_first), ...]
+    # Step 2: interleaved per-voice greedy + cross-voice dedup in one pass.
+    # last_end advances only when an occurrence is actually kept — same as _search_motif.
+    # If a voice's occurrence at P is cross-deduped, last_end is NOT advanced, so an
+    # overlapping occurrence at P+1 in that voice can still be found.
+    pat_occs = defaultdict(list)   # key -> [(nids, dp0_first, onset_q), ...]
     for (body, phase), voice_dict in pat_voice_raw.items():
         ln = len(body)
-        all_with_onset = []
-        for _vi, positions in voice_dict.items():
-            last_end = -1
+        all_cands = []
+        for vi, positions in voice_dict.items():
             for start, nids, onset, dp0_first in positions:
-                if start >= last_end:
-                    all_with_onset.append((onset, nids, dp0_first))
-                    last_end = start + ln + 1
-        all_with_onset.sort(key=lambda x: x[0])
-        seen_onsets = set()
-        for onset, nids, dp0_first in all_with_onset:
-            onset_q = round(onset * 16)
-            if onset_q not in seen_onsets:
-                pat_occs[(body, phase)].append((nids, dp0_first, onset_q))
-                seen_onsets.add(onset_q)
+                all_cands.append((round(onset * 16), start, vi, nids, dp0_first))
+        all_cands.sort(key=lambda x: (x[0], x[2]))  # onset_q, then voice index
+        last_end_v = {}
+        seen_oq = set()
+        for onset_q, start, vi, nids, dp0_first in all_cands:
+            if start < last_end_v.get(vi, -1):
+                continue  # overlaps previous kept occurrence in same voice
+            if onset_q in seen_oq:
+                continue  # cross-voice dedup — don't advance last_end
+            pat_occs[(body, phase)].append((nids, dp0_first, onset_q))
+            seen_oq.add(onset_q)
+            last_end_v[vi] = start + ln + 1
 
-    # Step 3: merge inversions
-    # body_inv = tuple((-iv, dur) for iv, dur in body) — absorb into body as inversion=True.
-    # Entries are 4-tuples: (nids, dp0, is_inv, onset_q).
-    # After merging, remove same-voice overlaps (shared nids) greedily by onset.
-    def _deoverlap(occs):
-        kept = []
-        used_nids = set()
-        for occ in sorted(occs, key=lambda x: x[3]):
-            nset = set(occ[0])
-            if not nset & used_nids:
-                kept.append(occ)
-                used_nids |= nset
-        return kept
-
+    # Step 3: merge inversions — same interleaved greedy+dedup, joint over direct+inverted.
+    # Prefer direct over inverted at the same onset (sort is_inv=False before True).
     absorbed = set()
     for key in list(pat_occs.keys()):
         body, phase = key
@@ -1741,9 +2048,28 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
         inv_key = (body_inv, phase)
         if inv_key in pat_occs and inv_key not in absorbed:
             absorbed.add(inv_key)
-            direct = [(n, d, False, oq) for n, d, oq in pat_occs[key]]
-            inv    = [(n, d, True,  oq) for n, d, oq in pat_occs[inv_key]]
-            pat_occs[key] = _deoverlap(direct + inv)
+            ln = len(body)
+            all_voices = set(pat_voice_raw[key].keys()) | set(pat_voice_raw[inv_key].keys())
+            all_cands = []
+            for vi in all_voices:
+                for start, nids, onset, dp0_first in pat_voice_raw[key].get(vi, []):
+                    all_cands.append((round(onset * 16), start, vi, nids, dp0_first, False))
+                for start, nids, onset, dp0_first in pat_voice_raw[inv_key].get(vi, []):
+                    all_cands.append((round(onset * 16), start, vi, nids, dp0_first, True))
+            # Sort: onset_q, then direct before inverted, then voice
+            all_cands.sort(key=lambda x: (x[0], x[5], x[2]))
+            last_end_v = {}
+            seen_oq = set()
+            merged = []
+            for onset_q, start, vi, nids, dp0_first, is_inv in all_cands:
+                if start < last_end_v.get(vi, -1):
+                    continue
+                if onset_q in seen_oq:
+                    continue  # cross-dedup — don't advance last_end
+                merged.append((nids, dp0_first, is_inv, onset_q))
+                seen_oq.add(onset_q)
+                last_end_v[vi] = start + ln + 1
+            pat_occs[key] = merged
 
     # Normalize non-merged entries to 4-tuples
     for key in pat_occs:
@@ -2060,7 +2386,9 @@ def _search_motif(query):
                 nids = [seq[i][2]] + [seq[i + k][3] for k in range(n)]
                 occs_with_onset.append((seq[i][4], nids))
                 seen_onsets.add(onset_q)
-            last_end = i + n + 1  # greedy: skip overlapping positions in this voice
+                last_end = i + n + 1  # greedy: only skip when occurrence is actually added
+            # if cross-deduped (onset already seen from another voice), don't advance
+            # last_end — allows finding a non-overlapping occurrence further along
 
     occs_with_onset.sort(key=lambda x: x[0])
 
@@ -2094,20 +2422,9 @@ def _search_motif(query):
         p_set   = set(p1_idxs) | set(p2_idxs)
         nr_idxs = [j for j in range(len(occs_with_onset)) if j not in p_set]
 
-        # Volta: check if volta1 vs volta2 counts differ → no pairing
-        volta_diff = False
-        if volta_search_info and 'volta1' in volta_search_info:
-            _v1s, _v1e = volta_search_info['volta1']
-            _v2s, _v2e = volta_search_info['volta2']
-            c_v1 = sum(1 for j in p1_idxs if _v1s - 1e-9 <= occs_with_onset[j][0] < _v1e - 1e-9)
-            c_v2 = sum(1 for j in p2_idxs if _v2s - 1e-9 <= occs_with_onset[j][0] < _v2e - 1e-9)
-            volta_diff = (c_v1 != c_v2)
-
-        if volta_diff:
-            # Different volta counts: return all occurrences stripped of __p2
-            occs_with_onset = [(o, [_strip_p2(nid) for nid in nids])
-                               for o, nids in occs_with_onset]
-        elif p2_idxs:
+        if p2_idxs:
+            nr_before = [j for j in nr_idxs if occs_with_onset[j][0] < rpt_start_q - 1e-9]
+            nr_after  = [j for j in nr_idxs if occs_with_onset[j][0] >= play2_end_q - 1e-9]
             p1_by_oq16 = {round(occs_with_onset[j][0] * 16): j for j in p1_idxs}
             pairs = []
             for j2 in p2_idxs:
@@ -2115,23 +2432,46 @@ def _search_motif(query):
                 j1 = p1_by_oq16.get(round((o2 - shift_q) * 16))
                 if j1 is not None:
                     pairs.append((j1, j2))
-            idx_order = p1_idxs + p2_idxs + nr_idxs
+            # B-section repeat: split nr_after into B_p1 / B_p2 and pair them
+            b_has_repeat  = _eff_rpt.get('b_has_repeat', False)
+            B_dur_q       = _eff_rpt.get('B_dur_q', 0.0)
+            B_p1_end_q    = _eff_rpt.get('B_p1_end_q', float('inf'))
+            if b_has_repeat and B_dur_q > 0:
+                nr_B_p1 = [j for j in nr_after if occs_with_onset[j][0] < B_p1_end_q - 1e-9]
+                nr_B_p2 = [j for j in nr_after if occs_with_onset[j][0] >= B_p1_end_q - 1e-9]
+            else:
+                nr_B_p1 = nr_after
+                nr_B_p2 = []
+            idx_order = nr_before + p1_idxs + p2_idxs + nr_B_p1 + nr_B_p2
             occs_with_onset = [occs_with_onset[j] for j in idx_order]
+            nb       = len(nr_before)
             p1_count = len(p1_idxs)
             p2_count = len(p2_idxs)
-            p1_pos   = {j1: k       for k, j1 in enumerate(p1_idxs)}
-            p2_pos   = {j2: p1_count + k for k, j2 in enumerate(p2_idxs)}
+            p1_pos   = {j1: nb + k              for k, j1 in enumerate(p1_idxs)}
+            p2_pos   = {j2: nb + p1_count + k   for k, j2 in enumerate(p2_idxs)}
             repeat_pairs = [(p1_pos[j1], p2_pos[j2])
                             for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos]
-            # strip __p2 suffix from nids in play-2 slots
+            # B pairs
+            if nr_B_p2:
+                _b_base = nb + p1_count + p2_count
+                B_p1_by_oq = {round(occs_with_onset[_b_base + k][0] * 16): _b_base + k
+                               for k in range(len(nr_B_p1))}
+                for k2, j in enumerate(nr_B_p2):
+                    o2 = occs_with_onset[_b_base + len(nr_B_p1) + k2][0]
+                    k1_pos = B_p1_by_oq.get(round((o2 - B_dur_q) * 16))
+                    if k1_pos is not None:
+                        repeat_pairs.append((k1_pos, _b_base + len(nr_B_p1) + k2))
+            # strip __p2 suffix from nids in A play-2 slots
             stripped = []
             for k, (o, nids) in enumerate(occs_with_onset):
-                if p1_count <= k < p1_count + p2_count:
+                if nb + p1_count <= k < nb + p1_count + p2_count:
                     stripped.append((o, [_strip_p2(nid) for nid in nids]))
                 else:
                     stripped.append((o, nids))
             occs_with_onset = stripped
 
+    # Strip __p2 from B_p2 nids (they're outside the A play-2 range, not stripped above)
+    occs_with_onset = [(o, [_strip_p2(nid) for nid in nids]) for o, nids in occs_with_onset]
     occs = [nids for _, nids in occs_with_onset]
     return {"occs": occs, "count": len(occs), "repeat_pairs": repeat_pairs}
 
@@ -2175,41 +2515,59 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         play2_end = 0.0
         volta1_range_q = volta2_range_q = None  # (start, end) in unfolded time
         is_volta = False
+        b_has_repeat = False   # True when B section also has a structural repeat
+        B_dur_q      = 0.0    # duration of B section (quarters)
+        B_p1_end_q   = 0.0   # end of B first pass in unfolded time
         if volta_groups:
-            # Volta unfolding: I + A + A1 + A(shifted) + A2(shifted) + B(shifted)
+            # Volta unfolding: [I] + A + A1 + [I_p2] + A_p2 + A2(shifted) + B(shifted)
+            # When B also repeats (suite dance ||:A:||||:B:||), B_p2 is appended so
+            # _find_motifs can detect cross-repeat patterns and B is counted twice.
+            # I = any section(s) before A that are inside the repeat bracket
+            # (detected via repeat_ranges[0][0] which marks the true repeat start)
             vg = volta_groups[0]
             _body_s, _body_e = vg['body']
             _v1_s,   _v1_e   = vg['volta1']
             _v2_s,   _v2_e   = vg['volta2']
-            _A_dur   = _body_e - _body_s
-            _v1_dur  = _v1_e - _v1_s
-            _v2_dur  = _v2_e - _v2_s
-            # Shifts for each part in unfolded timeline
-            _A_p2_shift  = _v1_e - _body_s           # A plays again right after A1
-            _A2_uf_start = _v1_e + _A_dur             # onset of A2 in unfolded
+            _A_dur  = _body_e - _body_s
+            _v2_dur = _v2_e - _v2_s
+            # True repeat start — includes pickup/intro sections inside the bracket
+            _I_start = repeat_ranges[0][0] if repeat_ranges else _body_s
+            _I_dur   = _body_s - _I_start
+            # All play-2 notes are shifted by full play-1 duration = v1_e - I_start
+            _play2_shift = _v1_e - _I_start
+            _A2_uf_start = _v1_e + _I_dur + _A_dur
             _A2_shift    = _A2_uf_start - _v2_s
             _B_uf_start  = _A2_uf_start + _v2_dur
             _B_shift     = _B_uf_start - _v2_e
+            # B section repeat (||:A:||||:B:|| structure): repeat_ranges has ≥2 entries
+            _b_repeat = len(repeat_ranges) >= 2
+            _B_dur    = (repeat_ranges[-1][1] - repeat_ranges[-1][0]) if _b_repeat else 0.0
             unfolded = {}
             for vk, notes in voices.items():
-                _I  = [n for n in notes if n[5] < _body_s]
-                _A  = [n for n in notes if _body_s <= n[5] < _body_e]
-                _A1 = [n for n in notes if _v1_s <= n[5] < _v1_e]
-                _A2 = [n for n in notes if _v2_s <= n[5] < _v2_e]
+                _I  = [n for n in notes if _I_start <= n[5] < _body_s]
+                _A  = [n for n in notes if _body_s  <= n[5] < _body_e]
+                _A1 = [n for n in notes if _v1_s    <= n[5] < _v1_e]
+                _A2 = [n for n in notes if _v2_s    <= n[5] < _v2_e]
                 _B  = [n for n in notes if n[5] >= _v2_e]
-                _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_p2_shift) for n in _A]
-                _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_shift) for n in _A2]
-                _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift) for n in _B]
-                unfolded[vk] = _I + _A + _A1 + _Ap2 + _A2s + _Bs
+                _Ip2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_shift) for n in _I]
+                _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_shift) for n in _A]
+                _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_shift)            for n in _A2]
+                _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)             for n in _B]
+                _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_shift+_B_dur)
+                          for n in _B] if _b_repeat and _B_dur > 0 else [])
+                unfolded[vk] = _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
             seq_voices = unfolded
             # Repeat parameters for per-motif counting (in unfolded time)
-            rpt_start = _body_s
-            rpt_end   = _v1_e                  # end of play-1 (A + A1)
-            shift     = _A_p2_shift            # how much A is shifted for play2
-            play2_end = _A2_uf_start + _v2_dur  # end of A_play2 + A2 in unfolded
-            volta1_range_q = (_v1_s, _v1_e)    # A1 in unfolded (same as original)
+            rpt_start    = _I_start
+            rpt_end      = _v1_e                       # end of play-1 (I + A + A1)
+            shift        = _play2_shift                # uniform shift for all play-2 notes
+            play2_end    = _A2_uf_start + _v2_dur      # end of play-2 block = start of B
+            volta1_range_q = (_v1_s, _v1_e)
             volta2_range_q = (_A2_uf_start, _A2_uf_start + _v2_dur)
-            is_volta = True
+            is_volta     = True
+            b_has_repeat = _b_repeat
+            B_dur_q      = _B_dur
+            B_p1_end_q   = play2_end + _B_dur          # end of B first pass
         elif len(repeat_ranges) == 1:
             rpt_start, rpt_end = repeat_ranges[0]
             shift = rpt_end - rpt_start
@@ -2231,7 +2589,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         all_seqs = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
                     for vk, notes in seq_voices.items()
                     if len(notes) >= 4]
-        motifs = _find_motifs(all_seqs)
+        motifs = _find_motifs(all_seqs, beat_dur_q=beat_dur_q, pickup_dur_q=pickup_dur_q)
         result = []
         for i, m in enumerate(motifs):
             steps = [_interval_label(iv, dur) for iv, dur in m['pattern']]
@@ -2278,42 +2636,77 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                             if rpt_end_16 <= t['onset_q'] < play2_end_16]
                 p_set    = set(p1_idxs) | set(p2_idxs)
                 nr_idxs  = [j for j in range(len(transforms)) if j not in p_set]
-                # Volta check: compare occurrences in volta1 vs volta2 ranges
-                volta_diff = False
-                if is_volta and volta1_range_q and volta2_range_q:
-                    _v1s16 = volta1_range_q[0] * 16
-                    _v1e16 = volta1_range_q[1] * 16
-                    _v2s16 = volta2_range_q[0] * 16
-                    _v2e16 = volta2_range_q[1] * 16
-                    c_v1 = sum(1 for j in p1_idxs if _v1s16 <= transforms[j]['onset_q'] < _v1e16)
-                    c_v2 = sum(1 for j in p2_idxs if _v2s16 <= transforms[j]['onset_q'] < _v2e16)
-                    volta_diff = (c_v1 != c_v2)
                 if p2_idxs:
-                    # Pair p1 with p2 (same logic for both equal and different volta counts)
+                    # Pair each p2 occurrence with its p1 counterpart via uniform shift
                     p1_by_oq = {transforms[j]['onset_q']: j for j in p1_idxs}
                     pairs = []
                     for j2 in p2_idxs:
                         j1 = p1_by_oq.get(transforms[j2]['onset_q'] - shift_16)
                         if j1 is not None:
                             pairs.append((j1, j2))
-                    idx_order      = p1_idxs + p2_idxs + nr_idxs
+                    nr_before = [j for j in nr_idxs if transforms[j]['onset_q'] < rpt_start_16]
+                    nr_after  = [j for j in nr_idxs if transforms[j]['onset_q'] >= play2_end_16]
+                    idx_order = nr_before + p1_idxs + p2_idxs + nr_after
                     # strip __p2 suffix from play-2 nids so they point to real SVG elements
                     occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
                                 for j in idx_order]
                     transforms_out = [transforms[j] for j in idx_order]
-                    p1_pos = {j1: k       for k, j1 in enumerate(p1_idxs)}
-                    p2_pos = {j2: len(p1_idxs) + k for k, j2 in enumerate(p2_idxs)}
-                    repeat_pairs   = [(p1_pos[j1], p2_pos[j2])
-                                      for j1, j2 in pairs
-                                      if j1 in p1_pos and j2 in p2_pos]
+                    nb = len(nr_before)
+                    p1_pos = {j1: nb + k                 for k, j1 in enumerate(p1_idxs)}
+                    p2_pos = {j2: nb + len(p1_idxs) + k  for k, j2 in enumerate(p2_idxs)}
+                    repeat_pairs = [(p1_pos[j1], p2_pos[j2])
+                                    for j1, j2 in pairs
+                                    if j1 in p1_pos and j2 in p2_pos]
                     n_occ = len(occs_out)
-                    if volta_diff:
-                        # Different volta counts → skip structural filter;
-                        # show as long as total heard count >= 2
+                    if is_volta:
+                        # Split nr_after into B first-pass and B second-pass (when B repeats)
+                        B_p1_end_16 = B_p1_end_q * 16
+                        B_dur_16    = B_dur_q * 16
+                        if b_has_repeat and B_dur_q > 0:
+                            nr_B_p1 = [j for j in nr_after
+                                       if transforms[j]['onset_q'] < B_p1_end_16]
+                            nr_B_p2 = [j for j in nr_after
+                                       if transforms[j]['onset_q'] >= B_p1_end_16]
+                        else:
+                            nr_B_p1 = nr_after
+                            nr_B_p2 = []
+                        # Check if motif appears in either volta region
+                        v1_16_s = volta1_range_q[0] * 16
+                        v1_16_e = volta1_range_q[1] * 16
+                        v2_16_s = volta2_range_q[0] * 16
+                        v2_16_e = volta2_range_q[1] * 16
+                        p1_in_v1 = any(v1_16_s <= transforms[j]['onset_q'] < v1_16_e
+                                       for j in p1_idxs)
+                        p2_in_v2 = any(v2_16_s <= transforms[j]['onset_q'] < v2_16_e
+                                       for j in p2_idxs)
+                        if not p1_in_v1 and not p2_in_v2:
+                            # No volta difference: collapse both A_p2 and B_p2
+                            idx_order = nr_before + p1_idxs + nr_B_p1
+                            occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
+                                        for j in idx_order]
+                            transforms_out = [transforms[j] for j in idx_order]
+                            repeat_pairs = []
+                            n_occ = len(occs_out)
+                        elif nr_B_p2:
+                            # Volta diff + B repeats: pair B occurrences the same way A is paired
+                            B_p1_by_oq = {transforms[j]['onset_q']: j for j in nr_B_p1}
+                            B_pairs_raw = []
+                            for j2 in nr_B_p2:
+                                j1 = B_p1_by_oq.get(transforms[j2]['onset_q'] - B_dur_16)
+                                if j1 is not None:
+                                    B_pairs_raw.append((j1, j2))
+                            # Map j → position in occs_out
+                            # idx_order = nr_before + p1_idxs + p2_idxs + nr_B_p1 + nr_B_p2
+                            _nr_all_map = {j: len(nr_before) + len(p1_idxs) + len(p2_idxs) + k
+                                           for k, j in enumerate(nr_after)}
+                            B_rep_pairs = [(_nr_all_map[j1], _nr_all_map[j2])
+                                           for j1, j2 in B_pairs_raw
+                                           if j1 in _nr_all_map and j2 in _nr_all_map]
+                            repeat_pairs = repeat_pairs + B_rep_pairs
                         if n_occ < 2:
                             continue
                     else:
-                        # Equal volta counts (or simple repeat) → structural filter
+                        # Simple repeat: structural filter
                         paired_p2 = {j2 for _, j2 in pairs}
                         unpaired_p2 = [j for j in p2_idxs if j not in paired_p2]
                         structural = len(p1_idxs) + len(nr_idxs) + len(unpaired_p2)
@@ -2330,7 +2723,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 'n_direct_only':  _nd,
                 'n_inv_only':     _ni,
                 'n_both':         _nb,
-                'queryStr':       _pattern_to_query(m['pattern'], phase),
+                'queryStr':       _pattern_to_query(m['pattern'], phase) + (';inv' if (_ni + _nb) > 0 else ''),
                 'profile':        profile,
                 'repeat_pairs':   repeat_pairs,
                 'mdl':            _mdl_score(n_occ, L_pat, transforms_out),
@@ -3016,31 +3409,42 @@ def render_score(path: str, version: str = "1") -> tuple:
             # Volta unfolding (same logic as analyze_motifs)
             _vg = _vg_s[0]
             _bs, _be = _vg['body'];  _v1s, _v1e = _vg['volta1'];  _v2s, _v2e = _vg['volta2']
-            _A_dur = _be - _bs;  _v1_dur = _v1e - _v1s;  _v2_dur = _v2e - _v2s
-            _A_p2_sh = _v1e - _bs
-            _A2_uf   = _v1e + _A_dur
+            _A_dur = _be - _bs;  _v2_dur = _v2e - _v2s
+            _I_start = _rr_s[0][0] if _rr_s else _bs
+            _I_dur   = _bs - _I_start
+            _play2_sh = _v1e - _I_start
+            _A2_uf   = _v1e + _I_dur + _A_dur
             _A2_sh   = _A2_uf - _v2s
             _B_uf    = _A2_uf + _v2_dur
             _B_sh    = _B_uf - _v2e
+            _b_rpt = len(_rr_s) >= 2
+            _B_dur = (_rr_s[-1][1] - _rr_s[-1][0]) if _b_rpt else 0.0
             _uf = {}
             for vk, notes in _voices_s.items():
-                _I  = [n for n in notes if n[5] < _bs]
-                _A  = [n for n in notes if _bs <= n[5] < _be]
+                _I  = [n for n in notes if _I_start <= n[5] < _bs]
+                _A  = [n for n in notes if _bs  <= n[5] < _be]
                 _A1 = [n for n in notes if _v1s <= n[5] < _v1e]
                 _A2 = [n for n in notes if _v2s <= n[5] < _v2e]
                 _B  = [n for n in notes if n[5] >= _v2e]
-                _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_p2_sh) for n in _A]
+                _Ip2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_sh) for n in _I]
+                _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_sh) for n in _A]
                 _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_sh) for n in _A2]
                 _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh)  for n in _B]
-                _uf[vk] = _I + _A + _A1 + _Ap2 + _A2s + _Bs
+                _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_sh+_B_dur)
+                          for n in _B] if _b_rpt and _B_dur > 0 else [])
+                _uf[vk] = _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _uf.items() if len(notes) >= 4]
+            _play2_end = _A2_uf + _v2_dur
             _volta_search_info = {
-                'rpt_start': _bs,   'rpt_end': _v1e,
-                'shift':     _A_p2_sh,
-                'play2_end': _A2_uf + _v2_dur,
-                'volta1':    (_v1s, _v1e),
-                'volta2':    (_A2_uf, _A2_uf + _v2_dur),
+                'rpt_start':   _I_start, 'rpt_end': _v1e,
+                'shift':       _play2_sh,
+                'play2_end':   _play2_end,
+                'volta1':      (_v1s, _v1e),
+                'volta2':      (_A2_uf, _A2_uf + _v2_dur),
+                'b_has_repeat': _b_rpt,
+                'B_dur_q':     _B_dur,
+                'B_p1_end_q':  _play2_end + _B_dur,
             }
         elif len(_rr_s) == 1:
             _rpt_s, _rpt_e = _rr_s[0]
@@ -4014,7 +4418,7 @@ class FileBrowser(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
 
-        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_music21_files()
+        self._files        = find_generated_files() + find_lilypond_files() + find_tobis_files() + find_kern_files(KERN_DIR) + find_music21_files()
         self._current_path = None
 
         self._build_ui()
