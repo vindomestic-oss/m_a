@@ -77,9 +77,11 @@ _state = {
 </head><body style='font:16px sans-serif;padding:40px;color:#888'>
 Select a kern file in the panel.</body></html>""",
     "version":    _START_VERSION,
-    "seqs":       [],   # [(voice_key, interval_seq), ...] for current file
-    "beat_dur_q": 1.0,
-    "pickup_dur_q": 0.0,
+    "seqs":             [],    # [(voice_key, interval_seq), ...] for current file
+    "beat_dur_q":       1.0,
+    "pickup_dur_q":     0.0,
+    "repeat_ranges":    [],
+    "volta_search_info": None,
 }
 _state_lock = threading.Lock()
 
@@ -1433,6 +1435,8 @@ def _voice_notes_from_mei(mei_str):
     _first_measure   = True
     rpt_section_start = 0.0   # onset where current repeat section started
     repeat_ranges    = []     # list of (start_onset, end_onset) for single-play repeats
+    _measure_starts  = {}     # measure xml:id -> onset at start (for volta detection)
+    _measure_ends    = {}     # measure xml:id -> onset at end
 
     for measure_el in tree.iter(tag_pfx + 'measure'):
         # Pick up meter changes inside the measure
@@ -1497,6 +1501,9 @@ def _voice_notes_from_mei(mei_str):
         # max_pos > beats_per_measure with metcon='false' — those are NOT short measures.
         eff_pos = min(max_pos, beats_per_measure)
         onset_before_update = measure_onset
+        _m_id = measure_el.get(_XML_ID, '')
+        if _m_id:
+            _measure_starts[_m_id] = onset_before_update
         if eff_pos > 0 and (measure_el.get('metcon') == 'false' or
                             eff_pos < beats_per_measure - 1e-9):
             if _first_measure:
@@ -1504,6 +1511,8 @@ def _voice_notes_from_mei(mei_str):
             measure_onset += eff_pos
         else:
             measure_onset += beats_per_measure
+        if _m_id:
+            _measure_ends[_m_id] = measure_onset
         _first_measure = False
         # Detect repeat barlines for section-repeat tracking
         _left  = measure_el.get('left', '')
@@ -1562,7 +1571,57 @@ def _voice_notes_from_mei(mei_str):
     result = {}
     for key, notes in voices.items():
         result[key] = _merge_ornamental_slurs(notes, slur_ends)
-    return result, beat_dur_q, pickup_dur_q, repeat_ranges
+
+    # ── Detect volta (1st/2nd ending) groups ────────────────────────────────────
+    # Requires <expansion plist> with pattern: ... body A1 body A2 ...
+    # where A1 is ending n=1 and A2 is ending n=2.
+    volta_groups = []
+    try:
+        exp_el = None
+        for _exp in tree.iter(tag_pfx + 'expansion'):
+            if _exp.get('type', '') != 'norep':
+                exp_el = _exp
+                break
+        if exp_el is not None and _measure_starts:
+            _plist = [x.lstrip('#') for x in exp_el.get('plist', '').split()]
+            # Collect ending n values by xml:id
+            _ending_n = {}
+            for _el in tree.iter(tag_pfx + 'ending'):
+                _eid = _el.get(_XML_ID, '')
+                if _eid:
+                    _ending_n[_eid] = _el.get('n', '')
+            # Compute onset range for each section/ending by its direct-child measures
+            _sec_range = {}
+            for _tag in ('section', 'ending'):
+                for _el in tree.iter(tag_pfx + _tag):
+                    _eid = _el.get(_XML_ID, '')
+                    _ms  = [c for c in _el if c.tag == tag_pfx + 'measure']
+                    if _eid and _ms:
+                        _s = _measure_starts.get(_ms[0].get(_XML_ID, ''))
+                        _e = _measure_ends.get(_ms[-1].get(_XML_ID, ''))
+                        if _s is not None and _e is not None:
+                            _sec_range[_eid] = (_s, _e)
+            # Scan plist for pattern: body volta1 body volta2
+            _n = len(_plist)
+            _i = 0
+            while _i <= _n - 4:
+                _a, _b, _c, _d = _plist[_i], _plist[_i+1], _plist[_i+2], _plist[_i+3]
+                if (_a == _c
+                        and _b in _ending_n and _d in _ending_n
+                        and _ending_n[_b] == '1' and _ending_n[_d] == '2'
+                        and _a in _sec_range and _b in _sec_range and _d in _sec_range):
+                    volta_groups.append({
+                        'body':   _sec_range[_a],
+                        'volta1': _sec_range[_b],
+                        'volta2': _sec_range[_d],
+                    })
+                    _i += 4
+                else:
+                    _i += 1
+    except Exception:
+        pass
+
+    return result, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups
 
 
 def _merge_ornamental_slurs(notes, slur_ends):
@@ -1769,7 +1828,7 @@ def _get_note_beat_positions(mei_str):
         if c and u:
             bpm = int(c) * 4.0 / int(u)
             break
-    voices, _bdq, _pdq, _rr = _voice_notes_from_mei(mei_str)
+    voices, _bdq, _pdq, _rr, _vg = _voice_notes_from_mei(mei_str)
     labels = {}
     for _vk, notes in voices.items():
         for nid, _pname, _oct, dur, _midi, onset in notes:
@@ -1912,10 +1971,11 @@ def _search_motif(query):
         pattern_inv = None
 
     with _state_lock:
-        seqs         = list(_state.get("seqs", []))
-        beat_dur_q   = _state.get("beat_dur_q", 1.0)
-        pickup_dur_q = _state.get("pickup_dur_q", 0.0)
-        repeat_ranges = list(_state.get("repeat_ranges", []))
+        seqs              = list(_state.get("seqs", []))
+        beat_dur_q        = _state.get("beat_dur_q", 1.0)
+        pickup_dur_q      = _state.get("pickup_dur_q", 0.0)
+        repeat_ranges     = list(_state.get("repeat_ranges", []))
+        volta_search_info = _state.get("volta_search_info")
 
     # compute phase using the smallest note duration in the pattern as unit
     # rhythm_only: durs elements are (op, val) → s[1] = val
@@ -2003,16 +2063,29 @@ def _search_motif(query):
             last_end = i + n + 1  # greedy: skip overlapping positions in this voice
 
     occs_with_onset.sort(key=lambda x: x[0])
+
+    def _strip_p2(nid):
+        return nid[:-4] if nid.endswith('__p2') else nid
+
     # Apply repeat_pairs from unfolded seqs: seqs already contain play-2 copies
     repeat_pairs = []
-    if len(repeat_ranges) == 1:
-        rpt_start_q = repeat_ranges[0][0]
-        rpt_end_q   = repeat_ranges[0][1]
-        shift_q     = rpt_end_q - rpt_start_q
-        play2_end_q = rpt_end_q + shift_q
+    # Determine effective repeat parameters (volta or simple)
+    _eff_rpt = None
+    if volta_search_info:
+        _eff_rpt = volta_search_info
+    elif len(repeat_ranges) == 1:
+        rr = repeat_ranges[0]
+        _eff_rpt = {
+            'rpt_start': rr[0], 'rpt_end': rr[1],
+            'shift':     rr[1] - rr[0],
+            'play2_end': rr[1] + (rr[1] - rr[0]),
+        }
 
-        def _strip_p2(nid):
-            return nid[:-4] if nid.endswith('__p2') else nid
+    if _eff_rpt:
+        rpt_start_q = _eff_rpt['rpt_start']
+        rpt_end_q   = _eff_rpt['rpt_end']
+        shift_q     = _eff_rpt['shift']
+        play2_end_q = _eff_rpt['play2_end']
 
         p1_idxs = [j for j, (o, _) in enumerate(occs_with_onset)
                    if rpt_start_q - 1e-9 <= o < rpt_end_q - 1e-9]
@@ -2021,7 +2094,20 @@ def _search_motif(query):
         p_set   = set(p1_idxs) | set(p2_idxs)
         nr_idxs = [j for j in range(len(occs_with_onset)) if j not in p_set]
 
-        if p2_idxs:
+        # Volta: check if volta1 vs volta2 counts differ → no pairing
+        volta_diff = False
+        if volta_search_info and 'volta1' in volta_search_info:
+            _v1s, _v1e = volta_search_info['volta1']
+            _v2s, _v2e = volta_search_info['volta2']
+            c_v1 = sum(1 for j in p1_idxs if _v1s - 1e-9 <= occs_with_onset[j][0] < _v1e - 1e-9)
+            c_v2 = sum(1 for j in p2_idxs if _v2s - 1e-9 <= occs_with_onset[j][0] < _v2e - 1e-9)
+            volta_diff = (c_v1 != c_v2)
+
+        if volta_diff:
+            # Different volta counts: return all occurrences stripped of __p2
+            occs_with_onset = [(o, [_strip_p2(nid) for nid in nids])
+                               for o, nids in occs_with_onset]
+        elif p2_idxs:
             p1_by_oq16 = {round(occs_with_onset[j][0] * 16): j for j in p1_idxs}
             pairs = []
             for j2 in p2_idxs:
@@ -2045,6 +2131,7 @@ def _search_motif(query):
                 else:
                     stripped.append((o, nids))
             occs_with_onset = stripped
+
     occs = [nids for _, nids in occs_with_onset]
     return {"occs": occs, "count": len(occs), "repeat_pairs": repeat_pairs}
 
@@ -2078,17 +2165,55 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     try:
         if mei_str is None:
             mei_str = vtk.getMEI()
-        voices, beat_dur_q, pickup_dur_q, repeat_ranges = _voice_notes_from_mei(mei_str)
+        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(mei_str)
         if beat_dur_q_override is not None:
             beat_dur_q = beat_dur_q_override
 
-        # ── Unfold single-section repeat before motif detection ──────────────────
-        # Insert play-2 copies (same nids, shifted onsets) so _find_motifs sees
-        # the true melodic context including cross-boundary patterns.
+        # ── Unfold repeat/volta before motif detection ───────────────────────────
+        # Insert play-2 copies so _find_motifs sees cross-boundary patterns.
         rpt_start = rpt_end = shift = 0.0
-        if len(repeat_ranges) == 1:
+        play2_end = 0.0
+        volta1_range_q = volta2_range_q = None  # (start, end) in unfolded time
+        is_volta = False
+        if volta_groups:
+            # Volta unfolding: I + A + A1 + A(shifted) + A2(shifted) + B(shifted)
+            vg = volta_groups[0]
+            _body_s, _body_e = vg['body']
+            _v1_s,   _v1_e   = vg['volta1']
+            _v2_s,   _v2_e   = vg['volta2']
+            _A_dur   = _body_e - _body_s
+            _v1_dur  = _v1_e - _v1_s
+            _v2_dur  = _v2_e - _v2_s
+            # Shifts for each part in unfolded timeline
+            _A_p2_shift  = _v1_e - _body_s           # A plays again right after A1
+            _A2_uf_start = _v1_e + _A_dur             # onset of A2 in unfolded
+            _A2_shift    = _A2_uf_start - _v2_s
+            _B_uf_start  = _A2_uf_start + _v2_dur
+            _B_shift     = _B_uf_start - _v2_e
+            unfolded = {}
+            for vk, notes in voices.items():
+                _I  = [n for n in notes if n[5] < _body_s]
+                _A  = [n for n in notes if _body_s <= n[5] < _body_e]
+                _A1 = [n for n in notes if _v1_s <= n[5] < _v1_e]
+                _A2 = [n for n in notes if _v2_s <= n[5] < _v2_e]
+                _B  = [n for n in notes if n[5] >= _v2_e]
+                _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_p2_shift) for n in _A]
+                _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_shift) for n in _A2]
+                _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift) for n in _B]
+                unfolded[vk] = _I + _A + _A1 + _Ap2 + _A2s + _Bs
+            seq_voices = unfolded
+            # Repeat parameters for per-motif counting (in unfolded time)
+            rpt_start = _body_s
+            rpt_end   = _v1_e                  # end of play-1 (A + A1)
+            shift     = _A_p2_shift            # how much A is shifted for play2
+            play2_end = _A2_uf_start + _v2_dur  # end of A_play2 + A2 in unfolded
+            volta1_range_q = (_v1_s, _v1_e)    # A1 in unfolded (same as original)
+            volta2_range_q = (_A2_uf_start, _A2_uf_start + _v2_dur)
+            is_volta = True
+        elif len(repeat_ranges) == 1:
             rpt_start, rpt_end = repeat_ranges[0]
             shift = rpt_end - rpt_start
+            play2_end = rpt_end + shift
             unfolded = {}
             for vk, notes in voices.items():
                 pre  = [n for n in notes if n[5] < rpt_start]
@@ -2140,19 +2265,40 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             _nd = m.get('n_direct_only', n_occ)
             _ni = m.get('n_inv_only', 0)
             _nb = m.get('n_both', 0)
+            def _strip_p2(nid):
+                return nid[:-4] if nid.endswith('__p2') else nid
             if shift > 0:
                 rpt_start_16  = rpt_start * 16
                 rpt_end_16    = rpt_end   * 16
                 shift_16      = shift * 16
-                play2_end_16  = rpt_end_16 + shift_16
+                play2_end_16  = play2_end * 16
                 p1_idxs  = [j for j, t in enumerate(transforms)
                             if rpt_start_16 <= t['onset_q'] < rpt_end_16]
                 p2_idxs  = [j for j, t in enumerate(transforms)
                             if rpt_end_16 <= t['onset_q'] < play2_end_16]
                 p_set    = set(p1_idxs) | set(p2_idxs)
                 nr_idxs  = [j for j in range(len(transforms)) if j not in p_set]
-                if p2_idxs:
-                    # Match each play-2 to its play-1 by shifted onset
+                # Volta check: compare occurrences in volta1 vs volta2 ranges
+                volta_diff = False
+                if is_volta and volta1_range_q and volta2_range_q:
+                    _v1s16 = volta1_range_q[0] * 16
+                    _v1e16 = volta1_range_q[1] * 16
+                    _v2s16 = volta2_range_q[0] * 16
+                    _v2e16 = volta2_range_q[1] * 16
+                    c_v1 = sum(1 for j in p1_idxs if _v1s16 <= transforms[j]['onset_q'] < _v1e16)
+                    c_v2 = sum(1 for j in p2_idxs if _v2s16 <= transforms[j]['onset_q'] < _v2e16)
+                    volta_diff = (c_v1 != c_v2)
+                if volta_diff:
+                    # Different volta counts → sum all heard occurrences, no pairing
+                    n_occ = len(m['occurrences'])
+                    if n_occ < 2:
+                        continue
+                    occs_out = [[_strip_p2(nid) for nid in occ]
+                                for occ in m['occurrences']]
+                    transforms_out = transforms
+                    repeat_pairs = []
+                elif p2_idxs:
+                    # Equal volta counts (or simple repeat) → pair p1 with p2
                     p1_by_oq = {transforms[j]['onset_q']: j for j in p1_idxs}
                     pairs = []
                     for j2 in p2_idxs:
@@ -2161,8 +2307,6 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                             pairs.append((j1, j2))
                     idx_order      = p1_idxs + p2_idxs + nr_idxs
                     # strip __p2 suffix from play-2 nids so they point to real SVG elements
-                    def _strip_p2(nid):
-                        return nid[:-4] if nid.endswith('__p2') else nid
                     occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
                                 for j in idx_order]
                     transforms_out = [transforms[j] for j in idx_order]
@@ -2857,18 +3001,52 @@ def render_score(path: str, version: str = "1") -> tuple:
 
     # parse voices — separate try so _voices_s survives later errors
     try:
-        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s = _voice_notes_from_mei(mei_str)
+        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _vg_s = _voice_notes_from_mei(mei_str)
         if _beat_override is not None:
             _beat_dur_q_s = _beat_override
     except Exception:
         _voices_s = {}
         _beat_dur_q_s = 1.0
         _pickup_dur_q_s = 0.0
+        _rr_s = []
+        _vg_s = []
 
     # compute interval sequences for the /search endpoint + build note label map
+    # _volta_search_info: repeat parameters for volta-aware pairing in _search_motif
+    _volta_search_info = None
     try:
-        # unfold single repeat so /search finds cross-boundary patterns (same as analyze_motifs)
-        if len(_rr_s) == 1:
+        # unfold repeat/volta so /search finds cross-boundary patterns
+        if _vg_s:
+            # Volta unfolding (same logic as analyze_motifs)
+            _vg = _vg_s[0]
+            _bs, _be = _vg['body'];  _v1s, _v1e = _vg['volta1'];  _v2s, _v2e = _vg['volta2']
+            _A_dur = _be - _bs;  _v1_dur = _v1e - _v1s;  _v2_dur = _v2e - _v2s
+            _A_p2_sh = _v1e - _bs
+            _A2_uf   = _v1e + _A_dur
+            _A2_sh   = _A2_uf - _v2s
+            _B_uf    = _A2_uf + _v2_dur
+            _B_sh    = _B_uf - _v2e
+            _uf = {}
+            for vk, notes in _voices_s.items():
+                _I  = [n for n in notes if n[5] < _bs]
+                _A  = [n for n in notes if _bs <= n[5] < _be]
+                _A1 = [n for n in notes if _v1s <= n[5] < _v1e]
+                _A2 = [n for n in notes if _v2s <= n[5] < _v2e]
+                _B  = [n for n in notes if n[5] >= _v2e]
+                _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_p2_sh) for n in _A]
+                _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_sh) for n in _A2]
+                _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh)  for n in _B]
+                _uf[vk] = _I + _A + _A1 + _Ap2 + _A2s + _Bs
+            all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
+                        for vk, notes in _uf.items() if len(notes) >= 4]
+            _volta_search_info = {
+                'rpt_start': _bs,   'rpt_end': _v1e,
+                'shift':     _A_p2_sh,
+                'play2_end': _A2_uf + _v2_dur,
+                'volta1':    (_v1s, _v1e),
+                'volta2':    (_A2_uf, _A2_uf + _v2_dur),
+            }
+        elif len(_rr_s) == 1:
             _rpt_s, _rpt_e = _rr_s[0]
             _sh = _rpt_e - _rpt_s
             _uf = {}
@@ -3751,15 +3929,15 @@ window.toggleTSDGen8=function(){{
 <div id="score-pages" style="position:relative">{pages}</div>
 </body>
 </html>"""
-    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s, _rr_s
+    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _volta_search_info
 
 # ── background render + update ────────────────────────────────────────────────
 
 def _render_worker(path: str, version: str, queue):
     """Runs in a subprocess to isolate verovio segfaults from the main process."""
     try:
-        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges = render_score(path, version)
-        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges))
+        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges, volta_info = render_score(path, version)
+        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges, volta_info))
     except Exception as e:
         queue.put(('error', str(e)))
 
@@ -3794,14 +3972,15 @@ def load_file_bg(path: str, status_cb):
         status_cb(f"ERROR: {result[1]}", error=True)
         return
 
-    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges = result
+    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, repeat_ranges, volta_info = result
     with _state_lock:
-        _state["html"]           = html
-        _state["version"]        = ver
-        _state["seqs"]           = seqs
-        _state["beat_dur_q"]     = beat_dur_q
-        _state["pickup_dur_q"]   = pickup_dur_q
-        _state["repeat_ranges"]  = repeat_ranges
+        _state["html"]              = html
+        _state["version"]           = ver
+        _state["seqs"]              = seqs
+        _state["beat_dur_q"]        = beat_dur_q
+        _state["pickup_dur_q"]      = pickup_dur_q
+        _state["repeat_ranges"]     = repeat_ranges
+        _state["volta_search_info"] = volta_info
     _notify_sse(ver)
     status_cb(f"{n_pages} page{'s' if n_pages != 1 else ''} — {os.path.basename(path)}")
 
