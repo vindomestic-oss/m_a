@@ -1823,12 +1823,15 @@ def _voice_notes_from_mei(mei_str):
             repeat_ranges.append((rpt_section_start, measure_onset))
             rpt_section_start = measure_onset
             _rpt_active = False
-        elif _right == 'dblheavy' and _rpt_active:
+        elif _right == 'dblheavy':
             # Verovio merges a backward+forward repeat pair into a single dblheavy
-            # barline.  This means two independent repeat sections (||:A:||||:B:||).
+            # barline — always means two independent repeat sections (||:A:||||:B:||).
             # Split here so both sections are tracked as separate ranges → no unfolding.
+            # Note: no _rpt_active guard — the first section may start implicitly
+            # (no explicit rptstart at the beginning of the piece).
             repeat_ranges.append((rpt_section_start, measure_onset))
             rpt_section_start = measure_onset
+            _rpt_active = True
 
     # Merge tied notes from <tie> elements (MusicXML-sourced MEI).
     # kern-sourced MEI uses tie="i/m/t" attributes (handled in proc_note);
