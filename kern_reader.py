@@ -2449,9 +2449,15 @@ def _search_motif(query):
             p2_count = len(p2_idxs)
             p1_pos   = {j1: nb + k              for k, j1 in enumerate(p1_idxs)}
             p2_pos   = {j2: nb + p1_count + k   for k, j2 in enumerate(p2_idxs)}
-            repeat_pairs = [(p1_pos[j1], p2_pos[j2])
+            # skip_p2=True when p2 nids match p1 nids after stripping (same physical notes).
+            # False when they differ (e.g. volta1 vs volta2 endings — both must be drawn).
+            def _nids_match(pos1, pos2):
+                return ([_strip_p2(n) for n in occs_with_onset[pos1][1]] ==
+                        [_strip_p2(n) for n in occs_with_onset[pos2][1]])
+            repeat_pairs = [(p1_pos[j1], p2_pos[j2],
+                             _nids_match(p1_pos[j1], p2_pos[j2]))
                             for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos]
-            # B pairs
+            # B pairs (B_p2 nids always match B_p1 after stripping → skip_p2=True)
             if nr_B_p2:
                 _b_base = nb + p1_count + p2_count
                 B_p1_by_oq = {round(occs_with_onset[_b_base + k][0] * 16): _b_base + k
@@ -2460,7 +2466,7 @@ def _search_motif(query):
                     o2 = occs_with_onset[_b_base + len(nr_B_p1) + k2][0]
                     k1_pos = B_p1_by_oq.get(round((o2 - B_dur_q) * 16))
                     if k1_pos is not None:
-                        repeat_pairs.append((k1_pos, _b_base + len(nr_B_p1) + k2))
+                        repeat_pairs.append((k1_pos, _b_base + len(nr_B_p1) + k2, True))
             # strip __p2 suffix from nids in A play-2 slots
             stripped = []
             for k, (o, nids) in enumerate(occs_with_onset):
@@ -2654,7 +2660,10 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                     nb = len(nr_before)
                     p1_pos = {j1: nb + k                 for k, j1 in enumerate(p1_idxs)}
                     p2_pos = {j2: nb + len(p1_idxs) + k  for k, j2 in enumerate(p2_idxs)}
-                    repeat_pairs = [(p1_pos[j1], p2_pos[j2])
+                    # skip_p2=True when p2 nids == p1 nids after stripping (same physical notes,
+                    # e.g. body in simple repeat).  False when they differ (e.g. volta1 vs volta2).
+                    repeat_pairs = [(p1_pos[j1], p2_pos[j2],
+                                     occs_out[p1_pos[j1]] == occs_out[p2_pos[j2]])
                                     for j1, j2 in pairs
                                     if j1 in p1_pos and j2 in p2_pos]
                     n_occ = len(occs_out)
@@ -2699,7 +2708,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                             # idx_order = nr_before + p1_idxs + p2_idxs + nr_B_p1 + nr_B_p2
                             _nr_all_map = {j: len(nr_before) + len(p1_idxs) + len(p2_idxs) + k
                                            for k, j in enumerate(nr_after)}
-                            B_rep_pairs = [(_nr_all_map[j1], _nr_all_map[j2])
+                            B_rep_pairs = [(_nr_all_map[j1], _nr_all_map[j2], True)
                                            for j1, j2 in B_pairs_raw
                                            if j1 in _nr_all_map and j2 in _nr_all_map]
                             repeat_pairs = repeat_pairs + B_rep_pairs
@@ -3714,13 +3723,15 @@ function clientToSVG(svg,cx,cy){{
 
 function drawBoxes(m){{
   clearRects();
-  // repeat_pairs: [[play1_idx, play2_idx], ...] — same physical notes, second playthrough
+  // repeat_pairs: [[play1_idx, play2_idx, skip_p2], ...]
+  // skip_p2=true  → same physical notes (simple repeat): show "N(M)" at play1, skip play2 box
+  // skip_p2=false → different physical notes (e.g. volta endings): draw both with own numbers
   var extraNum={{}};   // play1_idx -> play2_num (1-based)
   var skipDraw={{}};   // play2_idx -> true
   if(m.repeat_pairs){{
     m.repeat_pairs.forEach(function(pair){{
-      extraNum[pair[0]]=pair[1]+1;
-      skipDraw[pair[1]]=true;
+      var skip=pair.length<3||pair[2];
+      if(skip){{extraNum[pair[0]]=pair[1]+1; skipDraw[pair[1]]=true;}}
     }});
   }}
   m.occs.forEach(function(occ,occIdx){{
