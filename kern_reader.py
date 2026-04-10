@@ -3797,13 +3797,14 @@ function clientToSVG(svg,cx,cy){{
 function drawBoxes(m){{
   clearRects();
   // repeat_pairs: [[play1_idx, play2_idx, skip_p2], ...]
-  // skip_p2=true  → same physical notes (simple repeat): show N at play1, skip play2 box
+  // skip_p2=true  → same physical notes (simple repeat): show "N(M)" at play1, skip play2 box
   // skip_p2=false → different physical notes (e.g. volta endings): draw both with own numbers
+  var extraNum={{}};   // play1_idx -> play2_num (1-based)
   var skipDraw={{}};   // play2_idx -> true
   if(m.repeat_pairs){{
     m.repeat_pairs.forEach(function(pair){{
       var skip=pair.length<3||pair[2];
-      if(skip){{skipDraw[pair[1]]=true;}}
+      if(skip){{extraNum[pair[0]]=pair[1]+1; skipDraw[pair[1]]=true;}}
     }});
   }}
   m.occs.forEach(function(occ,occIdx){{
@@ -3882,7 +3883,9 @@ function drawBoxes(m){{
         if(isVeryFirst||isOnly){{
           var numSz=ypad*1.5;
           var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-          txt.textContent=String(occIdx+1);
+          txt.textContent=extraNum[occIdx]!==undefined
+            ? String(occIdx+1)+'('+extraNum[occIdx]+')'
+            : String(occIdx+1);
           txt.setAttribute('x', String(x1+numSz*0.1));
           txt.setAttribute('y', String(y1-numSz*0.15));
           txt.setAttribute('fill', m.color);
