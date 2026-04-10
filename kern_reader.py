@@ -1162,16 +1162,33 @@ def _extract_movement(xml_str: str, start_mnum: str, end_mnum: str,
             else:
                 have.add(child.tag)
 
-        # Insert missing elements in MusicXML canonical order
-        # For time: infer from note content rather than blindly inheriting the
-        # previous movement's time sig (which is wrong when the first movement
-        # never emits subsequent time-sig changes, as with CapToMusic.py exports)
-        if 'time' not in have and acc_divs is not None:
+        # Insert missing elements in MusicXML canonical order.
+        # For time: infer from note content to catch wrong time sigs in source
+        # (e.g. CapToMusic exports that write 4/4 for every movement header).
+        # Only override when the inferred bar duration differs from declared —
+        # same-duration equivalents (6/8↔3/4, 12/8↔3/2, 2/2↔4/4) are kept
+        # as-is since the source's grouping choice is likely intentional.
+        if acc_divs is not None:
             divs_val = int(acc_divs.text)
             kept = part.findall('measure')
             inferred_time = _infer_time_sig_from_content(kept, divs_val, fname)
             if inferred_time is not None:
-                acc_time = inferred_time
+                ib  = int(inferred_time.findtext('beats', '0'))
+                ibt = int(inferred_time.findtext('beat-type', '1'))
+                inferred_bar_q = ib * 4.0 / ibt
+                existing_time = existing.find('time')
+                if existing_time is not None:
+                    eb  = int(existing_time.findtext('beats', '0'))
+                    ebt = int(existing_time.findtext('beat-type', '1'))
+                    declared_bar_q = eb * 4.0 / ebt
+                    if abs(declared_bar_q - inferred_bar_q) > 0.01:
+                        # Bar durations differ → source sig is wrong, replace
+                        existing.remove(existing_time)
+                        have.discard('time')
+                        acc_time = inferred_time
+                    # else: same bar duration (e.g. 6/8 vs 3/4) → keep source sig
+                else:
+                    acc_time = inferred_time
 
         insert_pos = 0
         for tag, elem in [('divisions', acc_divs), ('key', acc_key),
@@ -1182,6 +1199,16 @@ def _extract_movement(xml_str: str, start_mnum: str, end_mnum: str,
         for n, elem in sorted(acc_clefs.items()):
             if f'clef_{n}' not in have:
                 existing.append(elem)
+
+    # Renumber measures from 1 in all parts
+    first_part = root.find('part')
+    if first_part is not None:
+        orig_nums = [m.get('number', '') for m in first_part.findall('measure')]
+        num_map = {orig: str(i + 1) for i, orig in enumerate(orig_nums)}
+        for part in root.findall('part'):
+            for i, msr in enumerate(part.findall('measure')):
+                orig = msr.get('number', '')
+                msr.set('number', num_map.get(orig, str(i + 1)))
 
     return ET.tostring(root, encoding='unicode')
 
@@ -1228,7 +1255,7 @@ def _regen_tobis_splits(subdir='engl-suites'):
     os.makedirs(out_dir, exist_ok=True)
 
     for src_fname in sorted(os.listdir(src_dir)):
-        if not src_fname.lower().endswith('.xml'):
+        if not src_fname.lower().endswith(('.xml', '.musicxml')):
             continue
         src_path = os.path.join(src_dir, src_fname)
         with open(src_path, encoding='utf-8') as f:
@@ -1240,7 +1267,7 @@ def _regen_tobis_splits(subdir='engl-suites'):
             continue
 
         # BWV number for output filename prefix
-        bwv_m = _re.match(r'(BWV_\d+[a-z]?)\.xml', src_fname, _re.I)
+        bwv_m = _re.match(r'(BWV_\d+[a-z]?)\.(xml|musicxml)', src_fname, _re.I)
         bwv_prefix = bwv_m.group(1) if bwv_m else src_fname.rsplit('.', 1)[0]
 
         for i, (title, start_mnum, end_mnum) in enumerate(movements, 1):
@@ -1381,6 +1408,182 @@ _BEAT_DUR_OVERRIDES: dict[str, float] = {
 
 # ── MusicXML voice-order fix ──────────────────────────────────────────────────
 _STEP_MIDI = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
+
+def _fix_missing_divisions(content: str) -> str:
+    """Inject <divisions> into the first <attributes> block when absent.
+    MusicXML requires divisions for unambiguous duration parsing; without it
+    verovio misaligns voices in files that mix triplet eighths and quarters
+    (e.g. BWV_0995_6_Gavotte_II_en_Rondeaux.xml).  Divisions are inferred
+    from the duration of the first <type>quarter</type> note found."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    changed = False
+    for part in root.findall('.//part'):
+        if part.find('.//attributes/divisions') is not None:
+            continue  # already has divisions
+
+        # Infer divisions from the first explicit quarter note duration
+        divisions = None
+        for note in part.iter('note'):
+            type_el = note.find('type')
+            dur_el  = note.find('duration')
+            if type_el is not None and dur_el is not None:
+                if (type_el.text or '').strip() == 'quarter':
+                    try:
+                        divisions = int(dur_el.text)
+                        break
+                    except (ValueError, TypeError):
+                        pass
+        if divisions is None:
+            continue
+
+        first_measure = part.find('measure')
+        if first_measure is None:
+            continue
+        attrs = first_measure.find('attributes')
+        if attrs is None:
+            attrs = ET.Element('attributes')
+            first_measure.insert(0, attrs)
+        if attrs.find('divisions') is None:
+            div_el = ET.Element('divisions')
+            div_el.text = str(divisions)
+            attrs.insert(0, div_el)
+            changed = True
+
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
+
+
+def _fix_missing_tuplet_markers(content: str) -> str:
+    """Add missing <tuplet> notation markers to triplet groups.
+
+    Some MusicXML files (e.g. from CapToMusic) only annotate tuplet start/stop
+    in the first measure; subsequent measures have <time-modification> but no
+    <tuplet type="start/stop"> markers.  Without these markers, verovio emits
+    plain <note dur='8'> in the MEI (no <tuplet> wrapper) and spaces them as
+    regular eighth notes — causing lower-voice quarter notes to appear
+    compressed relative to the upper-voice triplet eighths.
+
+    Algorithm: for each voice in each measure, collect runs of notes sharing
+    the same <time-modification> (actual=3, normal=2) in groups of 3, then
+    add start/stop markers where absent.
+    """
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+
+    changed = False
+    for part in root.findall('.//part'):
+        for measure in part.findall('measure'):
+            # Collect non-chord notes per voice in document order
+            voices: dict = {}
+            for child in measure:
+                if child.tag != 'note':
+                    continue
+                if child.find('chord') is not None:
+                    continue          # chord note shares onset with previous
+                v_el = child.find('voice')
+                v = v_el.text if v_el is not None else '1'
+                voices.setdefault(v, []).append(child)
+
+            for note_list in voices.values():
+                i = 0
+                while i < len(note_list):
+                    note = note_list[i]
+                    tm = note.find('time-modification')
+                    if tm is None:
+                        i += 1
+                        continue
+                    if tm.findtext('actual-notes') != '3' or tm.findtext('normal-notes') != '2':
+                        i += 1
+                        continue
+                    # Gather exactly 3 consecutive triplet notes
+                    group = []
+                    j = i
+                    while j < len(note_list) and len(group) < 3:
+                        n = note_list[j]
+                        ntm = n.find('time-modification')
+                        if ntm is None or ntm.findtext('actual-notes') != '3':
+                            break
+                        group.append(n)
+                        j += 1
+                    if len(group) != 3:
+                        i = j
+                        continue
+                    # Only mark uniform groups (all same <duration>) to avoid
+                    # incorrectly splitting mixed-value triplet groups (e.g. BWV_0815)
+                    durs = [n.findtext('duration') for n in group]
+                    if len(set(durs)) != 1:
+                        i = j
+                        continue
+                    first, last = group[0], group[-1]
+                    # Check if start marker already present on first note
+                    first_nots = first.find('notations')
+                    has_start = first_nots is not None and any(
+                        t.get('type') == 'start'
+                        for t in first_nots.findall('tuplet')
+                    )
+                    if not has_start:
+                        if first_nots is None:
+                            first_nots = ET.SubElement(first, 'notations')
+                        ts = ET.SubElement(first_nots, 'tuplet')
+                        ts.set('number', '1')
+                        ts.set('type', 'start')
+                        last_nots = last.find('notations')
+                        if last_nots is None:
+                            last_nots = ET.SubElement(last, 'notations')
+                        te = ET.SubElement(last_nots, 'tuplet')
+                        te.set('number', '1')
+                        te.set('type', 'stop')
+                        changed = True
+                    i = j  # advance past this group
+
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
+
+
+def _strip_new_system_hints(content: str) -> str:
+    """Remove new-system/new-page layout hints from <print> elements.
+
+    Verovio's MusicXML tie-matching resets at <print new-system='yes'>
+    boundaries, leaving cross-system ties unresolved ('ties left open').
+    Removing the hints lets verovio compute its own layout, after which
+    tie matching works correctly across system breaks.
+    """
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    changed = False
+    for print_el in root.iter('print'):
+        for attr in ('new-system', 'new-page'):
+            if print_el.get(attr):
+                del print_el.attrib[attr]
+                changed = True
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
+
 
 def _fix_implicit_pickup_measures(content: str) -> str:
     """Fix MusicXML implicit measures (number='-1') from LilyPond repeat pickups.
@@ -1698,7 +1901,7 @@ def _voice_notes_from_mei(mei_str):
             beats_per_measure, beat_dur_q = _parse_meter(c, u)
             break
 
-    def proc_note(n, dur_override=None, dots_override=None, onset=0.0, scale=1.0):
+    def proc_note(n, dur_override=None, dots_override=None, onset=0.0, scale=1.0, dur_q=None):
         nid   = n.get(_XML_ID)
         pname = n.get('pname', '')
         if not pname or not nid:
@@ -1707,10 +1910,14 @@ def _voice_notes_from_mei(mei_str):
         if 'm' in tie or 't' in tie:   # skip tied continuation — but still counts time
             return None
         oct_str = n.get('oct', '4')
-        dur     = dur_override if dur_override is not None else n.get('dur', '4')
-        dots    = dots_override if dots_override is not None else int(n.get('dots', 0))
+        if dur_q is not None:
+            actual_dur = dur_q
+        else:
+            dur  = dur_override if dur_override is not None else n.get('dur', '4')
+            dots = dots_override if dots_override is not None else int(n.get('dots', 0))
+            actual_dur = _to_quarters(dur, dots) * scale
         accid   = n.get('accid') or n.get('accid.ges')
-        return (nid, pname, int(oct_str), _to_quarters(dur, dots) * scale,
+        return (nid, pname, int(oct_str), actual_dur,
                 _to_midi(pname, oct_str, accid), onset)
 
     def iter_events(el, scale=1.0):
@@ -1726,6 +1933,26 @@ def _voice_notes_from_mei(mei_str):
                 yield from iter_events(child, scale)
             else:
                 yield child, scale
+
+    # Base PPQ for MusicXML-sourced MEI: verovio sets dur.ppq on every note/rest with
+    # the actual performed duration in MIDI ticks.  When verovio omits <tuplet> wrappers
+    # for some measures (a known verovio quirk), dur and dots stay at the nominal value
+    # (e.g. dur='8' for a triplet eighth) but dur.ppq correctly reflects the real duration.
+    # kern-sourced MEI has no dur.ppq at all; _base_ppq stays None and the existing
+    # _to_quarters(dur, dots)*scale path is used unchanged.
+    _base_ppq = None
+    for _n in tree.iter(tag_pfx + 'note'):
+        _ppq = _n.get('dur.ppq')
+        if _ppq and _n.get('dur') == '4' and not int(_n.get('dots', 0)):
+            _base_ppq = int(_ppq)
+            break
+
+    def _elem_dur_q(el, scale):
+        """Duration in quarters: prefer dur.ppq/base_ppq, fall back to dur+dots+scale."""
+        ppq = el.get('dur.ppq')
+        if ppq and _base_ppq:
+            return int(ppq) / _base_ppq
+        return _to_quarters(el.get('dur', '4'), int(el.get('dots', 0))) * scale
 
     voices           = defaultdict(list)
     measure_onset    = 0.0
@@ -1758,24 +1985,24 @@ def _voice_notes_from_mei(mei_str):
                     t = child.tag.split('}')[-1]
                     onset = measure_onset + pos
                     if t == 'note':
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
+                        dur = _elem_dur_q(child, scale)
                         if child.get('grace'):   # grace note (q/Q in kern) — skip, no pos advance
                             pass
                         else:
-                            e = proc_note(child, onset=onset, scale=scale)
+                            e = proc_note(child, onset=onset, scale=scale, dur_q=dur)
                             if e:
                                 voices[key].append(e)
                             pos += dur
                             pos_real = pos
                     elif t == 'chord':
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
+                        dur = _elem_dur_q(child, scale)
                         if child.get('grace'):   # grace chord — skip
                             pass
                         else:
                             cands = [proc_note(n,
                                                dur_override=child.get('dur', '4'),
                                                dots_override=int(child.get('dots', 0)),
-                                               onset=onset, scale=scale)
+                                               onset=onset, scale=scale, dur_q=dur)
                                      for n in child.findall(tag_pfx + 'note')]
                             cands = [c for c in cands if c]
                             if cands:
@@ -1783,7 +2010,7 @@ def _voice_notes_from_mei(mei_str):
                             pos += dur
                             pos_real = pos
                     elif t in ('rest', 'space'):
-                        dur = _to_quarters(child.get('dur', '4'), int(child.get('dots', 0))) * scale
+                        dur = _elem_dur_q(child, scale)
                         pos += dur
                         pos_real = pos
                     elif t == 'mRest':
@@ -1798,14 +2025,22 @@ def _voice_notes_from_mei(mei_str):
         #    verovio doesn't set metcon; mRest filler voices are excluded via pos_real)
         # Cap at beats_per_measure: MusicXML cross-measure tied chords can produce
         # max_pos > beats_per_measure with metcon='false' — those are NOT short measures.
-        eff_pos = min(max_pos, beats_per_measure)
+        # Exception: when actual content greatly exceeds the time-sig measure length
+        # (wrong time signature in source MusicXML, e.g. 3/8 for a 4/4 piece),
+        # advance by actual content so voices stay in sync.
+        _overfull = max_pos > beats_per_measure * 1.5 + 1e-9
+        if _overfull:
+            eff_pos = max_pos
+        else:
+            eff_pos = min(max_pos, beats_per_measure)
         onset_before_update = measure_onset
         _m_id = measure_el.get(_XML_ID, '')
         if _m_id:
             _measure_starts[_m_id] = onset_before_update
         if eff_pos > 0 and (measure_el.get('metcon') == 'false' or
-                            eff_pos < beats_per_measure - 1e-9):
-            if _first_measure:
+                            eff_pos < beats_per_measure - 1e-9 or
+                            _overfull):
+            if _first_measure and not _overfull:
                 pickup_dur_q = eff_pos
             measure_onset += eff_pos
         else:
@@ -2497,6 +2732,37 @@ def _search_motif(query):
                         pos1 = Bv1_by_oq16.get(round(o2 * 16) - bv_offset_16)
                         if pos1 is not None:
                             repeat_pairs.append((pos1, pos2, True))
+            # Volta-difference check (mirrors analyze_motifs collapse logic):
+            # If motif doesn't appear in any volta region → collapse play-2 copies.
+            if volta_search_info and p2_idxs:
+                _v1_s, _v1_e = _eff_rpt.get('volta1', (float('inf'), float('inf')))
+                _v2_s, _v2_e = _eff_rpt.get('volta2', (float('inf'), float('inf')))
+                _in_Av1 = any(_v1_s-1e-9 <= occs_with_onset[p1_pos[j1]][0] < _v1_e-1e-9
+                              for j1, j2 in pairs if j1 in p1_pos)
+                _in_Av2 = any(_v2_s-1e-9 <= occs_with_onset[p2_pos[j2]][0] < _v2_e-1e-9
+                              for j1, j2 in pairs if j2 in p2_pos)
+                _in_Bv1 = _in_Bv2 = False
+                if nr_B_p2:
+                    _b_v1 = _eff_rpt.get('b_volta_v1')
+                    _b_v2 = _eff_rpt.get('b_volta_v2')
+                    if _b_v1 and _b_v2:
+                        _bv1s, _bv1e = _b_v1
+                        _bv2s, _bv2e = _b_v2
+                        _in_Bv1 = any(_bv1s-1e-9 <= occs_with_onset[_b_base+k][0] < _bv1e-1e-9
+                                      for k in range(len(nr_B_p1)))
+                        _in_Bv2 = any(_bv2s-1e-9 <= occs_with_onset[_b_base+len(nr_B_p1)+k2][0] < _bv2e-1e-9
+                                      for k2 in range(len(nr_B_p2)))
+                if (_in_Av1 == _in_Av2) and (_in_Bv1 == _in_Bv2):
+                    # No volta difference: motif absent from both A-volta regions,
+                    # or present in both (same content → not distinguishing).
+                    # Collapse play-2 and B_p2.
+                    _keep = (list(range(nb)) +
+                             list(range(nb, nb + p1_count)) +
+                             list(range(nb + p1_count + p2_count,
+                                        nb + p1_count + p2_count + len(nr_B_p1))))
+                    occs_with_onset = [occs_with_onset[k] for k in _keep]
+                    repeat_pairs = []
+                    p2_count = 0  # no play-2 slots remain to strip
             # strip __p2 suffix from nids in A play-2 slots
             stripped = []
             for k, (o, nids) in enumerate(occs_with_onset):
@@ -2582,6 +2848,18 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             # B section repeat (||:A:||||:B:|| structure): repeat_ranges has ≥2 entries
             _b_repeat = len(repeat_ranges) >= 2
             _B_dur    = (repeat_ranges[-1][1] - repeat_ranges[-1][0]) if _b_repeat else 0.0
+            # Pre-detect B volta structure so per-voice loop can split body/v1/v2 correctly.
+            # Without this, _Bs contains B_v2 notes and _Bp2 contains B_v1 notes — both wrong.
+            _bv1_s_orig = _bv1_e_orig = _bv2_s_orig = _bv2_e_orig = None
+            _Bb_p2_shift = _Bv2_shift = 0.0
+            if len(volta_groups) >= 2:
+                _vg1 = volta_groups[1]
+                _bv1_s_orig, _bv1_e_orig = _vg1['volta1']
+                _bv2_s_orig, _bv2_e_orig = _vg1['volta2']
+                # B play-2 body starts after B play-1 ends (_B_uf_start + B_dur)
+                _Bb_p2_shift = _B_shift + (_bv1_e_orig - _v2_e)
+                # B_v2 placed at same relative offset from B_body as B_v1 in play-1
+                _Bv2_shift   = _Bb_p2_shift + _bv1_s_orig - _bv2_s_orig
             unfolded = {}
             for vk, notes in voices.items():
                 _I  = [n for n in notes if _I_start <= n[5] < _body_s]
@@ -2592,9 +2870,19 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 _Ip2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_shift) for n in _I]
                 _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_shift) for n in _A]
                 _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_shift)            for n in _A2]
-                _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)             for n in _B]
-                _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_shift+_B_dur)
-                          for n in _B] if _b_repeat and _B_dur > 0 else [])
+                if _bv1_s_orig is not None:
+                    # B has its own volta: play-1 = body+v1, play-2 = body+v2
+                    _Bb  = [n for n in notes if _v2_e        <= n[5] < _bv1_s_orig]
+                    _Bv1 = [n for n in notes if _bv1_s_orig  <= n[5] < _bv1_e_orig]
+                    _Bv2 = [n for n in notes if _bv2_s_orig  <= n[5] < _bv2_e_orig]
+                    _Bs  = ([(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)        for n in _Bb] +
+                            [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)        for n in _Bv1])
+                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bb_p2_shift) for n in _Bb] +
+                            [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bv2_shift)   for n in _Bv2])
+                else:
+                    _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)             for n in _B]
+                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_shift+_B_dur)
+                              for n in _B] if _b_repeat and _B_dur > 0 else [])
                 unfolded[vk] = _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
             seq_voices = unfolded
             # Repeat parameters for per-motif counting (in unfolded time)
@@ -2611,11 +2899,12 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             # Detect B-section's own 1st/2nd endings (volta_groups[1])
             if len(volta_groups) >= 2:
                 _vg1 = volta_groups[1]
-                _bv1_uf_s = _B_shift + _vg1['volta1'][0]
-                _bv1_uf_e = _B_shift + _vg1['volta1'][1]
-                _bv2_uf_s = _B_shift + _vg1['volta2'][0]
-                _bv2_uf_e = _B_shift + _vg1['volta2'][1]
-                b_has_volta = True
+                _Bp2_start   = _B_uf_start + _B_dur   # start of B play-2 in unfolded time
+                _bv1_uf_s    = _B_uf_start + (_vg1['volta1'][0] - _v2_e)
+                _bv1_uf_e    = _Bp2_start              # B play-1 ends where play-2 begins
+                _bv2_uf_s    = _Bp2_start + (_vg1['volta1'][0] - _v2_e)
+                _bv2_uf_e    = _bv2_uf_s + (_vg1['volta2'][1] - _vg1['volta2'][0])
+                b_has_volta  = True
                 b_volta_v1_16s = round(_bv1_uf_s * 16)
                 b_volta_v1_16e = round(_bv1_uf_e * 16)
                 b_volta_v2_16s = round(_bv2_uf_s * 16)
@@ -2738,8 +3027,9 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                                        for j in p1_idxs)
                         p2_in_v2 = any(v2_16_s <= transforms[j]['onset_q'] < v2_16_e
                                        for j in p2_idxs)
-                        if not p1_in_v1 and not p2_in_v2:
-                            # No volta difference: collapse both A_p2 and B_p2
+                        if p1_in_v1 == p2_in_v2:
+                            # No volta difference: motif absent from both volta regions
+                            # OR present in both (same content in both endings) → collapse.
                             idx_order = nr_before + p1_idxs + nr_B_p1
                             occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
                                         for j in idx_order]
@@ -3446,6 +3736,9 @@ def render_score(path: str, version: str = "1") -> tuple:
             content = prepare_grand_staff(content)
             content = add_beam_markers(content)
         elif ext in ('xml', 'musicxml', 'mxl'):
+            content = _fix_missing_divisions(content)
+            content = _fix_missing_tuplet_markers(content)
+            content = _strip_new_system_hints(content)
             content = _fix_implicit_pickup_measures(content)
             content = _fix_musicxml_voice_order(content)
         ok = _vtk.loadData(content)
@@ -3497,6 +3790,15 @@ def render_score(path: str, version: str = "1") -> tuple:
             _B_sh    = _B_uf - _v2e
             _b_rpt = len(_rr_s) >= 2
             _B_dur = (_rr_s[-1][1] - _rr_s[-1][0]) if _b_rpt else 0.0
+            # Pre-detect B volta structure (same logic as analyze_motifs)
+            _bv1s_o = _bv1e_o = _bv2s_o = _bv2e_o = None
+            _Bb_p2_sh = _Bv2_sh = 0.0
+            if len(_vg_s) >= 2:
+                _vg1s = _vg_s[1]
+                _bv1s_o, _bv1e_o = _vg1s['volta1']
+                _bv2s_o, _bv2e_o = _vg1s['volta2']
+                _Bb_p2_sh = _B_sh + (_bv1e_o - _v2e)
+                _Bv2_sh   = _Bb_p2_sh + _bv1s_o - _bv2s_o
             _uf = {}
             for vk, notes in _voices_s.items():
                 _I  = [n for n in notes if _I_start <= n[5] < _bs]
@@ -3507,9 +3809,18 @@ def render_score(path: str, version: str = "1") -> tuple:
                 _Ip2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_sh) for n in _I]
                 _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_sh) for n in _A]
                 _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_sh) for n in _A2]
-                _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh)  for n in _B]
-                _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_sh+_B_dur)
-                          for n in _B] if _b_rpt and _B_dur > 0 else [])
+                if _bv1s_o is not None:
+                    _Bb  = [n for n in notes if _v2e       <= n[5] < _bv1s_o]
+                    _Bv1 = [n for n in notes if _bv1s_o    <= n[5] < _bv1e_o]
+                    _Bv2 = [n for n in notes if _bv2s_o    <= n[5] < _bv2e_o]
+                    _Bs  = ([(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh) for n in _Bb] +
+                            [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh) for n in _Bv1])
+                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bb_p2_sh) for n in _Bb] +
+                            [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bv2_sh)   for n in _Bv2])
+                else:
+                    _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh)  for n in _B]
+                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_sh+_B_dur)
+                              for n in _B] if _b_rpt and _B_dur > 0 else [])
                 _uf[vk] = _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _uf.items() if len(notes) >= 4]
@@ -3527,10 +3838,12 @@ def render_score(path: str, version: str = "1") -> tuple:
             # B-section's own 1st/2nd endings (volta_groups[1])
             if len(_vg_s) >= 2:
                 _vg1s = _vg_s[1]
+                _Bp2_st = _B_uf + _B_dur
                 _volta_search_info['b_volta_v1'] = (
-                    _B_sh + _vg1s['volta1'][0], _B_sh + _vg1s['volta1'][1])
+                    _B_uf + (_vg1s['volta1'][0] - _v2e), _Bp2_st)
                 _volta_search_info['b_volta_v2'] = (
-                    _B_sh + _vg1s['volta2'][0], _B_sh + _vg1s['volta2'][1])
+                    _Bp2_st + (_vg1s['volta1'][0] - _v2e),
+                    _Bp2_st + (_vg1s['volta1'][0] - _v2e) + (_vg1s['volta2'][1] - _vg1s['volta2'][0]))
         elif len(_rr_s) == 1:
             _rpt_s, _rpt_e = _rr_s[0]
             _sh = _rpt_e - _rpt_s
