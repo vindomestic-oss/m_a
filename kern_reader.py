@@ -2449,13 +2449,15 @@ def _search_motif(query):
             p2_count = len(p2_idxs)
             p1_pos   = {j1: nb + k              for k, j1 in enumerate(p1_idxs)}
             p2_pos   = {j2: nb + p1_count + k   for k, j2 in enumerate(p2_idxs)}
-            # skip_p2=True when p2 nids match p1 nids after stripping (same physical notes).
-            # False when they differ (e.g. volta1 vs volta2 endings — both must be drawn).
-            def _nids_match(pos1, pos2):
-                return ([_strip_p2(n) for n in occs_with_onset[pos1][1]] ==
-                        [_strip_p2(n) for n in occs_with_onset[pos2][1]])
+            # skip_p2=True when p1 and p2 share any physical note (body repeat, or motif
+            # spanning body/volta boundary).  False only when entirely different notes
+            # (motif wholly within one volta ending vs the other).
+            def _nids_overlap(pos1, pos2):
+                s1 = set(_strip_p2(n) for n in occs_with_onset[pos1][1])
+                s2 = set(_strip_p2(n) for n in occs_with_onset[pos2][1])
+                return bool(s1 & s2)
             repeat_pairs = [(p1_pos[j1], p2_pos[j2],
-                             _nids_match(p1_pos[j1], p2_pos[j2]))
+                             _nids_overlap(p1_pos[j1], p2_pos[j2]))
                             for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos]
             # B pairs (B_p2 nids always match B_p1 after stripping → skip_p2=True)
             if nr_B_p2:
@@ -2660,10 +2662,13 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                     nb = len(nr_before)
                     p1_pos = {j1: nb + k                 for k, j1 in enumerate(p1_idxs)}
                     p2_pos = {j2: nb + len(p1_idxs) + k  for k, j2 in enumerate(p2_idxs)}
-                    # skip_p2=True when p2 nids == p1 nids after stripping (same physical notes,
-                    # e.g. body in simple repeat).  False when they differ (e.g. volta1 vs volta2).
+                    # skip_p2=True when p1 and p2 share any physical note (same or overlapping
+                    # position — e.g. body repeat, or motif spanning body/volta boundary).
+                    # False only when they share NO notes (entirely different volta endings).
+                    def _nids_overlap(pos1, pos2):
+                        return bool(set(occs_out[pos1]) & set(occs_out[pos2]))
                     repeat_pairs = [(p1_pos[j1], p2_pos[j2],
-                                     occs_out[p1_pos[j1]] == occs_out[p2_pos[j2]])
+                                     _nids_overlap(p1_pos[j1], p2_pos[j2]))
                                     for j1, j2 in pairs
                                     if j1 in p1_pos and j2 in p2_pos]
                     n_occ = len(occs_out)
