@@ -2469,6 +2469,31 @@ def _search_motif(query):
                     k1_pos = B_p1_by_oq.get(round((o2 - B_dur_q) * 16))
                     if k1_pos is not None:
                         repeat_pairs.append((k1_pos, _b_base + len(nr_B_p1) + k2, True))
+                # B-section volta pairing (volta_groups[1]):
+                # pair B's 1st-ending occurrences with B's 2nd-ending occurrences
+                # from _Bs (no __p2 nids); skip _Bp2 occurrences.
+                b_volta_v1 = _eff_rpt.get('b_volta_v1')
+                b_volta_v2 = _eff_rpt.get('b_volta_v2')
+                if b_volta_v1 and b_volta_v2:
+                    bv1_s, bv1_e = b_volta_v1
+                    bv2_s, bv2_e = b_volta_v2
+                    bv_offset_16 = round((bv2_s - bv1_s) * 16)
+                    Bv1_by_oq16 = {}
+                    for k in range(len(nr_B_p1)):
+                        pos = _b_base + k
+                        o = occs_with_onset[pos][0]
+                        if bv1_s - 1e-9 <= o < bv1_e - 1e-9:
+                            Bv1_by_oq16[round(o * 16)] = pos
+                    for k2 in range(len(nr_B_p2)):
+                        pos2 = _b_base + len(nr_B_p1) + k2
+                        o2 = occs_with_onset[pos2][0]
+                        if not (bv2_s - 1e-9 <= o2 < bv2_e - 1e-9):
+                            continue
+                        if any(nid.endswith('__p2') for nid in occs_with_onset[pos2][1]):
+                            continue
+                        pos1 = Bv1_by_oq16.get(round(o2 * 16) - bv_offset_16)
+                        if pos1 is not None:
+                            repeat_pairs.append((pos1, pos2, True))
             # strip __p2 suffix from nids in A play-2 slots
             stripped = []
             for k, (o, nids) in enumerate(occs_with_onset):
@@ -3496,6 +3521,13 @@ def render_score(path: str, version: str = "1") -> tuple:
                 'B_dur_q':     _B_dur,
                 'B_p1_end_q':  _play2_end + _B_dur,
             }
+            # B-section's own 1st/2nd endings (volta_groups[1])
+            if len(_vg_s) >= 2:
+                _vg1s = _vg_s[1]
+                _volta_search_info['b_volta_v1'] = (
+                    _B_sh + _vg1s['volta1'][0], _B_sh + _vg1s['volta1'][1])
+                _volta_search_info['b_volta_v2'] = (
+                    _B_sh + _vg1s['volta2'][0], _B_sh + _vg1s['volta2'][1])
         elif len(_rr_s) == 1:
             _rpt_s, _rpt_e = _rr_s[0]
             _sh = _rpt_e - _rpt_s
