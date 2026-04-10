@@ -2526,6 +2526,10 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         b_has_repeat = False   # True when B section also has a structural repeat
         B_dur_q      = 0.0    # duration of B section (quarters)
         B_p1_end_q   = 0.0   # end of B first pass in unfolded time
+        b_has_volta  = False   # True when B section has its own 1st/2nd endings
+        b_volta_v1_16s = b_volta_v1_16e = 0  # B volta1 onset range in 16ths (unfolded)
+        b_volta_v2_16s = b_volta_v2_16e = 0  # B volta2 onset range in 16ths (unfolded)
+        b_volta_offset_16 = 0                 # volta2_start − volta1_start in 16ths
         if volta_groups:
             # Volta unfolding: [I] + A + A1 + [I_p2] + A_p2 + A2(shifted) + B(shifted)
             # When B also repeats (suite dance ||:A:||||:B:||), B_p2 is appended so
@@ -2576,6 +2580,19 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             b_has_repeat = _b_repeat
             B_dur_q      = _B_dur
             B_p1_end_q   = play2_end + _B_dur          # end of B first pass
+            # Detect B-section's own 1st/2nd endings (volta_groups[1])
+            if len(volta_groups) >= 2:
+                _vg1 = volta_groups[1]
+                _bv1_uf_s = _B_shift + _vg1['volta1'][0]
+                _bv1_uf_e = _B_shift + _vg1['volta1'][1]
+                _bv2_uf_s = _B_shift + _vg1['volta2'][0]
+                _bv2_uf_e = _B_shift + _vg1['volta2'][1]
+                b_has_volta = True
+                b_volta_v1_16s = round(_bv1_uf_s * 16)
+                b_volta_v1_16e = round(_bv1_uf_e * 16)
+                b_volta_v2_16s = round(_bv2_uf_s * 16)
+                b_volta_v2_16e = round(_bv2_uf_e * 16)
+                b_volta_offset_16 = round((_bv2_uf_s - _bv1_uf_s) * 16)
         elif len(repeat_ranges) == 1:
             rpt_start, rpt_end = repeat_ranges[0]
             shift = rpt_end - rpt_start
@@ -2717,6 +2734,25 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                                            for j1, j2 in B_pairs_raw
                                            if j1 in _nr_all_map and j2 in _nr_all_map]
                             repeat_pairs = repeat_pairs + B_rep_pairs
+                            # B-section volta pairing (volta_groups[1]):
+                            # pair B's 1st-ending occurrences (in nr_B_p1, from _Bs)
+                            # with B's 2nd-ending occurrences (in nr_B_p2, from _Bs).
+                            # Skip _Bp2 occurrences (they have __p2 nids).
+                            if b_has_volta:
+                                Bv1_by_oq = {
+                                    transforms[j]['onset_q']: j
+                                    for j in nr_B_p1
+                                    if b_volta_v1_16s <= transforms[j]['onset_q'] < b_volta_v1_16e
+                                }
+                                for j2 in nr_B_p2:
+                                    oq2 = transforms[j2]['onset_q']
+                                    if not (b_volta_v2_16s <= oq2 < b_volta_v2_16e):
+                                        continue
+                                    if any(nid.endswith('__p2') for nid in m['occurrences'][j2]):
+                                        continue
+                                    j1 = Bv1_by_oq.get(oq2 - b_volta_offset_16)
+                                    if j1 is not None and j1 in _nr_all_map and j2 in _nr_all_map:
+                                        repeat_pairs.append((_nr_all_map[j1], _nr_all_map[j2], True))
                         if n_occ < 2:
                             continue
                     else:
