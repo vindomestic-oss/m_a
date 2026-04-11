@@ -2174,7 +2174,47 @@ def _voice_notes_from_mei(mei_str):
     except Exception:
         pass
 
-    return result, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups
+    # ── Detect Da Capo al Fine structure ─────────────────────────────────────────
+    # Pattern: expansion plist has 4 entries where plist[1] == plist[3]
+    # (section B appears once in the body, then again at the end via Da Capo).
+    # Structural times derived from right="dbl" barline (B start) and <dir>Fine</dir>.
+    dacapo_info = None
+    try:
+        for _exp in tree.iter(tag_pfx + 'expansion'):
+            if _exp.get('type', '') == 'norep':
+                continue
+            _plist_dc = [x.lstrip('#') for x in _exp.get('plist', '').split()]
+            if (len(_plist_dc) == 4
+                    and _plist_dc[1] == _plist_dc[3]
+                    and _plist_dc[0] != _plist_dc[1]
+                    and _plist_dc[1] != _plist_dc[2]):
+                _b_start = None
+                _fine    = None
+                for _m in tree.iter(tag_pfx + 'measure'):
+                    if _m.get('right', '') == 'dbl' and _b_start is None:
+                        _mid = _m.get(_XML_ID, '')
+                        if _mid in _measure_ends:
+                            _b_start = _measure_ends[_mid]
+                    for _d in _m.findall('.//' + tag_pfx + 'dir'):
+                        _txt = (_d.text or '')
+                        for _r in _d.iter(tag_pfx + 'rend'):
+                            _txt += (_r.text or '')
+                        if re.search(r'fine', _txt, re.IGNORECASE) and _fine is None:
+                            _mid = _m.get(_XML_ID, '')
+                            if _mid in _measure_ends:
+                                _fine = _measure_ends[_mid]
+                _pc_end = max(_measure_ends.values()) if _measure_ends else 0.0
+                if _b_start is not None and _fine is not None and _fine > _b_start:
+                    dacapo_info = {
+                        'b_start_q':   _b_start,
+                        'fine_q':      _fine,
+                        'piece_end_q': _pc_end,
+                    }
+                break
+    except Exception:
+        pass
+
+    return result, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups, dacapo_info
 
 
 def _merge_ornamental_slurs(notes, slur_ends):
@@ -2396,7 +2436,7 @@ def _get_note_beat_positions(mei_str):
         if c and u:
             bpm = int(c) * 4.0 / int(u)
             break
-    voices, _bdq, _pdq, _rr, _vg = _voice_notes_from_mei(mei_str)
+    voices, _bdq, _pdq, _rr, _vg, _dci = _voice_notes_from_mei(mei_str)
     labels = {}
     for _vk, notes in voices.items():
         for nid, _pname, _oct, dur, _midi, onset in notes:
@@ -2855,7 +2895,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     try:
         if mei_str is None:
             mei_str = vtk.getMEI()
-        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(mei_str)
+        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups, dacapo_info = _voice_notes_from_mei(mei_str)
         if beat_dur_q_override is not None:
             beat_dur_q = beat_dur_q_override
 
@@ -2872,6 +2912,10 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         b_volta_v1_16s = b_volta_v1_16e = 0  # B volta1 onset range in 16ths (unfolded)
         b_volta_v2_16s = b_volta_v2_16e = 0  # B volta2 onset range in 16ths (unfolded)
         b_volta_offset_16 = 0                 # volta2_start − volta1_start in 16ths
+        is_dacapo      = False
+        dc_b_start_q   = 0.0
+        dc_fine_q      = 0.0
+        dc_piece_end_q = 0.0
         if volta_groups:
             # Volta unfolding: [I] + A + A1 + [I_p2] + A_p2 + A2(shifted) + B(shifted)
             # When B also repeats (suite dance ||:A:||||:B:||), B_p2 is appended so
@@ -2974,6 +3018,30 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 post_sh = [(n[0], n[1], n[2], n[3], n[4], n[5] + shift) for n in post]
                 unfolded[vk] = pre + rep + rep_p2 + post_sh
             seq_voices = unfolded
+        elif dacapo_info and not volta_groups and not repeat_ranges:
+            # Da Capo al Fine: A (0..b_start) + B (b_start..fine) + C (fine..piece_end) + B_dacapo
+            # B plays twice (once forward, once after C via Da Capo).
+            # Unfold: keep A + B + C in place, append B_p2 (shifted to after piece_end).
+            _b_start = dacapo_info['b_start_q']
+            _fine    = dacapo_info['fine_q']
+            _pc_end  = dacapo_info['piece_end_q']
+            _dc_sft  = _pc_end - _b_start     # shift = piece_end - B_start
+            unfolded = {}
+            for vk, notes in voices.items():
+                _A   = [n for n in notes if n[5] < _b_start]
+                _B   = [n for n in notes if _b_start <= n[5] < _fine]
+                _C   = [n for n in notes if _fine    <= n[5] < _pc_end]
+                _Bp2 = [(n[0] + '__p2', n[1], n[2], n[3], n[4], n[5] + _dc_sft) for n in _B]
+                unfolded[vk] = _A + _B + _C + _Bp2
+            seq_voices     = unfolded
+            rpt_start      = _b_start
+            rpt_end        = _fine
+            shift          = _dc_sft
+            play2_end      = _fine + _dc_sft   # = piece_end + B_dur
+            is_dacapo      = True
+            dc_b_start_q   = _b_start
+            dc_fine_q      = _fine
+            dc_piece_end_q = _pc_end
         else:
             seq_voices = voices
 
@@ -3025,7 +3093,16 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                             if rpt_start_16 <= t['onset_q'] < rpt_end_16]
                 p2_idxs  = [j for j, t in enumerate(transforms)
                             if rpt_end_16 <= t['onset_q'] < play2_end_16]
-                p_set    = set(p1_idxs) | set(p2_idxs)
+                # Da Capo: C-section motifs (onset in [fine_q, piece_end_q)) sit inside
+                # the p2 onset range but are NOT Da Capo repeats.  Separate them out by
+                # the __p2 suffix that was added only to the actual B_p2 notes.
+                c_idxs = []
+                if is_dacapo and p2_idxs:
+                    _true_p2 = [j for j in p2_idxs
+                                if any(nid.endswith('__p2') for nid in m['occurrences'][j])]
+                    c_idxs   = [j for j in p2_idxs if j not in set(_true_p2)]
+                    p2_idxs  = _true_p2
+                p_set    = set(p1_idxs) | set(p2_idxs) | set(c_idxs)
                 nr_idxs  = [j for j in range(len(transforms)) if j not in p_set]
                 if p2_idxs:
                     # Pair each p2 occurrence with its p1 counterpart via uniform shift
@@ -3037,14 +3114,23 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                             pairs.append((j1, j2))
                     nr_before = [j for j in nr_idxs if transforms[j]['onset_q'] < rpt_start_16]
                     nr_after  = [j for j in nr_idxs if transforms[j]['onset_q'] >= play2_end_16]
-                    idx_order = nr_before + p1_idxs + p2_idxs + nr_after
+                    if is_dacapo:
+                        # Order: A (nr_before) + B_first (p1) + C (c_idxs) + B_dacapo (p2)
+                        idx_order = nr_before + p1_idxs + c_idxs + p2_idxs
+                    else:
+                        idx_order = nr_before + p1_idxs + p2_idxs + nr_after
                     # strip __p2 suffix from play-2 nids so they point to real SVG elements
                     occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
                                 for j in idx_order]
                     transforms_out = [transforms[j] for j in idx_order]
                     nb = len(nr_before)
-                    p1_pos = {j1: nb + k                 for k, j1 in enumerate(p1_idxs)}
-                    p2_pos = {j2: nb + len(p1_idxs) + k  for k, j2 in enumerate(p2_idxs)}
+                    p1_pos = {j1: nb + k for k, j1 in enumerate(p1_idxs)}
+                    if is_dacapo:
+                        # p2 placed after A + p1 + c sections
+                        p2_pos = {j2: nb + len(p1_idxs) + len(c_idxs) + k
+                                  for k, j2 in enumerate(p2_idxs)}
+                    else:
+                        p2_pos = {j2: nb + len(p1_idxs) + k for k, j2 in enumerate(p2_idxs)}
                     # skip_p2=True when p1 and p2 share any physical note (same or overlapping
                     # position — e.g. body repeat, or motif spanning body/volta boundary).
                     # False only when they share NO notes (entirely different volta endings).
@@ -3122,6 +3208,14 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                                         repeat_pairs.append((_nr_all_map[j1], _nr_all_map[j2], True))
                         if n_occ < 2:
                             continue
+                    elif is_dacapo:
+                        # Da Capo: keep motif if it appears outside B, or if it has
+                        # unpaired occurrences anywhere (A, C, or unmatched B plays).
+                        paired_p2   = {j2 for _, j2 in pairs}
+                        unpaired_p2 = [j for j in p2_idxs if j not in paired_p2]
+                        structural  = len(p1_idxs) + len(nr_idxs) + len(c_idxs) + len(unpaired_p2)
+                        if structural < 2:
+                            continue
                     else:
                         # Simple repeat: structural filter
                         paired_p2 = {j2 for _, j2 in pairs}
@@ -3146,12 +3240,14 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 _nb = sum(1 for _f in _pos_inv.values() if len(_f) == 2)
             # Both-parts-repeat halving: when A (volta) and B both repeat, every
             # occurrence is duplicated → display count / 2 to reflect one hearing.
+            # Da Capo: only B repeats; apply ÷2 when the duplicated count is even.
             # Applied independently per sub-count so an even inv sub-count is
             # halved even when the total (and/or direct sub-count) is odd.
-            _nd_halved = is_volta and b_has_repeat and _nd % 2 == 0 and _nd // 2 >= 2
-            _ni_halved = is_volta and b_has_repeat and _ni % 2 == 0 and _ni // 2 >= 2
-            _nb_halved = is_volta and b_has_repeat and _nb % 2 == 0 and _nb // 2 >= 2
-            _both_rpt  = is_volta and b_has_repeat and n_occ % 2 == 0 and n_occ // 2 >= 2
+            _halving = (is_volta and b_has_repeat) or (is_dacapo and bool(repeat_pairs))
+            _nd_halved = _halving and _nd % 2 == 0 and _nd // 2 >= 2
+            _ni_halved = _halving and _ni % 2 == 0 and _ni // 2 >= 2
+            _nb_halved = _halving and _nb % 2 == 0 and _nb // 2 >= 2
+            _both_rpt  = _halving and n_occ % 2 == 0 and n_occ // 2 >= 2
             _dc        = n_occ // 2 if _both_rpt else n_occ
             if _dc < 2:
                 continue   # halved to single occurrence → not a meaningful motif
@@ -3841,7 +3937,7 @@ def render_score(path: str, version: str = "1") -> tuple:
 
     # parse voices — separate try so _voices_s survives later errors
     try:
-        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _vg_s = _voice_notes_from_mei(mei_str)
+        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _vg_s, _dci_s = _voice_notes_from_mei(mei_str)
         if _beat_override is not None:
             _beat_dur_q_s = _beat_override
     except Exception:

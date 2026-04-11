@@ -63,8 +63,10 @@ def _worker_func(path, q):
         mei_str = _kr._vtk.getMEI()
         motifs = _kr.analyze_motifs(_kr._vtk, mei_str=mei_str)
         q.put([{
-            'count':        m['count'],
-            'count_direct': m['n_direct_only'] + m['n_both'],
+            'count':        m.get('display_count', m['count']),
+            'count_direct': (m['n_direct_only'] + m['n_both']) // 2
+                            if m.get('both_parts_repeat', False)
+                            else m['n_direct_only'] + m['n_both'],
             'length':       m['length'],
         } for m in motifs])
     except Exception:
@@ -145,7 +147,7 @@ def main():
 
     _xml_files = kr.find_lilypond_files()
 
-    all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files() + _xml_files
+    all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files() + _xml_files + kr.find_tobis_files()
     if args.composer:
         target = args.composer.strip()
         files = [(r, f) for r, f in all_files
