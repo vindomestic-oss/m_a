@@ -2117,9 +2117,13 @@ def _voice_notes_from_mei(mei_str):
                 slur_ends[sid] = eid
 
     # Merge ornamental 2-note slur pairs per voice
+    # Only applies to kern-sourced MEI — MusicXML slurs are phrase markings, not ornaments
     result = {}
     for key, notes in voices.items():
-        result[key] = _merge_ornamental_slurs(notes, slur_ends)
+        if _base_ppq is None:
+            result[key] = _merge_ornamental_slurs(notes, slur_ends)
+        else:
+            result[key] = notes
 
     # ── Detect volta (1st/2nd ending) groups ────────────────────────────────────
     # Requires <expansion plist> with pattern: ... body A1 body A2 ...
@@ -2551,15 +2555,15 @@ def _search_motif(query):
         all_dur_vals = [s[1][1] for s in pattern] + ([last_dur[1]] if last_dur is not None else [])
     min_dur_q = min(all_dur_vals) if all_dur_vals else None
 
-    occs_with_onset = []
-    seen_onsets = set()
-    for _vk, seq in seqs:
+    # Phase 1: collect ALL matching positions across voices (no greedy yet).
+    # Phase 2: sort by (onset_q, is_inv=False first) then run joint greedy — mirrors
+    # _find_motifs step 3 so direct always beats inverted at the same onset.
+    _all_cands = []   # (onset_q, is_inv, vi_idx, i, onset_f, nids)
+    for _vi_idx, (_vk, seq) in enumerate(seqs):
         if len(seq) < n:
             continue
-        last_end = -1  # greedy non-overlapping per voice
         for i in range(len(seq) - n + 1):
-            if i < last_end:
-                continue
+            _curr_is_inv = False
             # phase of first note, measured in units of the smallest pattern duration
             if explicit_scale_q is not None and min_dur_q is not None:
                 # explicit scale: no caps — use exact n_per_beat from scale/dur ratio
@@ -2600,18 +2604,22 @@ def _search_motif(query):
                     return all(_dir(seq[i + k][0]) == pat[k][0] and
                                _dur_matches(seq[i + k][1], pat[k][1])
                                for k in range(n))
-                if not (_match_pat(pattern) or
-                        (pattern_inv is not None and _match_pat(pattern_inv))):
+                _d_ok = _match_pat(pattern)
+                _i_ok = pattern_inv is not None and _match_pat(pattern_inv)
+                if not (_d_ok or _i_ok):
                     continue
+                _curr_is_inv = _i_ok and not _d_ok
             else:
                 def _match_pat(pat):
                     return all((seq[i + k][0] in pat[k][0] if isinstance(pat[k][0], list)
                                 else seq[i + k][0] == pat[k][0]) and
                                _dur_matches(seq[i + k][1], pat[k][1])
                                for k in range(n))
-                if not (_match_pat(pattern) or
-                        (pattern_inv is not None and _match_pat(pattern_inv))):
+                _d_ok = _match_pat(pattern)
+                _i_ok = pattern_inv is not None and _match_pat(pattern_inv)
+                if not (_d_ok or _i_ok):
                     continue
+                _curr_is_inv = _i_ok and not _d_ok
             # check last note's duration: seq[i+n][1] is its duration as first note of next interval
             if last_dur is not None and i + n < len(seq):
                 if not _dur_matches(seq[i + n][1], last_dur):
@@ -2620,15 +2628,25 @@ def _search_motif(query):
             if not all(seq[i + k][6] for k in range(n)):
                 continue
             onset_q = round(seq[i][4] * 16)
-            if onset_q not in seen_onsets:
-                nids = [seq[i][2]] + [seq[i + k][3] for k in range(n)]
-                occs_with_onset.append((seq[i][4], nids))
-                seen_onsets.add(onset_q)
-                last_end = i + n + 1  # greedy: only skip when occurrence is actually added
-            # if cross-deduped (onset already seen from another voice), don't advance
-            # last_end — allows finding a non-overlapping occurrence further along
+            nids = [seq[i][2]] + [seq[i + k][3] for k in range(n)]
+            _all_cands.append((onset_q, _curr_is_inv, _vi_idx, i, seq[i][4], nids))
 
-    occs_with_onset.sort(key=lambda x: x[0])
+    # Phase 2: sort (direct before inverted at same onset, then by voice), joint greedy.
+    # Cross-dedup does NOT advance per-voice last_end — same semantics as _find_motifs.
+    _all_cands.sort(key=lambda x: (x[0], x[1], x[2]))
+    _last_end_v = {}
+    seen_onsets = set()
+    occs_with_onset = []
+    is_inv_flags    = []
+    for _oq, _inv, _vi, _i, _of, _ns in _all_cands:
+        if _i < _last_end_v.get(_vi, -1):
+            continue
+        if _oq in seen_onsets:
+            continue  # cross-onset dedup — don't advance last_end_v
+        occs_with_onset.append((_of, _ns))
+        is_inv_flags.append(_inv)
+        seen_onsets.add(_oq)
+        _last_end_v[_vi] = _i + n + 1
 
     def _strip_p2(nid):
         return nid[:-4] if nid.endswith('__p2') else nid
@@ -2682,6 +2700,7 @@ def _search_motif(query):
                 nr_B_p2 = []
             idx_order = nr_before + p1_idxs + p2_idxs + nr_B_p1 + nr_B_p2
             occs_with_onset = [occs_with_onset[j] for j in idx_order]
+            is_inv_flags    = [is_inv_flags[j]    for j in idx_order]
             nb       = len(nr_before)
             p1_count = len(p1_idxs)
             p2_count = len(p2_idxs)
@@ -2738,9 +2757,9 @@ def _search_motif(query):
                 _v1_s, _v1_e = _eff_rpt.get('volta1', (float('inf'), float('inf')))
                 _v2_s, _v2_e = _eff_rpt.get('volta2', (float('inf'), float('inf')))
                 _in_Av1 = any(_v1_s-1e-9 <= occs_with_onset[p1_pos[j1]][0] < _v1_e-1e-9
-                              for j1, j2 in pairs if j1 in p1_pos)
+                              for j1 in p1_idxs if j1 in p1_pos)
                 _in_Av2 = any(_v2_s-1e-9 <= occs_with_onset[p2_pos[j2]][0] < _v2_e-1e-9
-                              for j1, j2 in pairs if j2 in p2_pos)
+                              for j2 in p2_idxs if j2 in p2_pos)
                 _in_Bv1 = _in_Bv2 = False
                 if nr_B_p2:
                     _b_v1 = _eff_rpt.get('b_volta_v1')
@@ -2752,15 +2771,43 @@ def _search_motif(query):
                                       for k in range(len(nr_B_p1)))
                         _in_Bv2 = any(_bv2s-1e-9 <= occs_with_onset[_b_base+len(nr_B_p1)+k2][0] < _bv2e-1e-9
                                       for k2 in range(len(nr_B_p2)))
-                if (_in_Av1 == _in_Av2) and (_in_Bv1 == _in_Bv2):
-                    # No volta difference: motif absent from both A-volta regions,
-                    # or present in both (same content → not distinguishing).
-                    # Collapse play-2 and B_p2.
+                # Secondary volta check: also scan for the natural inverse of the
+                # searched pattern in volta regions.  Mirrors analyze_motifs behaviour
+                # where a merged motif doesn't collapse if EITHER form (direct or
+                # inverted) is in a volta.
+                if (not _in_Av1 or not _in_Av2) and not contour and pattern is not None:
+                    _inv_ivs = [[-x for x in (iv if isinstance(iv, list) else [iv])]
+                                for iv, _ in pattern]
+                    def _inv_in_range(rng_s, rng_e):
+                        for _vk2, sq2 in seqs:
+                            for ii in range(len(sq2) - n + 1):
+                                if not (rng_s - 1e-9 <= sq2[ii][4] < rng_e - 1e-9):
+                                    continue
+                                if not all(sq2[ii + k][6] for k in range(n)):
+                                    continue
+                                if min_dur_q is not None:
+                                    ph2 = _metric_phase(sq2[ii][4] - pickup_dur_q,
+                                                        min_dur_q, beat_dur_q)
+                                    if ph2 != start_phase:
+                                        continue
+                                if all(sq2[ii + k][0] in _inv_ivs[k] and
+                                       _dur_matches(sq2[ii + k][1], pattern[k][1])
+                                       for k in range(n)):
+                                    return True
+                        return False
+                    if not _in_Av1 and _v1_s < float('inf'):
+                        _in_Av1 = _inv_in_range(_v1_s, _v1_e)
+                    if not _in_Av2 and _v2_s < float('inf'):
+                        _in_Av2 = _inv_in_range(_v2_s, _v2_e)
+                if (not _in_Av1 and not _in_Av2) and (not _in_Bv1 and not _in_Bv2):
+                    # Motif absent from all volta regions (body-only repeat).
+                    # Body p2 notes are identical SVG elements → show once.
                     _keep = (list(range(nb)) +
                              list(range(nb, nb + p1_count)) +
                              list(range(nb + p1_count + p2_count,
                                         nb + p1_count + p2_count + len(nr_B_p1))))
                     occs_with_onset = [occs_with_onset[k] for k in _keep]
+                    is_inv_flags    = [is_inv_flags[k]    for k in _keep]
                     repeat_pairs = []
                     p2_count = 0  # no play-2 slots remain to strip
             # strip __p2 suffix from nids in A play-2 slots
@@ -2775,7 +2822,8 @@ def _search_motif(query):
     # Strip __p2 from B_p2 nids (they're outside the A play-2 range, not stripped above)
     occs_with_onset = [(o, [_strip_p2(nid) for nid in nids]) for o, nids in occs_with_onset]
     occs = [nids for _, nids in occs_with_onset]
-    return {"occs": occs, "count": len(occs), "repeat_pairs": repeat_pairs}
+    return {"occs": occs, "count": len(occs), "repeat_pairs": repeat_pairs,
+            "is_inv": is_inv_flags}
 
 
 def _mdl_score(n, L, transforms):
@@ -2862,6 +2910,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 _Bv2_shift   = _Bb_p2_shift + _bv1_s_orig - _bv2_s_orig
             unfolded = {}
             for vk, notes in voices.items():
+                _pre = [n for n in notes if n[5] < _I_start]
                 _I  = [n for n in notes if _I_start <= n[5] < _body_s]
                 _A  = [n for n in notes if _body_s  <= n[5] < _body_e]
                 _A1 = [n for n in notes if _v1_s    <= n[5] < _v1_e]
@@ -2883,7 +2932,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                     _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)             for n in _B]
                     _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_shift+_B_dur)
                               for n in _B] if _b_repeat and _B_dur > 0 else [])
-                unfolded[vk] = _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
+                unfolded[vk] = _pre + _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
             seq_voices = unfolded
             # Repeat parameters for per-motif counting (in unfolded time)
             rpt_start    = _I_start
@@ -3027,9 +3076,9 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                                        for j in p1_idxs)
                         p2_in_v2 = any(v2_16_s <= transforms[j]['onset_q'] < v2_16_e
                                        for j in p2_idxs)
-                        if p1_in_v1 == p2_in_v2:
-                            # No volta difference: motif absent from both volta regions
-                            # OR present in both (same content in both endings) → collapse.
+                        if not p1_in_v1 and not p2_in_v2:
+                            # Motif absent from both volta regions (body-only repeat).
+                            # Body p2 notes are identical SVG elements → collapse.
                             idx_order = nr_before + p1_idxs + nr_B_p1
                             occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
                                         for j in idx_order]
@@ -3080,21 +3129,52 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                         structural = len(p1_idxs) + len(nr_idxs) + len(unpaired_p2)
                         if structural < 2:
                             continue
+            # Recompute three-way counts from the final filtered transforms_out.
+            # The original _nd/_ni/_nb come from _find_motifs on the full unfolded
+            # sequence; if the volta-collapse path removed play-2 entries the values
+            # are stale.  Recount so the dict always displays the correct totals.
+            if (_ni > 0 or _nb > 0) and transforms_out is not transforms:
+                _pos_inv = {}
+                for _t in transforms_out:
+                    _oq  = _t['onset_q']
+                    _inv = _t.get('inversion', False)
+                    if _oq not in _pos_inv:
+                        _pos_inv[_oq] = set()
+                    _pos_inv[_oq].add(_inv)
+                _nd = sum(1 for _f in _pos_inv.values() if _f == {False})
+                _ni = sum(1 for _f in _pos_inv.values() if _f == {True})
+                _nb = sum(1 for _f in _pos_inv.values() if len(_f) == 2)
+            # Both-parts-repeat halving: when A (volta) and B both repeat, every
+            # occurrence is duplicated → display count / 2 to reflect one hearing.
+            # Applied independently per sub-count so an even inv sub-count is
+            # halved even when the total (and/or direct sub-count) is odd.
+            _nd_halved = is_volta and b_has_repeat and _nd % 2 == 0 and _nd // 2 >= 2
+            _ni_halved = is_volta and b_has_repeat and _ni % 2 == 0 and _ni // 2 >= 2
+            _nb_halved = is_volta and b_has_repeat and _nb % 2 == 0 and _nb // 2 >= 2
+            _both_rpt  = is_volta and b_has_repeat and n_occ % 2 == 0 and n_occ // 2 >= 2
+            _dc        = n_occ // 2 if _both_rpt else n_occ
+            if _dc < 2:
+                continue   # halved to single occurrence → not a meaningful motif
             result.append({
-                'color':          _MOTIF_COLORS[i % len(_MOTIF_COLORS)],
-                'occs':           occs_out,
-                'count':          n_occ,
-                'length':         L_pat + 1,
-                'pattern':        steps,
-                'phase_pfx':      phase_pfx,
-                'transforms':     transforms_out,
-                'n_direct_only':  _nd,
-                'n_inv_only':     _ni,
-                'n_both':         _nb,
-                'queryStr':       _pattern_to_query(m['pattern'], phase) + (';inv' if (_ni + _nb) > 0 else ''),
-                'profile':        profile,
-                'repeat_pairs':   repeat_pairs,
-                'mdl':            _mdl_score(n_occ, L_pat, transforms_out),
+                'color':             _MOTIF_COLORS[i % len(_MOTIF_COLORS)],
+                'occs':              occs_out,
+                'count':             n_occ,
+                'display_count':     _dc,
+                'both_parts_repeat': _both_rpt,
+                'nd_halved':         _nd_halved,
+                'ni_halved':         _ni_halved,
+                'nb_halved':         _nb_halved,
+                'length':            L_pat + 1,
+                'pattern':           steps,
+                'phase_pfx':         phase_pfx,
+                'transforms':        transforms_out,
+                'n_direct_only':     _nd,
+                'n_inv_only':        _ni,
+                'n_both':            _nb,
+                'queryStr':          _pattern_to_query(m['pattern'], phase) + (';inv' if (_ni + _nb) > 0 else ''),
+                'profile':           profile,
+                'repeat_pairs':      repeat_pairs,
+                'mdl':               _mdl_score(n_occ, L_pat, transforms_out),
             })
         return result
     except Exception as e:
@@ -3885,7 +3965,9 @@ def render_score(path: str, version: str = "1") -> tuple:
             k //= 3
         return k == 1
 
-    motifs.sort(key=lambda m: (_is_smooth(m['count']) and m['count'] >= 8, m['count']), reverse=True)
+    def _eff_count(m):
+        return m.get('display_count', m['count'])
+    motifs.sort(key=lambda m: (_is_smooth(_eff_count(m)) and _eff_count(m) >= 8, _eff_count(m)), reverse=True)
 
     reload_js = _RELOAD_JS.format(version=version)
 
@@ -3894,31 +3976,40 @@ def render_score(path: str, version: str = "1") -> tuple:
         pfx = m['phase_pfx']
         phase_html = (f'<sub style="letter-spacing:-1px;color:#aaa">{pfx}</sub>'
                       if pfx else '')
-        cnt    = m['count']
-        n_dir  = m.get('n_direct_only', cnt)
+        halved    = m.get('both_parts_repeat', False)
+        nd_halved = m.get('nd_halved', halved)
+        ni_halved = m.get('ni_halved', halved)
+        nb_halved = m.get('nb_halved', halved)
+        any_halved = nd_halved or ni_halved or nb_halved or halved
+        cnt    = m.get('display_count', m['count'])
+        n_dir  = m.get('n_direct_only', m['count'])
         n_inv  = m.get('n_inv_only', 0)
         n_both = m.get('n_both', 0)
+        n_dir  = n_dir  // 2 if nd_halved else n_dir
+        n_inv  = n_inv  // 2 if ni_halved else n_inv
+        n_both = n_both // 2 if nb_halved else n_both
         def _bold(n):
             return f'<b>{n}</b>' if _is_smooth(n) and n >= 8 else str(n)
+        _sup = '<sup style="color:#aaa;font-size:9px;margin-left:1px">÷2</sup>'
+        half_sup = _sup if halved else ''
         if n_inv > 0 or n_both > 0:
             n_dir_total = n_dir + n_both
             n_inv_total = n_inv + n_both
-            total       = n_dir + n_inv + n_both
             cnt_html = (
                 f'<span style="font-size:11px">'
                 f'<span class="cnt-f" data-fi="{i}" data-ff="direct" '
                 f'style="cursor:pointer;color:#555" title="только прямые">'
-                f'&times;{_bold(n_dir_total)}</span>'
+                f'&times;{_bold(n_dir_total)}{_sup if nd_halved else ""}</span>'
                 f'&nbsp;<span class="cnt-f" data-fi="{i}" data-ff="inv" '
                 f'style="cursor:pointer;color:#888" title="только инверсии">'
-                f'&#x21C5;{_bold(n_inv_total)}</span>'
+                f'&#x21C5;{_bold(n_inv_total)}{_sup if ni_halved else ""}</span>'
                 f'&nbsp;<span class="cnt-f" data-fi="{i}" data-ff="all" '
                 f'style="cursor:pointer;color:#888" title="все">'
-                f'&#x2295;{_bold(total)}</span>'
+                f'&#x2295;{_bold(cnt)}</span>'
                 f'</span>'
             )
         else:
-            cnt_html = _bold(cnt)
+            cnt_html = _bold(cnt) + half_sup
         mdl = m.get('mdl', 0)
         mdl_html = f'<b>{mdl}</b>' if mdl > 0 else f'<span style="color:#bbb">{mdl}</span>'
         first_nids = m.get('occs', [[]])[0] if m.get('occs') else []
@@ -3929,7 +4020,7 @@ def render_score(path: str, version: str = "1") -> tuple:
                 notes_info.append((pn.lower(), oi, dq, mv, nid))
         staff_svg = _mini_staff_svg(notes_info, beam_of)
         return (
-            f'<tr data-midx="{i}" data-count="{m["count"]}" data-mdl="{mdl}" data-length="{m["length"]}" '
+            f'<tr data-midx="{i}" data-count="{cnt}" data-mdl="{mdl}" data-length="{m["length"]}" '
             f'style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
             f'onmouseover="this.style.background=\'#f0f0f0\'" '
             f'onmouseout="if(this.getAttribute(\'data-active\')!==\'1\')this.style.background=\'\'">'
@@ -3949,12 +4040,11 @@ def render_score(path: str, version: str = "1") -> tuple:
         )
 
     auto_rows = "".join(_row(i, m) for i, m in enumerate(motifs))
-    motif_data = [{"color": m["color"], "occs": m["occs"],
+    motif_data = [{"color": m["color"],
                    "transforms": m.get("transforms", []),
                    "queryStr": m.get("queryStr", ""),
                    "profile": m.get("profile", []),
-                   "mdl": m.get("mdl", 0),
-                   "repeat_pairs": m.get("repeat_pairs", [])}
+                   "mdl": m.get("mdl", 0)}
                   for m in motifs]
     motif_json = json.dumps(motif_data)
     note_labels_json = json.dumps(nid_labels)
@@ -4282,11 +4372,34 @@ function clearActiveRows(){{
   }});
 }}
 
-function _filteredOccs(idx,filter){{
-  var m=motifs[idx];
-  if(filter==='direct') return m.occs.filter(function(_,i){{return !m.transforms[i].inversion;}});
-  if(filter==='inv')    return m.occs.filter(function(_,i){{return  m.transforms[i].inversion;}});
-  return m.occs;
+var _motifCache={{}};
+function fetchMotifOccs(queryStr,cb){{
+  if(_motifCache[queryStr]){{cb(_motifCache[queryStr]);return;}}
+  fetch('/search',{{method:'POST',headers:{{'Content-Type':'text/plain'}},body:queryStr}})
+  .then(function(r){{return r.json();}})
+  .then(function(d){{_motifCache[queryStr]=d;cb(d);}})
+  .catch(function(){{cb(null);}});
+}}
+function colorMotifOccs(occs,color){{
+  occs.forEach(function(occ){{
+    occ.forEach(function(id){{
+      var el=document.getElementById(id);
+      if(el)try{{el.setAttribute('fill',color);}}catch(e){{}}
+    }});
+  }});
+}}
+function filteredByInv(data,filter){{
+  // Returns {{occs, repeat_pairs}} with indices remapped to the filtered subset.
+  if(filter==='all'||!data.is_inv)return{{occs:data.occs,repeat_pairs:data.repeat_pairs||[]}};
+  var wantInv=(filter==='inv');
+  var oldToNew={{}};
+  var occs=[];
+  data.occs.forEach(function(occ,i){{
+    if(data.is_inv[i]===wantInv){{oldToNew[i]=occs.length;occs.push(occ);}}
+  }});
+  var rp=(data.repeat_pairs||[]).filter(function(p){{return p[0] in oldToNew&&p[1] in oldToNew;}})
+    .map(function(p){{return[oldToNew[p[0]],oldToNew[p[1]],p[2]];}});
+  return{{occs:occs,repeat_pairs:rp}};
 }}
 
 function _highlightFilter(idx,filter){{
@@ -4315,12 +4428,8 @@ function scrollToFirst(m){{
 }}
 
 function colorMotif(m){{
-  m.occs.forEach(function(occ){{
-    occ.forEach(function(id){{
-      var el=document.getElementById(id);
-      if(el)try{{el.setAttribute('fill',m.color);}}catch(e){{}}
-    }});
-  }});
+  // Legacy: called by addCustomMotif with an object that has .occs and .color
+  colorMotifOccs(m.occs,m.color);
 }}
 
 function highlight(){{
@@ -4343,11 +4452,6 @@ function highlight(){{
         activeKey=key; activeFilter=filter;
         var row=document.querySelector('#motif-dict tr[data-midx="'+idx+'"]');
         if(row){{row.style.background='#e8f0fe';row.setAttribute('data-active','1');}}
-        colorMotif(motifs[idx]);
-        var occs=_filteredOccs(idx,filter);
-        var rp=(filter==='all')?motifs[idx].repeat_pairs:[];
-        drawBoxes({{occs:occs,color:motifs[idx].color,repeat_pairs:rp}});
-        scrollToFirst({{occs:occs}});
         _highlightFilter(idx,filter);
         if(st2){{
           var badge2='';
@@ -4355,6 +4459,14 @@ function highlight(){{
           else if(filter==='inv')badge2='<span style="background:#c05a00;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">\u21c5inv</span> ';
           st2.innerHTML=badge2+'<b>M'+(idx+1)+'</b>';
         }}
+        fetchMotifOccs(motifs[idx].queryStr,function(data){{
+          if(activeKey!==key||activeFilter!==filter)return;
+          if(!data||!data.occs)return;
+          colorMotifOccs(data.occs,motifs[idx].color);
+          var fr=filteredByInv(data,filter);
+          drawBoxes({{occs:fr.occs,color:motifs[idx].color,repeat_pairs:fr.repeat_pairs}});
+          scrollToFirst({{occs:fr.occs}});
+        }});
       }}
     }});
   }});
@@ -4376,15 +4488,19 @@ function highlight(){{
         activeKey=key;
         this.style.background='#e8f0fe';
         this.setAttribute('data-active','1');
-        colorMotif(motifs[idx]);
-        drawBoxes(motifs[idx]);
-        scrollToFirst(motifs[idx]);
         if(st){{st.innerHTML='<b>M'+(idx+1)+'</b>';}}
         var qs=motifs[idx].queryStr;
         if(qs){{
           var inp=document.getElementById('motif-search-input');
           if(inp){{inp.value=qs;}}
         }}
+        fetchMotifOccs(qs,function(data){{
+          if(activeKey!==key)return;
+          if(!data||!data.occs)return;
+          colorMotifOccs(data.occs,motifs[idx].color);
+          drawBoxes({{occs:data.occs,color:motifs[idx].color,repeat_pairs:data.repeat_pairs}});
+          scrollToFirst({{occs:data.occs}});
+        }});
         /* DISABLED: transposition profile detail row
         var prof=motifs[idx].profile;
         if(prof && prof.length>0){{
@@ -4490,18 +4606,17 @@ function _findDictMatch(query){{
   for(var i=0;i<motifs.length;i++){{
     var mq=motifs[i].queryStr;
     if(!mq)continue;
-    if(base===mq){{
-      // Direct match: user typed the motif's own query (±;inv suffix)
-      // ;inv means "show me the inverted variant of this motif"
+    // Strip ;inv from dict queryStr before comparing — it may differ from user input
+    var mqBase=mq.replace(/;inv\\s*$/,'').trim();
+    if(base===mqBase){{
+      // Direct match: user typed the motif's own query (with or without ;inv suffix)
       var filter=hasInv?'inv':'direct';
-      var variant=hasInv?'inv':'direct';
-      return{{idx:i,filter:filter,variant:variant}};
+      return{{idx:i,filter:filter,variant:filter}};
     }}
-    if(invBase&&invBase===mq){{
-      // User typed the inverted form of this motif's query (±;inv suffix)
+    if(invBase&&invBase===mqBase){{
+      // User typed the inverted form of this motif's query
       var filter2=hasInv?'direct':'inv';
-      var variant2=hasInv?'direct':'inv';
-      return{{idx:i,filter:filter2,variant:variant2}};
+      return{{idx:i,filter:filter2,variant:filter2}};
     }}
   }}
   return null;
@@ -4516,12 +4631,14 @@ function _activateDictRow(match, st){{
   row.style.background='#e8f0fe';
   row.setAttribute('data-active','1');
   row.scrollIntoView({{behavior:'smooth',block:'nearest'}});
-  colorMotif(motifs[idx]);
-  var occs=_filteredOccs(idx,filter);
-  var rp2=(filter==='all')?motifs[idx].repeat_pairs:[];
-  drawBoxes({{occs:occs,color:motifs[idx].color,repeat_pairs:rp2}});
-  scrollToFirst({{occs:occs}});
   _highlightFilter(idx,filter);
+  fetchMotifOccs(motifs[idx].queryStr,function(data){{
+    if(!data||!data.occs)return;
+    colorMotifOccs(data.occs,motifs[idx].color);
+    var fr2=filteredByInv(data,filter);
+    drawBoxes({{occs:fr2.occs,color:motifs[idx].color,repeat_pairs:fr2.repeat_pairs}});
+    scrollToFirst({{occs:fr2.occs}});
+  }});
   // Status badge
   var label=motifs[idx].queryStr;
   var n=idx+1;
@@ -5148,7 +5265,8 @@ if __name__ == "__main__":
     def _on_close():
         if _browser_proc is not None:
             try:
-                _browser_proc.kill()
+                subprocess.run(['taskkill', '/F', '/T', '/PID', str(_browser_proc.pid)],
+                               capture_output=True)
             except Exception:
                 pass
         _app.destroy()
