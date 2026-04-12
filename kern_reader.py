@@ -4980,6 +4980,23 @@ if __name__ == "__main__":
     # start HTTP server
     threading.Thread(target=start_server, daemon=True).start()
 
+    import subprocess
+
+    def _kill_browser():
+        """Close all msedge/chrome browser windows via PowerShell Stop-Process."""
+        for _proc_name in ('msedge', 'chrome'):
+            try:
+                subprocess.run(
+                    ['powershell', '-Command',
+                     f'Get-Process {_proc_name} -ErrorAction SilentlyContinue | Stop-Process -Force'],
+                    capture_output=True, timeout=5)
+            except Exception:
+                pass
+
+    # Close any existing browser before opening a new one
+    _kill_browser()
+    import time as _time; _time.sleep(0.5)
+
     # Create browser window first (needs screen size from tkinter)
     _app = FileBrowser()
     _sw  = _app.winfo_screenwidth()
@@ -4995,27 +5012,15 @@ if __name__ == "__main__":
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     ]:
         if os.path.exists(_exe):
-            import subprocess
             _browser_proc = subprocess.Popen([_exe, "--new-window",
                               "--window-position=0,0",
                               f"--window-size={_bw},{_sh}", _url])
-            # Save PID so restart script can close this window
-            try:
-                with open(os.path.join(os.path.dirname(__file__), '.browser_pid'), 'w') as _pf:
-                    _pf.write(str(_browser_proc.pid))
-            except Exception:
-                pass
             break
     if _browser_proc is None:
         webbrowser.open(_url)
 
     def _on_close():
-        if _browser_proc is not None:
-            try:
-                subprocess.run(['taskkill', '/F', '/T', '/PID', str(_browser_proc.pid)],
-                               capture_output=True)
-            except Exception:
-                pass
+        _kill_browser()
         _app.destroy()
 
     _app.protocol("WM_DELETE_WINDOW", _on_close)
