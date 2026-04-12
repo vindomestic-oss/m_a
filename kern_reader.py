@@ -2653,16 +2653,18 @@ def _search_motif(query):
 
     # Apply repeat_pairs from unfolded seqs: seqs already contain play-2 copies
     repeat_pairs = []
-    # Determine effective repeat parameters (volta or simple)
     _eff_rpt = None
     if volta_search_info:
         _eff_rpt = volta_search_info
-    elif len(repeat_ranges) == 1:
+    elif repeat_ranges:
         rr = repeat_ranges[0]
         _eff_rpt = {
             'rpt_start': rr[0], 'rpt_end': rr[1],
             'shift':     rr[1] - rr[0],
             'play2_end': rr[1] + (rr[1] - rr[0]),
+            'volta1': None, 'volta2': None,
+            'b_has_repeat': False, 'B_dur_q': 0.0,
+            'B_p1_start_q': 0.0, 'B_p1_end_q': 0.0,
         }
 
     if _eff_rpt:
@@ -2688,17 +2690,7 @@ def _search_motif(query):
                 j1 = p1_by_oq16.get(round((o2 - shift_q) * 16))
                 if j1 is not None:
                     pairs.append((j1, j2))
-            # B-section repeat: split nr_after into B_p1 / B_p2 and pair them
-            b_has_repeat  = _eff_rpt.get('b_has_repeat', False)
-            B_dur_q       = _eff_rpt.get('B_dur_q', 0.0)
-            B_p1_end_q    = _eff_rpt.get('B_p1_end_q', float('inf'))
-            if b_has_repeat and B_dur_q > 0:
-                nr_B_p1 = [j for j in nr_after if occs_with_onset[j][0] < B_p1_end_q - 1e-9]
-                nr_B_p2 = [j for j in nr_after if occs_with_onset[j][0] >= B_p1_end_q - 1e-9]
-            else:
-                nr_B_p1 = nr_after
-                nr_B_p2 = []
-            idx_order = nr_before + p1_idxs + p2_idxs + nr_B_p1 + nr_B_p2
+            idx_order = nr_before + p1_idxs + p2_idxs + nr_after
             occs_with_onset = [occs_with_onset[j] for j in idx_order]
             is_inv_flags    = [is_inv_flags[j]    for j in idx_order]
             nb       = len(nr_before)
@@ -2706,124 +2698,57 @@ def _search_motif(query):
             p2_count = len(p2_idxs)
             p1_pos   = {j1: nb + k              for k, j1 in enumerate(p1_idxs)}
             p2_pos   = {j2: nb + p1_count + k   for k, j2 in enumerate(p2_idxs)}
-            # skip_p2=True when p1 and p2 share any physical note (body repeat, or motif
-            # spanning body/volta boundary).  False only when entirely different notes
-            # (motif wholly within one volta ending vs the other).
-            def _nids_overlap(pos1, pos2):
-                s1 = set(_strip_p2(n) for n in occs_with_onset[pos1][1])
-                s2 = set(_strip_p2(n) for n in occs_with_onset[pos2][1])
-                return bool(s1 & s2)
-            repeat_pairs = [(p1_pos[j1], p2_pos[j2],
-                             _nids_overlap(p1_pos[j1], p2_pos[j2]))
-                            for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos]
-            # B pairs (B_p2 nids always match B_p1 after stripping → skip_p2=True)
-            if nr_B_p2:
-                _b_base = nb + p1_count + p2_count
-                B_p1_by_oq = {round(occs_with_onset[_b_base + k][0] * 16): _b_base + k
-                               for k in range(len(nr_B_p1))}
-                for k2, j in enumerate(nr_B_p2):
-                    o2 = occs_with_onset[_b_base + len(nr_B_p1) + k2][0]
-                    k1_pos = B_p1_by_oq.get(round((o2 - B_dur_q) * 16))
-                    if k1_pos is not None:
-                        repeat_pairs.append((k1_pos, _b_base + len(nr_B_p1) + k2, True))
-                # B-section volta pairing (volta_groups[1]):
-                # pair B's 1st-ending occurrences with B's 2nd-ending occurrences
-                # from _Bs (no __p2 nids); skip _Bp2 occurrences.
-                b_volta_v1 = _eff_rpt.get('b_volta_v1')
-                b_volta_v2 = _eff_rpt.get('b_volta_v2')
-                if b_volta_v1 and b_volta_v2:
-                    bv1_s, bv1_e = b_volta_v1
-                    bv2_s, bv2_e = b_volta_v2
-                    bv_offset_16 = round((bv2_s - bv1_s) * 16)
-                    Bv1_by_oq16 = {}
-                    for k in range(len(nr_B_p1)):
-                        pos = _b_base + k
-                        o = occs_with_onset[pos][0]
-                        if bv1_s - 1e-9 <= o < bv1_e - 1e-9:
-                            Bv1_by_oq16[round(o * 16)] = pos
-                    for k2 in range(len(nr_B_p2)):
-                        pos2 = _b_base + len(nr_B_p1) + k2
-                        o2 = occs_with_onset[pos2][0]
-                        if not (bv2_s - 1e-9 <= o2 < bv2_e - 1e-9):
-                            continue
-                        if any(nid.endswith('__p2') for nid in occs_with_onset[pos2][1]):
-                            continue
-                        pos1 = Bv1_by_oq16.get(round(o2 * 16) - bv_offset_16)
-                        if pos1 is not None:
-                            repeat_pairs.append((pos1, pos2, True))
-            # Volta-difference check (mirrors analyze_motifs collapse logic):
-            # If motif doesn't appear in any volta region → collapse play-2 copies.
-            if volta_search_info and p2_idxs:
-                _v1_s, _v1_e = _eff_rpt.get('volta1', (float('inf'), float('inf')))
-                _v2_s, _v2_e = _eff_rpt.get('volta2', (float('inf'), float('inf')))
-                _in_Av1 = any(_v1_s-1e-9 <= occs_with_onset[p1_pos[j1]][0] < _v1_e-1e-9
-                              for j1 in p1_idxs if j1 in p1_pos)
-                _in_Av2 = any(_v2_s-1e-9 <= occs_with_onset[p2_pos[j2]][0] < _v2_e-1e-9
-                              for j2 in p2_idxs if j2 in p2_pos)
-                _in_Bv1 = _in_Bv2 = False
-                if nr_B_p2:
-                    _b_v1 = _eff_rpt.get('b_volta_v1')
-                    _b_v2 = _eff_rpt.get('b_volta_v2')
-                    if _b_v1 and _b_v2:
-                        _bv1s, _bv1e = _b_v1
-                        _bv2s, _bv2e = _b_v2
-                        _in_Bv1 = any(_bv1s-1e-9 <= occs_with_onset[_b_base+k][0] < _bv1e-1e-9
-                                      for k in range(len(nr_B_p1)))
-                        _in_Bv2 = any(_bv2s-1e-9 <= occs_with_onset[_b_base+len(nr_B_p1)+k2][0] < _bv2e-1e-9
-                                      for k2 in range(len(nr_B_p2)))
-                # Secondary volta check: also scan for the natural inverse of the
-                # searched pattern in volta regions.  Mirrors analyze_motifs behaviour
-                # where a merged motif doesn't collapse if EITHER form (direct or
-                # inverted) is in a volta.
-                if (not _in_Av1 or not _in_Av2) and not contour and pattern is not None:
-                    _inv_ivs = [[-x for x in (iv if isinstance(iv, list) else [iv])]
-                                for iv, _ in pattern]
-                    def _inv_in_range(rng_s, rng_e):
-                        for _vk2, sq2 in seqs:
-                            for ii in range(len(sq2) - n + 1):
-                                if not (rng_s - 1e-9 <= sq2[ii][4] < rng_e - 1e-9):
-                                    continue
-                                if not all(sq2[ii + k][6] for k in range(n)):
-                                    continue
-                                if min_dur_q is not None:
-                                    ph2 = _metric_phase(sq2[ii][4] - pickup_dur_q,
-                                                        min_dur_q, beat_dur_q)
-                                    if ph2 != start_phase:
-                                        continue
-                                if all(sq2[ii + k][0] in _inv_ivs[k] and
-                                       _dur_matches(sq2[ii + k][1], pattern[k][1])
-                                       for k in range(n)):
-                                    return True
-                        return False
-                    if not _in_Av1 and _v1_s < float('inf'):
-                        _in_Av1 = _inv_in_range(_v1_s, _v1_e)
-                    if not _in_Av2 and _v2_s < float('inf'):
-                        _in_Av2 = _inv_in_range(_v2_s, _v2_e)
-                if (not _in_Av1 and not _in_Av2) and (not _in_Bv1 and not _in_Bv2):
-                    # Motif absent from all volta regions (body-only repeat).
-                    # Body p2 notes are identical SVG elements → show once.
-                    _keep = (list(range(nb)) +
-                             list(range(nb, nb + p1_count)) +
-                             list(range(nb + p1_count + p2_count,
-                                        nb + p1_count + p2_count + len(nr_B_p1))))
-                    occs_with_onset = [occs_with_onset[k] for k in _keep]
-                    is_inv_flags    = [is_inv_flags[k]    for k in _keep]
-                    repeat_pairs = []
-                    p2_count = 0  # no play-2 slots remain to strip
-            # strip __p2 suffix from nids in A play-2 slots
-            stripped = []
-            for k, (o, nids) in enumerate(occs_with_onset):
-                if nb + p1_count <= k < nb + p1_count + p2_count:
-                    stripped.append((o, [_strip_p2(nid) for nid in nids]))
+            is_volta_search = bool(_eff_rpt.get('volta1'))
+            if is_volta_search:
+                # Volta rule: always skip_p2=True — show N(M) label, count = total/2
+                repeat_pairs = [
+                    (p1_pos[j1], p2_pos[j2], True)
+                    for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos
+                ]
+            else:
+                def _nids_overlap(pos1, pos2):
+                    s1 = set(_strip_p2(n) for n in occs_with_onset[pos1][1])
+                    s2 = set(_strip_p2(n) for n in occs_with_onset[pos2][1])
+                    return bool(s1 & s2)
+                repeat_pairs = [(p1_pos[j1], p2_pos[j2],
+                                 _nids_overlap(p1_pos[j1], p2_pos[j2]))
+                                for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos]
+
+    # B-section repeat pairing
+    if _eff_rpt and _eff_rpt.get('b_has_repeat') and _eff_rpt.get('B_dur_q', 0) > 0:
+        _Bp1_s = _eff_rpt['B_p1_start_q']
+        _Bp1_e = _eff_rpt['B_p1_end_q']
+        _Bp2_e = _Bp1_e + _eff_rpt['B_dur_q']
+        _Bsh   = _eff_rpt['B_dur_q']
+        _bv1   = _eff_rpt.get('b_volta1')
+        _bv2   = _eff_rpt.get('b_volta2')
+        _Bp1_idxs = [j for j, (o, _) in enumerate(occs_with_onset)
+                     if _Bp1_s - 1e-9 <= o < _Bp1_e - 1e-9]
+        _Bp2_idxs = [j for j, (o, _) in enumerate(occs_with_onset)
+                     if _Bp1_e - 1e-9 <= o < _Bp2_e - 1e-9]
+        _Bp1_by_oq16 = {round(occs_with_onset[j][0] * 16): j for j in _Bp1_idxs}
+        for j2 in _Bp2_idxs:
+            o2 = occs_with_onset[j2][0]
+            j1 = _Bp1_by_oq16.get(round((o2 - _Bsh) * 16))
+            if j1 is not None:
+                if _bv1 and _bv2:
+                    _oq1 = occs_with_onset[j1][0]; _oq2 = occs_with_onset[j2][0]
+                    _in_bv = ((_bv1[0]-1e-9 <= _oq1 < _bv1[1]-1e-9) or
+                              (_bv2[0]-1e-9 <= _oq2 < _bv2[1]-1e-9))
+                    _skip = not _in_bv
                 else:
-                    stripped.append((o, nids))
-            occs_with_onset = stripped
+                    _skip = True
+                repeat_pairs.append((j1, j2, _skip))
 
     # Strip __p2 from B_p2 nids (they're outside the A play-2 range, not stripped above)
     occs_with_onset = [(o, [_strip_p2(nid) for nid in nids]) for o, nids in occs_with_onset]
     occs = [nids for _, nids in occs_with_onset]
-    return {"occs": occs, "count": len(occs), "repeat_pairs": repeat_pairs,
-            "is_inv": is_inv_flags}
+    _skip_p2_true_count = sum(1 for _, _, skip in repeat_pairs if skip)
+    display_count = len(occs) - _skip_p2_true_count
+    _is_simple_repeat = (not volta_search_info) and (len(repeat_ranges) == 1)
+    is_volta_result = bool((volta_search_info and volta_search_info.get('volta1')) or _is_simple_repeat)
+    return {"occs": occs, "count": display_count, "repeat_pairs": repeat_pairs,
+            "is_inv": is_inv_flags, "is_volta": is_volta_result}
 
 
 def _mdl_score(n, L, transforms):
@@ -2859,121 +2784,151 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         if beat_dur_q_override is not None:
             beat_dur_q = beat_dur_q_override
 
-        # ── Unfold repeat/volta before motif detection ───────────────────────────
-        # Insert play-2 copies so _find_motifs sees cross-boundary patterns.
-        rpt_start = rpt_end = shift = 0.0
-        play2_end = 0.0
-        volta1_range_q = volta2_range_q = None  # (start, end) in unfolded time
-        is_volta = False
-        b_has_repeat = False   # True when B section also has a structural repeat
-        B_dur_q      = 0.0    # duration of B section (quarters)
-        B_p1_end_q   = 0.0   # end of B first pass in unfolded time
-        b_has_volta  = False   # True when B section has its own 1st/2nd endings
-        b_volta_v1_16s = b_volta_v1_16e = 0  # B volta1 onset range in 16ths (unfolded)
-        b_volta_v2_16s = b_volta_v2_16e = 0  # B volta2 onset range in 16ths (unfolded)
-        b_volta_offset_16 = 0                 # volta2_start − volta1_start in 16ths
+        rpt_start = rpt_end = shift = play2_end = 0.0
+        is_volta  = False
+        voltas_equal   = False                       # True when volta1 and volta2 have same notes
+        volta1_range_q = volta2_range_q = None      # A-section volta ranges (unfolded time)
+        has_b_repeat   = False                       # True when B section also repeats
+        B_dur_q        = 0.0                         # duration of B section
+        B_p1_start_q   = B_p1_end_q = 0.0           # B play-1 range in unfolded time
+        b_volta1_range_q = b_volta2_range_q = None   # B-section volta ranges (if any)
+
         if volta_groups:
-            # Volta unfolding: [I] + A + A1 + [I_p2] + A_p2 + A2(shifted) + B(shifted)
-            # When B also repeats (suite dance ||:A:||||:B:||), B_p2 is appended so
-            # _find_motifs can detect cross-repeat patterns and B is counted twice.
-            # I = any section(s) before A that are inside the repeat bracket
-            # (detected via repeat_ranges[0][0] which marks the true repeat start)
+            # ── VOLTA_A or VOLTA_AB ──────────────────────────────────────────
             vg = volta_groups[0]
             _body_s, _body_e = vg['body']
             _v1_s,   _v1_e   = vg['volta1']
             _v2_s,   _v2_e   = vg['volta2']
-            _A_dur  = _body_e - _body_s
-            _v2_dur = _v2_e - _v2_s
-            # True repeat start — includes pickup/intro sections inside the bracket
+            _A_dur   = _body_e - _body_s
+            _v2_dur  = _v2_e - _v2_s
             _I_start = repeat_ranges[0][0] if repeat_ranges else _body_s
             _I_dur   = _body_s - _I_start
-            # All play-2 notes are shifted by full play-1 duration = v1_e - I_start
             _play2_shift = _v1_e - _I_start
             _A2_uf_start = _v1_e + _I_dur + _A_dur
             _A2_shift    = _A2_uf_start - _v2_s
             _B_uf_start  = _A2_uf_start + _v2_dur
             _B_shift     = _B_uf_start - _v2_e
-            # B section repeat (||:A:||||:B:|| structure): repeat_ranges has ≥2 entries
-            _b_repeat = len(repeat_ranges) >= 2
-            _B_dur    = (repeat_ranges[-1][1] - repeat_ranges[-1][0]) if _b_repeat else 0.0
-            # Pre-detect B volta structure so per-voice loop can split body/v1/v2 correctly.
-            # Without this, _Bs contains B_v2 notes and _Bp2 contains B_v1 notes — both wrong.
+            _b_repeat    = len(repeat_ranges) >= 2
+            _B_dur       = (repeat_ranges[-1][1] - repeat_ranges[-1][0]) if _b_repeat else 0.0
+            # pre-detect B volta structure
             _bv1_s_orig = _bv1_e_orig = _bv2_s_orig = _bv2_e_orig = None
             _Bb_p2_shift = _Bv2_shift = 0.0
             if len(volta_groups) >= 2:
                 _vg1 = volta_groups[1]
                 _bv1_s_orig, _bv1_e_orig = _vg1['volta1']
                 _bv2_s_orig, _bv2_e_orig = _vg1['volta2']
-                # B play-2 body starts after B play-1 ends (_B_uf_start + B_dur)
                 _Bb_p2_shift = _B_shift + (_bv1_e_orig - _v2_e)
-                # B_v2 placed at same relative offset from B_body as B_v1 in play-1
                 _Bv2_shift   = _Bb_p2_shift + _bv1_s_orig - _bv2_s_orig
             unfolded = {}
+            _v1_coll = {}   # volta1 note content per voice for equality check
+            _v2_coll = {}   # volta2 note content per voice for equality check
             for vk, notes in voices.items():
                 _pre = [n for n in notes if n[5] < _I_start]
-                _I  = [n for n in notes if _I_start <= n[5] < _body_s]
-                _A  = [n for n in notes if _body_s  <= n[5] < _body_e]
-                _A1 = [n for n in notes if _v1_s    <= n[5] < _v1_e]
-                _A2 = [n for n in notes if _v2_s    <= n[5] < _v2_e]
-                _B  = [n for n in notes if n[5] >= _v2_e]
+                _I   = [n for n in notes if _I_start <= n[5] < _body_s]
+                _A   = [n for n in notes if _body_s  <= n[5] < _body_e]
+                _A1  = [n for n in notes if _v1_s    <= n[5] < _v1_e]
+                _A2  = [n for n in notes if _v2_s    <= n[5] < _v2_e]
+                _B   = [n for n in notes if n[5] >= _v2_e]
+                _v1_coll[vk] = [(n[1], n[2], n[3]) for n in _A1]  # pname, oct, dur
+                _v2_coll[vk] = [(n[1], n[2], n[3]) for n in _A2]
                 _Ip2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_shift) for n in _I]
                 _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_shift) for n in _A]
                 _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_shift)            for n in _A2]
                 if _bv1_s_orig is not None:
-                    # B has its own volta: play-1 = body+v1, play-2 = body+v2
-                    _Bb  = [n for n in notes if _v2_e        <= n[5] < _bv1_s_orig]
-                    _Bv1 = [n for n in notes if _bv1_s_orig  <= n[5] < _bv1_e_orig]
-                    _Bv2 = [n for n in notes if _bv2_s_orig  <= n[5] < _bv2_e_orig]
-                    _Bs  = ([(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)        for n in _Bb] +
-                            [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)        for n in _Bv1])
+                    _Bb  = [n for n in notes if _v2_e       <= n[5] < _bv1_s_orig]
+                    _Bv1 = [n for n in notes if _bv1_s_orig <= n[5] < _bv1_e_orig]
+                    _Bv2 = [n for n in notes if _bv2_s_orig <= n[5] < _bv2_e_orig]
+                    _Bs  = ([(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift) for n in _Bb] +
+                            [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift) for n in _Bv1])
                     _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bb_p2_shift) for n in _Bb] +
                             [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bv2_shift)   for n in _Bv2])
                 else:
-                    _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)             for n in _B]
-                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_shift+_B_dur)
-                              for n in _B] if _b_repeat and _B_dur > 0 else [])
+                    _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_shift)           for n in _B]
+                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_shift+_B_dur) for n in _B]
+                            if _b_repeat and _B_dur > 0 else [])
                 unfolded[vk] = _pre + _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
             seq_voices = unfolded
-            # Repeat parameters for per-motif counting (in unfolded time)
-            rpt_start    = _I_start
-            rpt_end      = _v1_e                       # end of play-1 (I + A + A1)
-            shift        = _play2_shift                # uniform shift for all play-2 notes
-            play2_end    = _A2_uf_start + _v2_dur      # end of play-2 block = start of B
+            # Detect if volta1 == volta2 (same pitch+dur content — only barlines differ)
+            voltas_equal = (_v1_coll == _v2_coll)
+            _play2_end = _A2_uf_start + _v2_dur
+            rpt_start  = _I_start;  rpt_end  = _v1_e
+            shift      = _play2_shift;  play2_end = _play2_end
             volta1_range_q = (_v1_s, _v1_e)
             volta2_range_q = (_A2_uf_start, _A2_uf_start + _v2_dur)
-            is_volta     = True
-            b_has_repeat = _b_repeat
-            B_dur_q      = _B_dur
-            B_p1_end_q   = play2_end + _B_dur          # end of B first pass
-            # Detect B-section's own 1st/2nd endings (volta_groups[1])
+            is_volta   = True
+            has_b_repeat   = _b_repeat
+            B_dur_q        = _B_dur
+            B_p1_start_q   = _play2_end
+            B_p1_end_q     = _play2_end + _B_dur
             if len(volta_groups) >= 2:
-                _vg1 = volta_groups[1]
-                _Bp2_start   = _B_uf_start + _B_dur   # start of B play-2 in unfolded time
-                _bv1_uf_s    = _B_uf_start + (_vg1['volta1'][0] - _v2_e)
-                _bv1_uf_e    = _Bp2_start              # B play-1 ends where play-2 begins
-                _bv2_uf_s    = _Bp2_start + (_vg1['volta1'][0] - _v2_e)
-                _bv2_uf_e    = _bv2_uf_s + (_vg1['volta2'][1] - _vg1['volta2'][0])
-                b_has_volta  = True
-                b_volta_v1_16s = round(_bv1_uf_s * 16)
-                b_volta_v1_16e = round(_bv1_uf_e * 16)
-                b_volta_v2_16s = round(_bv2_uf_s * 16)
-                b_volta_v2_16e = round(_bv2_uf_e * 16)
-                b_volta_offset_16 = round((_bv2_uf_s - _bv1_uf_s) * 16)
-        elif len(repeat_ranges) == 1:
+                _vg1      = volta_groups[1]
+                _Bp2_start = _B_uf_start + _B_dur
+                _bv1_uf_s  = _B_uf_start + (_vg1['volta1'][0] - _v2_e)
+                _bv1_uf_e  = _Bp2_start
+                _bv2_uf_s  = _Bp2_start + (_vg1['volta1'][0] - _v2_e)
+                _bv2_uf_e  = _bv2_uf_s + (_vg1['volta2'][1] - _vg1['volta2'][0])
+                b_volta1_range_q = (_bv1_uf_s, _bv1_uf_e)
+                b_volta2_range_q = (_bv2_uf_s, _bv2_uf_e)
+
+        elif len(repeat_ranges) == 2:
+            # ── DOUBLE_REPEAT: ||:A:||||:B:|| ────────────────────────────────
+            _A_start, _A_end = repeat_ranges[0]
+            _B_start, _B_end = repeat_ranges[1]
+            _A_dur = _A_end - _A_start
+            _B_dur = _B_end - _B_start
+            _has_pre = any(n[5] < _A_start
+                           for vk_notes in voices.values() for n in vk_notes)
+            if _has_pre:
+                # pre anchor exists → unfolding is non-trivial
+                rpt_start  = _A_start;  rpt_end  = _A_end
+                shift      = _A_dur;    play2_end = _A_end + _A_dur
+                has_b_repeat   = True
+                B_dur_q        = _B_dur
+                B_p1_start_q   = play2_end               # B_p1 follows A_p2
+                B_p1_end_q     = play2_end + _B_dur
+                unfolded = {}
+                for vk, notes in voices.items():
+                    pre  = [n for n in notes if n[5] < _A_start]
+                    A    = [n for n in notes if _A_start <= n[5] < _A_end]
+                    B    = [n for n in notes if _B_start <= n[5] < _B_end]
+                    A_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_dur)          for n in A]
+                    B_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5]+_A_dur)          for n in B]
+                    B_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_dur+_B_dur)   for n in B]
+                    unfolded[vk] = pre + A + A_p2 + B_sh + B_p2
+                seq_voices = unfolded
+            else:
+                # no pre → unfold with p2 copies; N(M) display; count = total/2
+                rpt_start  = _A_start;  rpt_end  = _A_end
+                shift      = _A_dur;    play2_end = _A_end + _A_dur
+                has_b_repeat   = True
+                B_dur_q        = _B_dur
+                B_p1_start_q   = play2_end
+                B_p1_end_q     = play2_end + _B_dur
+                unfolded = {}
+                for vk, notes in voices.items():
+                    A    = [n for n in notes if _A_start <= n[5] < _A_end]
+                    B    = [n for n in notes if _B_start <= n[5] < _B_end]
+                    A_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_dur)        for n in A]
+                    B_sh = [(n[0],         n[1], n[2], n[3], n[4], n[5]+_A_dur)        for n in B]
+                    B_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_dur+_B_dur) for n in B]
+                    unfolded[vk] = A + A_p2 + B_sh + B_p2
+                seq_voices = unfolded
+
+        elif repeat_ranges:
+            # ── SIMPLE_REPEAT: ||:A:|| ───────────────────────────────────────
             rpt_start, rpt_end = repeat_ranges[0]
-            shift = rpt_end - rpt_start
+            shift     = rpt_end - rpt_start
             play2_end = rpt_end + shift
-            unfolded = {}
+            unfolded  = {}
             for vk, notes in voices.items():
-                pre  = [n for n in notes if n[5] < rpt_start]
-                rep  = [n for n in notes if rpt_start <= n[5] < rpt_end]
-                post = [n for n in notes if n[5] >= rpt_end]
-                # play-2: same pitches/durations but unique nids (suffix __p2) so
-                # _deoverlap doesn't discard them as duplicates of play-1
-                rep_p2  = [(n[0] + '__p2', n[1], n[2], n[3], n[4], n[5] + shift) for n in rep]
-                post_sh = [(n[0], n[1], n[2], n[3], n[4], n[5] + shift) for n in post]
+                pre     = [n for n in notes if n[5] < rpt_start]
+                rep     = [n for n in notes if rpt_start <= n[5] < rpt_end]
+                post    = [n for n in notes if n[5] >= rpt_end]
+                rep_p2  = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+shift) for n in rep]
+                post_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5]+shift) for n in post]
                 unfolded[vk] = pre + rep + rep_p2 + post_sh
             seq_voices = unfolded
+
         else:
             seq_voices = voices
 
@@ -2981,6 +2936,9 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                     for vk, notes in seq_voices.items()
                     if len(notes) >= 4]
         motifs = _find_motifs(all_seqs, beat_dur_q=beat_dur_q, pickup_dur_q=pickup_dur_q)
+        # Simple-repeat flag: ||:A:|| or ||:A:||B — A repeats once, B (if any) does not.
+        # In this case each A occurrence should count twice (first pass + repeat).
+        _is_spl_rpt = not is_volta and not has_b_repeat and len(repeat_ranges) == 1
         result = []
         for i, m in enumerate(motifs):
             steps = [_interval_label(iv, dur) for iv, dur in m['pattern']]
@@ -3017,18 +2975,17 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             def _strip_p2(nid):
                 return nid[:-4] if nid.endswith('__p2') else nid
             if shift > 0:
-                rpt_start_16  = rpt_start * 16
-                rpt_end_16    = rpt_end   * 16
-                shift_16      = shift * 16
-                play2_end_16  = play2_end * 16
-                p1_idxs  = [j for j, t in enumerate(transforms)
-                            if rpt_start_16 <= t['onset_q'] < rpt_end_16]
-                p2_idxs  = [j for j, t in enumerate(transforms)
-                            if rpt_end_16 <= t['onset_q'] < play2_end_16]
-                p_set    = set(p1_idxs) | set(p2_idxs)
-                nr_idxs  = [j for j in range(len(transforms)) if j not in p_set]
+                rpt_start_16 = rpt_start * 16
+                rpt_end_16   = rpt_end   * 16
+                shift_16     = shift     * 16
+                play2_end_16 = play2_end * 16
+                p1_idxs = [j for j, t in enumerate(transforms)
+                           if rpt_start_16 <= t['onset_q'] < rpt_end_16]
+                p2_idxs = [j for j, t in enumerate(transforms)
+                           if rpt_end_16   <= t['onset_q'] < play2_end_16]
+                p_set   = set(p1_idxs) | set(p2_idxs)
+                nr_idxs = [j for j in range(len(transforms)) if j not in p_set]
                 if p2_idxs:
-                    # Pair each p2 occurrence with its p1 counterpart via uniform shift
                     p1_by_oq = {transforms[j]['onset_q']: j for j in p1_idxs}
                     pairs = []
                     for j2 in p2_idxs:
@@ -3038,104 +2995,64 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                     nr_before = [j for j in nr_idxs if transforms[j]['onset_q'] < rpt_start_16]
                     nr_after  = [j for j in nr_idxs if transforms[j]['onset_q'] >= play2_end_16]
                     idx_order = nr_before + p1_idxs + p2_idxs + nr_after
-                    # strip __p2 suffix from play-2 nids so they point to real SVG elements
                     occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
                                 for j in idx_order]
                     transforms_out = [transforms[j] for j in idx_order]
-                    nb = len(nr_before)
-                    p1_pos = {j1: nb + k                 for k, j1 in enumerate(p1_idxs)}
-                    p2_pos = {j2: nb + len(p1_idxs) + k  for k, j2 in enumerate(p2_idxs)}
-                    # skip_p2=True when p1 and p2 share any physical note (same or overlapping
-                    # position — e.g. body repeat, or motif spanning body/volta boundary).
-                    # False only when they share NO notes (entirely different volta endings).
+                    nb      = len(nr_before)
+                    p1_pos  = {j1: nb + k                for k, j1 in enumerate(p1_idxs)}
+                    p2_pos  = {j2: nb + len(p1_idxs) + k for k, j2 in enumerate(p2_idxs)}
                     def _nids_overlap(pos1, pos2):
                         return bool(set(occs_out[pos1]) & set(occs_out[pos2]))
-                    repeat_pairs = [(p1_pos[j1], p2_pos[j2],
-                                     _nids_overlap(p1_pos[j1], p2_pos[j2]))
-                                    for j1, j2 in pairs
-                                    if j1 in p1_pos and j2 in p2_pos]
-                    n_occ = len(occs_out)
                     if is_volta:
-                        # Split nr_after into B first-pass and B second-pass (when B repeats)
-                        B_p1_end_16 = B_p1_end_q * 16
-                        B_dur_16    = B_dur_q * 16
-                        if b_has_repeat and B_dur_q > 0:
-                            nr_B_p1 = [j for j in nr_after
-                                       if transforms[j]['onset_q'] < B_p1_end_16]
-                            nr_B_p2 = [j for j in nr_after
-                                       if transforms[j]['onset_q'] >= B_p1_end_16]
-                        else:
-                            nr_B_p1 = nr_after
-                            nr_B_p2 = []
-                        # Check if motif appears in either volta region
-                        v1_16_s = volta1_range_q[0] * 16
-                        v1_16_e = volta1_range_q[1] * 16
-                        v2_16_s = volta2_range_q[0] * 16
-                        v2_16_e = volta2_range_q[1] * 16
-                        p1_in_v1 = any(v1_16_s <= transforms[j]['onset_q'] < v1_16_e
-                                       for j in p1_idxs)
-                        p2_in_v2 = any(v2_16_s <= transforms[j]['onset_q'] < v2_16_e
-                                       for j in p2_idxs)
-                        if not p1_in_v1 and not p2_in_v2:
-                            # Motif absent from both volta regions (body-only repeat).
-                            # Body p2 notes are identical SVG elements → collapse.
-                            idx_order = nr_before + p1_idxs + nr_B_p1
-                            occs_out = [[_strip_p2(nid) for nid in m['occurrences'][j]]
-                                        for j in idx_order]
-                            transforms_out = [transforms[j] for j in idx_order]
-                            repeat_pairs = []
-                            n_occ = len(occs_out)
-                        elif nr_B_p2:
-                            # Volta diff + B repeats: pair B occurrences the same way A is paired
-                            B_p1_by_oq = {transforms[j]['onset_q']: j for j in nr_B_p1}
-                            B_pairs_raw = []
-                            for j2 in nr_B_p2:
-                                j1 = B_p1_by_oq.get(transforms[j2]['onset_q'] - B_dur_16)
-                                if j1 is not None:
-                                    B_pairs_raw.append((j1, j2))
-                            # Map j → position in occs_out
-                            # idx_order = nr_before + p1_idxs + p2_idxs + nr_B_p1 + nr_B_p2
-                            _nr_all_map = {j: len(nr_before) + len(p1_idxs) + len(p2_idxs) + k
-                                           for k, j in enumerate(nr_after)}
-                            B_rep_pairs = [(_nr_all_map[j1], _nr_all_map[j2], True)
-                                           for j1, j2 in B_pairs_raw
-                                           if j1 in _nr_all_map and j2 in _nr_all_map]
-                            repeat_pairs = repeat_pairs + B_rep_pairs
-                            # B-section volta pairing (volta_groups[1]):
-                            # pair B's 1st-ending occurrences (in nr_B_p1, from _Bs)
-                            # with B's 2nd-ending occurrences (in nr_B_p2, from _Bs).
-                            # Skip _Bp2 occurrences (they have __p2 nids).
-                            if b_has_volta:
-                                Bv1_by_oq = {
-                                    transforms[j]['onset_q']: j
-                                    for j in nr_B_p1
-                                    if b_volta_v1_16s <= transforms[j]['onset_q'] < b_volta_v1_16e
-                                }
-                                for j2 in nr_B_p2:
-                                    oq2 = transforms[j2]['onset_q']
-                                    if not (b_volta_v2_16s <= oq2 < b_volta_v2_16e):
-                                        continue
-                                    if any(nid.endswith('__p2') for nid in m['occurrences'][j2]):
-                                        continue
-                                    j1 = Bv1_by_oq.get(oq2 - b_volta_offset_16)
-                                    if j1 is not None and j1 in _nr_all_map and j2 in _nr_all_map:
-                                        repeat_pairs.append((_nr_all_map[j1], _nr_all_map[j2], True))
-                        if n_occ < 2:
-                            continue
+                        # Volta rule: always skip_p2=True — show N(M) label, count = total/2
+                        repeat_pairs = [
+                            (p1_pos[j1], p2_pos[j2], True)
+                            for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos
+                        ]
                     else:
-                        # Simple repeat: structural filter
-                        paired_p2 = {j2 for _, j2 in pairs}
-                        unpaired_p2 = [j for j in p2_idxs if j not in paired_p2]
-                        structural = len(p1_idxs) + len(nr_idxs) + len(unpaired_p2)
-                        if structural < 2:
+                        repeat_pairs = [(p1_pos[j1], p2_pos[j2],
+                                         _nids_overlap(p1_pos[j1], p2_pos[j2]))
+                                        for j1, j2 in pairs if j1 in p1_pos and j2 in p2_pos]
+                    # ── B-section repeat pairing ─────────────────────────────
+                    if has_b_repeat and B_dur_q > 0:
+                        _Bp1_16s = round(B_p1_start_q * 16)
+                        _Bp1_16e = round(B_p1_end_q   * 16)
+                        _Bp2_16e = round((B_p1_end_q + B_dur_q) * 16)
+                        _Bshift16 = round(B_dur_q * 16)
+                        # nr_after positions in transforms_out: start at nb+len(p1)+len(p2)
+                        _base = nb + len(p1_idxs) + len(p2_idxs)
+                        _nr_after_Bp1 = [(k, transforms_out[_base + k])
+                                         for k in range(len(nr_after))
+                                         if _Bp1_16s <= transforms_out[_base + k]['onset_q'] < _Bp1_16e]
+                        _nr_after_Bp2 = [(k, transforms_out[_base + k])
+                                         for k in range(len(nr_after))
+                                         if _Bp1_16e <= transforms_out[_base + k]['onset_q'] < _Bp2_16e]
+                        _Bp1_by_oq = {t['onset_q']: _base + k for k, t in _nr_after_Bp1}
+                        for k2, t2 in _nr_after_Bp2:
+                            pos1 = _Bp1_by_oq.get(t2['onset_q'] - _Bshift16)
+                            if pos1 is not None:
+                                pos2 = _base + k2
+                                repeat_pairs.append((pos1, pos2, True))
+                    n_occ = len(occs_out)
+                    paired_p2  = {j2 for _, j2 in pairs}
+                    unpaired_p2 = [j for j in p2_idxs if j not in paired_p2]
+                    structural  = len(p1_idxs) + len(nr_idxs) + len(unpaired_p2)
+                    if _is_spl_rpt:
+                        # Simple repeat: p2 pairs count — 1 in A (structural=1) + 1 repeat = 2 total
+                        if structural + len(pairs) < 2:
                             continue
-            # Recompute three-way counts from the final filtered transforms_out.
-            # The original _nd/_ni/_nb come from _find_motifs on the full unfolded
-            # sequence; if the volta-collapse path removed play-2 entries the values
-            # are stale.  Recount so the dict always displays the correct totals.
-            if (_ni > 0 or _nb > 0) and transforms_out is not transforms:
+                    elif structural < 2:
+                        continue
+            # Positions in occs_out/transforms_out that are p2 of skip_p2=True pairs —
+            # these are drawn as "(X2)" brackets only, not counted as separate occurrences.
+            _skip_true_p2_pos = {pos2 for _, pos2, skip in repeat_pairs if skip}
+            _n_p2_skip = len(_skip_true_p2_pos)   # repeat contribution (A section count)
+            # Recompute three-way counts excluding skip_p2=True p2 positions.
+            if transforms_out is not transforms or _skip_true_p2_pos:
                 _pos_inv = {}
-                for _t in transforms_out:
+                for _k, _t in enumerate(transforms_out):
+                    if _k in _skip_true_p2_pos:
+                        continue
                     _oq  = _t['onset_q']
                     _inv = _t.get('inversion', False)
                     if _oq not in _pos_inv:
@@ -3144,26 +3061,16 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 _nd = sum(1 for _f in _pos_inv.values() if _f == {False})
                 _ni = sum(1 for _f in _pos_inv.values() if _f == {True})
                 _nb = sum(1 for _f in _pos_inv.values() if len(_f) == 2)
-            # Both-parts-repeat halving: when A (volta) and B both repeat, every
-            # occurrence is duplicated → display count / 2 to reflect one hearing.
-            # Applied independently per sub-count so an even inv sub-count is
-            # halved even when the total (and/or direct sub-count) is odd.
-            _nd_halved = is_volta and b_has_repeat and _nd % 2 == 0 and _nd // 2 >= 2
-            _ni_halved = is_volta and b_has_repeat and _ni % 2 == 0 and _ni // 2 >= 2
-            _nb_halved = is_volta and b_has_repeat and _nb % 2 == 0 and _nb // 2 >= 2
-            _both_rpt  = is_volta and b_has_repeat and n_occ % 2 == 0 and n_occ // 2 >= 2
-            _dc        = n_occ // 2 if _both_rpt else n_occ
-            if _dc < 2:
-                continue   # halved to single occurrence → not a meaningful motif
+            _dc = n_occ - _n_p2_skip
+            # For simple repeat: count A occurrences twice → threshold against n_occ
+            if (_is_spl_rpt and n_occ < 2) or (not _is_spl_rpt and _dc < 2):
+                continue
             result.append({
                 'color':             _MOTIF_COLORS[i % len(_MOTIF_COLORS)],
                 'occs':              occs_out,
                 'count':             n_occ,
-                'display_count':     _dc,
-                'both_parts_repeat': _both_rpt,
-                'nd_halved':         _nd_halved,
-                'ni_halved':         _ni_halved,
-                'nb_halved':         _nb_halved,
+                'display_count':     n_occ if _is_spl_rpt else _dc,
+                'n_p2_skip':         _n_p2_skip if _is_spl_rpt else 0,
                 'length':            L_pat + 1,
                 'pattern':           steps,
                 'phase_pfx':         phase_pfx,
@@ -3174,6 +3081,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 'queryStr':          _pattern_to_query(m['pattern'], phase) + (';inv' if (_ni + _nb) > 0 else ''),
                 'profile':           profile,
                 'repeat_pairs':      repeat_pairs,
+                'is_volta':          is_volta or (not volta_groups and len(repeat_ranges) >= 1),
                 'mdl':               _mdl_score(n_occ, L_pat, transforms_out),
             })
         return result
@@ -3852,25 +3760,23 @@ def render_score(path: str, version: str = "1") -> tuple:
         _vg_s = []
 
     # compute interval sequences for the /search endpoint + build note label map
-    # _volta_search_info: repeat parameters for volta-aware pairing in _search_motif
     _volta_search_info = None
     try:
         # unfold repeat/volta so /search finds cross-boundary patterns
         if _vg_s:
-            # Volta unfolding (same logic as analyze_motifs)
+            # ── VOLTA_A / VOLTA_AB ───────────────────────────────────────────
             _vg = _vg_s[0]
-            _bs, _be = _vg['body'];  _v1s, _v1e = _vg['volta1'];  _v2s, _v2e = _vg['volta2']
+            _bs, _be   = _vg['body'];  _v1s, _v1e = _vg['volta1'];  _v2s, _v2e = _vg['volta2']
             _A_dur = _be - _bs;  _v2_dur = _v2e - _v2s
-            _I_start = _rr_s[0][0] if _rr_s else _bs
-            _I_dur   = _bs - _I_start
+            _I_start  = _rr_s[0][0] if _rr_s else _bs
+            _I_dur    = _bs - _I_start
             _play2_sh = _v1e - _I_start
-            _A2_uf   = _v1e + _I_dur + _A_dur
-            _A2_sh   = _A2_uf - _v2s
-            _B_uf    = _A2_uf + _v2_dur
-            _B_sh    = _B_uf - _v2e
-            _b_rpt = len(_rr_s) >= 2
-            _B_dur = (_rr_s[-1][1] - _rr_s[-1][0]) if _b_rpt else 0.0
-            # Pre-detect B volta structure (same logic as analyze_motifs)
+            _A2_uf    = _v1e + _I_dur + _A_dur
+            _A2_sh    = _A2_uf - _v2s
+            _B_uf     = _A2_uf + _v2_dur
+            _B_sh     = _B_uf - _v2e
+            _b_rpt    = len(_rr_s) >= 2
+            _B_dur    = (_rr_s[-1][1] - _rr_s[-1][0]) if _b_rpt else 0.0
             _bv1s_o = _bv1e_o = _bv2s_o = _bv2e_o = None
             _Bb_p2_sh = _Bv2_sh = 0.0
             if len(_vg_s) >= 2:
@@ -3880,51 +3786,96 @@ def render_score(path: str, version: str = "1") -> tuple:
                 _Bb_p2_sh = _B_sh + (_bv1e_o - _v2e)
                 _Bv2_sh   = _Bb_p2_sh + _bv1s_o - _bv2s_o
             _uf = {}
+            _sv1c = {}; _sv2c = {}   # volta content per voice for equality check
             for vk, notes in _voices_s.items():
-                _I  = [n for n in notes if _I_start <= n[5] < _bs]
-                _A  = [n for n in notes if _bs  <= n[5] < _be]
-                _A1 = [n for n in notes if _v1s <= n[5] < _v1e]
-                _A2 = [n for n in notes if _v2s <= n[5] < _v2e]
-                _B  = [n for n in notes if n[5] >= _v2e]
+                _pre = [n for n in notes if n[5] < _I_start]
+                _I   = [n for n in notes if _I_start <= n[5] < _bs]
+                _A   = [n for n in notes if _bs  <= n[5] < _be]
+                _A1  = [n for n in notes if _v1s <= n[5] < _v1e]
+                _A2  = [n for n in notes if _v2s <= n[5] < _v2e]
+                _B   = [n for n in notes if n[5] >= _v2e]
+                _sv1c[vk] = [(n[1], n[2], n[3]) for n in _A1]
+                _sv2c[vk] = [(n[1], n[2], n[3]) for n in _A2]
                 _Ip2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_sh) for n in _I]
                 _Ap2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_play2_sh) for n in _A]
                 _A2s = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A2_sh) for n in _A2]
                 if _bv1s_o is not None:
-                    _Bb  = [n for n in notes if _v2e       <= n[5] < _bv1s_o]
-                    _Bv1 = [n for n in notes if _bv1s_o    <= n[5] < _bv1e_o]
-                    _Bv2 = [n for n in notes if _bv2s_o    <= n[5] < _bv2e_o]
+                    _Bb  = [n for n in notes if _v2e    <= n[5] < _bv1s_o]
+                    _Bv1 = [n for n in notes if _bv1s_o <= n[5] < _bv1e_o]
+                    _Bv2 = [n for n in notes if _bv2s_o <= n[5] < _bv2e_o]
                     _Bs  = ([(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh) for n in _Bb] +
                             [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh) for n in _Bv1])
                     _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bb_p2_sh) for n in _Bb] +
                             [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_Bv2_sh)   for n in _Bv2])
                 else:
-                    _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh)  for n in _B]
-                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_sh+_B_dur)
-                              for n in _B] if _b_rpt and _B_dur > 0 else [])
-                _uf[vk] = _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
+                    _Bs  = [(n[0], n[1], n[2], n[3], n[4], n[5]+_B_sh) for n in _B]
+                    _Bp2 = ([(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_B_sh+_B_dur) for n in _B]
+                            if _b_rpt and _B_dur > 0 else [])
+                _uf[vk] = _pre + _I + _A + _A1 + _Ip2 + _Ap2 + _A2s + _Bs + _Bp2
+            _s_voltas_equal = (_sv1c == _sv2c)
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _uf.items() if len(notes) >= 4]
             _play2_end = _A2_uf + _v2_dur
             _volta_search_info = {
-                'rpt_start':   _I_start, 'rpt_end': _v1e,
-                'shift':       _play2_sh,
-                'play2_end':   _play2_end,
-                'volta1':      (_v1s, _v1e),
-                'volta2':      (_A2_uf, _A2_uf + _v2_dur),
-                'b_has_repeat': _b_rpt,
-                'B_dur_q':     _B_dur,
-                'B_p1_end_q':  _play2_end + _B_dur,
+                'rpt_start': _I_start, 'rpt_end': _v1e,
+                'shift':     _play2_sh, 'play2_end': _play2_end,
+                'volta1':    (_v1s, _v1e),
+                'volta2':    (_A2_uf, _A2_uf + _v2_dur),
+                'voltas_equal': _s_voltas_equal,
+                'b_has_repeat': _b_rpt, 'B_dur_q': _B_dur,
+                'B_p1_start_q': _play2_end,
+                'B_p1_end_q':   _play2_end + _B_dur,
             }
-            # B-section's own 1st/2nd endings (volta_groups[1])
             if len(_vg_s) >= 2:
-                _vg1s = _vg_s[1]
-                _Bp2_st = _B_uf + _B_dur
-                _volta_search_info['b_volta_v1'] = (
-                    _B_uf + (_vg1s['volta1'][0] - _v2e), _Bp2_st)
-                _volta_search_info['b_volta_v2'] = (
-                    _Bp2_st + (_vg1s['volta1'][0] - _v2e),
-                    _Bp2_st + (_vg1s['volta1'][0] - _v2e) + (_vg1s['volta2'][1] - _vg1s['volta2'][0]))
-        elif len(_rr_s) == 1:
+                _vg1s  = _vg_s[1]
+                _Bp2_s = _B_uf + _B_dur
+                _volta_search_info['b_volta1'] = (
+                    _B_uf + (_vg1s['volta1'][0] - _v2e), _Bp2_s)
+                _volta_search_info['b_volta2'] = (
+                    _Bp2_s + (_vg1s['volta1'][0] - _v2e),
+                    _Bp2_s + (_vg1s['volta1'][0] - _v2e) + (_vg1s['volta2'][1] - _vg1s['volta2'][0]))
+
+        elif len(_rr_s) == 2:
+            # ── DOUBLE_REPEAT: ||:A:||||:B:|| ────────────────────────────────
+            _A_start, _A_end = _rr_s[0]
+            _B_start, _B_end = _rr_s[1]
+            _A_dur = _A_end - _A_start
+            _B_dur = _B_end - _B_start
+            _has_pre = any(n[5] < _A_start
+                           for vk_notes in _voices_s.values() for n in vk_notes)
+            if _has_pre:
+                _uf = {}
+                for vk, notes in _voices_s.items():
+                    pre  = [n for n in notes if n[5] < _A_start]
+                    A    = [n for n in notes if _A_start <= n[5] < _A_end]
+                    B    = [n for n in notes if _B_start <= n[5] < _B_end]
+                    A_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_dur)        for n in A]
+                    B_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5]+_A_dur)        for n in B]
+                    B_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_A_dur+_B_dur) for n in B]
+                    _uf[vk] = pre + A + A_p2 + B_sh + B_p2
+                all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
+                            for vk, notes in _uf.items() if len(notes) >= 4]
+                _play2_end = _A_end + _A_dur
+                _volta_search_info = {
+                    'rpt_start': _A_start, 'rpt_end': _A_end,
+                    'shift':     _A_dur,   'play2_end': _play2_end,
+                    'volta1': None, 'volta2': None,
+                    'b_has_repeat': True, 'B_dur_q': _B_dur,
+                    'B_p1_start_q': _play2_end,
+                    'B_p1_end_q':   _play2_end + _B_dur,
+                }
+            else:
+                _uf = {}
+                for vk, notes in _voices_s.items():
+                    A    = [n for n in notes if _A_start <= n[5] < _A_end]
+                    B    = [n for n in notes if _B_start <= n[5] < _B_end]
+                    B_sh = [(n[0], n[1], n[2], n[3], n[4], n[5]+_A_dur) for n in B]
+                    _uf[vk] = A + B_sh
+                all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
+                            for vk, notes in _uf.items() if len(notes) >= 4]
+
+        elif _rr_s:
+            # ── SIMPLE_REPEAT ────────────────────────────────────────────────
             _rpt_s, _rpt_e = _rr_s[0]
             _sh = _rpt_e - _rpt_s
             _uf = {}
@@ -3933,10 +3884,17 @@ def render_score(path: str, version: str = "1") -> tuple:
                 _rep   = [n for n in notes if _rpt_s <= n[5] < _rpt_e]
                 _post  = [n for n in notes if n[5] >= _rpt_e]
                 _rep2  = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_sh) for n in _rep]
-                _post2 = [(n[0], n[1], n[2], n[3], n[4], n[5]+_sh) for n in _post]
+                _post2 = [(n[0],        n[1], n[2], n[3], n[4], n[5]+_sh) for n in _post]
                 _uf[vk] = _pre + _rep + _rep2 + _post2
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _uf.items() if len(notes) >= 4]
+            _volta_search_info = {
+                'rpt_start': _rpt_s, 'rpt_end': _rpt_e,
+                'shift':     _sh,    'play2_end': _rpt_e + _sh,
+                'volta1': None, 'volta2': None,
+                'b_has_repeat': False, 'B_dur_q': 0.0,
+                'B_p1_start_q': 0.0, 'B_p1_end_q': 0.0,
+            }
         else:
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _voices_s.items() if len(notes) >= 4]
@@ -3976,22 +3934,13 @@ def render_score(path: str, version: str = "1") -> tuple:
         pfx = m['phase_pfx']
         phase_html = (f'<sub style="letter-spacing:-1px;color:#aaa">{pfx}</sub>'
                       if pfx else '')
-        halved    = m.get('both_parts_repeat', False)
-        nd_halved = m.get('nd_halved', halved)
-        ni_halved = m.get('ni_halved', halved)
-        nb_halved = m.get('nb_halved', halved)
-        any_halved = nd_halved or ni_halved or nb_halved or halved
         cnt    = m.get('display_count', m['count'])
+        n_p2   = m.get('n_p2_skip', 0)
         n_dir  = m.get('n_direct_only', m['count'])
         n_inv  = m.get('n_inv_only', 0)
         n_both = m.get('n_both', 0)
-        n_dir  = n_dir  // 2 if nd_halved else n_dir
-        n_inv  = n_inv  // 2 if ni_halved else n_inv
-        n_both = n_both // 2 if nb_halved else n_both
         def _bold(n):
             return f'<b>{n}</b>' if _is_smooth(n) and n >= 8 else str(n)
-        _sup = '<sup style="color:#aaa;font-size:9px;margin-left:1px">÷2</sup>'
-        half_sup = _sup if halved else ''
         if n_inv > 0 or n_both > 0:
             n_dir_total = n_dir + n_both
             n_inv_total = n_inv + n_both
@@ -3999,17 +3948,21 @@ def render_score(path: str, version: str = "1") -> tuple:
                 f'<span style="font-size:11px">'
                 f'<span class="cnt-f" data-fi="{i}" data-ff="direct" '
                 f'style="cursor:pointer;color:#555" title="только прямые">'
-                f'&times;{_bold(n_dir_total)}{_sup if nd_halved else ""}</span>'
+                f'&times;{_bold(n_dir_total)}</span>'
                 f'&nbsp;<span class="cnt-f" data-fi="{i}" data-ff="inv" '
                 f'style="cursor:pointer;color:#888" title="только инверсии">'
-                f'&#x21C5;{_bold(n_inv_total)}{_sup if ni_halved else ""}</span>'
+                f'&#x21C5;{_bold(n_inv_total)}</span>'
                 f'&nbsp;<span class="cnt-f" data-fi="{i}" data-ff="all" '
                 f'style="cursor:pointer;color:#888" title="все">'
                 f'&#x2295;{_bold(cnt)}</span>'
                 f'</span>'
             )
+        elif n_p2 > 0:
+            # Simple repeat: show num1(num2) — first pass count + repeat count
+            n1, n2 = cnt - n_p2, n_p2
+            cnt_html = f'{_bold(n1)}({_bold(n2)})'
         else:
-            cnt_html = _bold(cnt) + half_sup
+            cnt_html = _bold(cnt)
         mdl = m.get('mdl', 0)
         mdl_html = f'<b>{mdl}</b>' if mdl > 0 else f'<span style="color:#bbb">{mdl}</span>'
         first_nids = m.get('occs', [[]])[0] if m.get('occs') else []
@@ -4044,7 +3997,8 @@ def render_score(path: str, version: str = "1") -> tuple:
                    "transforms": m.get("transforms", []),
                    "queryStr": m.get("queryStr", ""),
                    "profile": m.get("profile", []),
-                   "mdl": m.get("mdl", 0)}
+                   "mdl": m.get("mdl", 0),
+                   "is_volta": m.get("is_volta", False)}
                   for m in motifs]
     motif_json = json.dumps(motif_data)
     note_labels_json = json.dumps(nid_labels)
@@ -4205,14 +4159,28 @@ function drawBoxes(m){{
   // repeat_pairs: [[play1_idx, play2_idx, skip_p2], ...]
   // skip_p2=true  → same physical notes (simple repeat): show "N(M)" at play1, skip play2 box
   // skip_p2=false → different physical notes (e.g. volta endings): draw both with own numbers
-  var extraNum={{}};   // play1_idx -> play2_num (1-based)
-  var skipDraw={{}};   // play2_idx -> true
+  var skipDraw={{}};   // play2_idx -> true  (skip_p2=True pairs)
+  var p2Label={{}};    // play1_idx -> play2_sequential_num  (for N(M) display)
   if(m.repeat_pairs){{
     m.repeat_pairs.forEach(function(pair){{
       var skip=pair.length<3||pair[2];
-      if(skip){{extraNum[pair[0]]=pair[1]+1; skipDraw[pair[1]]=true;}}
+      if(skip){{skipDraw[pair[1]]=true;}}
     }});
   }}
+  // Assign sequential numbers to ALL occurrences (including skipped p2)
+  var allNum={{}};
+  m.occs.forEach(function(_,i){{allNum[i]=i+1;}});
+  // For volta: build p2Label from pairs so drawn p1 box shows "N(M)"
+  if(m.is_volta&&m.repeat_pairs){{
+    m.repeat_pairs.forEach(function(pair){{
+      var skip=pair.length<3||pair[2];
+      if(skip){{p2Label[pair[0]]=allNum[pair[1]];}}
+    }});
+  }}
+  // Consecutive draw-order numbers for drawn boxes only (used for non-volta)
+  var drawNum={{}};
+  var drawCtr=0;
+  m.occs.forEach(function(_,i){{if(!skipDraw[i])drawNum[i]=++drawCtr;}});
   m.occs.forEach(function(occ,occIdx){{
     if(skipDraw[occIdx])return;
     var svgList=[]; var svgSysGroups=[];
@@ -4289,9 +4257,13 @@ function drawBoxes(m){{
         if(isVeryFirst||isOnly){{
           var numSz=ypad*1.5;
           var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
-          txt.textContent=extraNum[occIdx]!==undefined
-            ? String(occIdx+1)+'('+extraNum[occIdx]+')'
-            : String(occIdx+1);
+          if(m.is_volta){{
+            txt.textContent=p2Label[occIdx]!==undefined
+              ?String(allNum[occIdx])+'('+p2Label[occIdx]+')'
+              :String(allNum[occIdx]);
+          }}else{{
+            txt.textContent=String(drawNum[occIdx]);
+          }}
           txt.setAttribute('x', String(x1+numSz*0.1));
           txt.setAttribute('y', String(y1-numSz*0.15));
           txt.setAttribute('fill', m.color);
@@ -4332,7 +4304,7 @@ document.addEventListener('keydown',function(e){{
   }}
 }});
 
-var _dictSortKey='count';
+var _dictSortKey=null;
 var _dictSortAsc=false;
 var _sortLabels={{count:'Вхожд.',length:'Нот',mdl:'MDL'}};
 var _sortHdrs={{count:'sort-count-hdr',length:'sort-length-hdr',mdl:'sort-mdl-hdr'}};
@@ -4464,7 +4436,7 @@ function highlight(){{
           if(!data||!data.occs)return;
           colorMotifOccs(data.occs,motifs[idx].color);
           var fr=filteredByInv(data,filter);
-          drawBoxes({{occs:fr.occs,color:motifs[idx].color,repeat_pairs:fr.repeat_pairs}});
+          drawBoxes({{occs:fr.occs,color:motifs[idx].color,repeat_pairs:fr.repeat_pairs,is_volta:motifs[idx].is_volta}});
           scrollToFirst({{occs:fr.occs}});
         }});
       }}
@@ -4498,7 +4470,7 @@ function highlight(){{
           if(activeKey!==key)return;
           if(!data||!data.occs)return;
           colorMotifOccs(data.occs,motifs[idx].color);
-          drawBoxes({{occs:data.occs,color:motifs[idx].color,repeat_pairs:data.repeat_pairs}});
+          drawBoxes({{occs:data.occs,color:motifs[idx].color,repeat_pairs:data.repeat_pairs,is_volta:motifs[idx].is_volta}});
           scrollToFirst({{occs:data.occs}});
         }});
         /* DISABLED: transposition profile detail row
@@ -4528,12 +4500,12 @@ function highlight(){{
   }});
 }}
 
-function addCustomMotif(occs,queryStr,repeat_pairs,displayCount){{
+function addCustomMotif(occs,queryStr,repeat_pairs,displayCount,isVolta){{
   var cidx=customMotifs.length;
   var color=CUSTOM_COLORS[cidx%CUSTOM_COLORS.length];
   repeat_pairs=repeat_pairs||[];
-  var cnt=occs.length;
-  customMotifs.push({{color:color,occs:occs,repeat_pairs:repeat_pairs}});
+  var cnt=displayCount!=null?displayCount:occs.length;
+  customMotifs.push({{color:color,occs:occs,repeat_pairs:repeat_pairs,is_volta:isVolta}});
   occs.forEach(function(occ){{
     occ.forEach(function(id){{
       var el=document.getElementById(id);
@@ -4575,7 +4547,7 @@ function addCustomMotif(occs,queryStr,repeat_pairs,displayCount){{
   activeKey='custom:'+cidx;
   tr.style.background='#e8f0fe';
   tr.setAttribute('data-active','1');
-  drawBoxes({{color:color,occs:occs,repeat_pairs:repeat_pairs}});
+  drawBoxes({{color:color,occs:occs,repeat_pairs:repeat_pairs,is_volta:isVolta}});
   scrollToFirst({{occs:occs}});
 }}
 
@@ -4636,7 +4608,7 @@ function _activateDictRow(match, st){{
     if(!data||!data.occs)return;
     colorMotifOccs(data.occs,motifs[idx].color);
     var fr2=filteredByInv(data,filter);
-    drawBoxes({{occs:fr2.occs,color:motifs[idx].color,repeat_pairs:fr2.repeat_pairs}});
+    drawBoxes({{occs:fr2.occs,color:motifs[idx].color,repeat_pairs:fr2.repeat_pairs,is_volta:motifs[idx].is_volta}});
     scrollToFirst({{occs:fr2.occs}});
   }});
   // Status badge
@@ -4666,7 +4638,7 @@ window.searchMotif=function(){{
     st.style.color='#888';
     if(data.count===0){{st.textContent='\u041d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e';return;}}
     st.textContent='';
-    addCustomMotif(data.occs,query,data.repeat_pairs,data.count);
+    addCustomMotif(data.occs,query,data.repeat_pairs,data.count,data.is_volta);
   }})
   .catch(function(e){{st.style.color='#c0392b';st.textContent=String(e);}});
 }};
@@ -5258,6 +5230,12 @@ if __name__ == "__main__":
             _browser_proc = subprocess.Popen([_exe, "--new-window",
                               "--window-position=0,0",
                               f"--window-size={_bw},{_sh}", _url])
+            # Save PID so restart script can close this window
+            try:
+                with open(os.path.join(os.path.dirname(__file__), '.browser_pid'), 'w') as _pf:
+                    _pf.write(str(_browser_proc.pid))
+            except Exception:
+                pass
             break
     if _browser_proc is None:
         webbrowser.open(_url)
@@ -5272,4 +5250,6 @@ if __name__ == "__main__":
         _app.destroy()
 
     _app.protocol("WM_DELETE_WINDOW", _on_close)
+    _app.attributes('-topmost', True)
+    _app.after(200, lambda: _app.attributes('-topmost', False))
     _app.mainloop()
