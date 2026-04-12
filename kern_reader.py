@@ -4352,12 +4352,12 @@ function _findDictMatch(query){{
     var mqBase=mq.replace(/;inv\\s*$/,'').trim();
     if(base===mqBase){{
       // Direct match: user typed the motif's own query (with or without ;inv suffix)
-      var filter=hasInv?'inv':'direct';
+      var filter=hasInv?'all':'direct';
       return{{idx:i,filter:filter,variant:filter}};
     }}
     if(invBase&&invBase===mqBase){{
-      // User typed the inverted form of this motif's query
-      var filter2=hasInv?'direct':'inv';
+      // User typed the inverted form of this motif's query (no ;inv = inv-only; ;inv = union)
+      var filter2=hasInv?'all':'inv';
       return{{idx:i,filter:filter2,variant:filter2}};
     }}
   }}
