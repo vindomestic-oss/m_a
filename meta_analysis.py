@@ -63,7 +63,7 @@ def _worker_func(path, q):
         mei_str = _kr._vtk.getMEI()
         motifs = _kr.analyze_motifs(_kr._vtk, mei_str=mei_str)
         q.put([{
-            'count':        m['count'],
+            'count':        m.get('display_count', m['count']),
             'count_direct': m['n_direct_only'] + m['n_both'],
             'length':       m['length'],
         } for m in motifs])
