@@ -262,22 +262,27 @@
        ;; ── Simultaneous music: voice splits or staff layout
        ((eq? name 'SimultaneousMusic)
         (let* ((elts (ly:music-property m 'elements '()))
-               ;; Detect grand-staff layout: SimultaneousMusic with 2+ anonymous Staff children.
-               ;; In LilyPond 2.24+, \new Staff no longer sets create-new-context=#t, so we
-               ;; detect and pre-assign staff IDs here instead of inside ContextSpeccedMusic.
-               ;; We require 2+ anonymous Staff children to avoid false-positives from
-               ;; \clef/\key expansions (also ContextSpeccedMusic{Staff}) inside a single voice.
+               ;; Detect grand-staff layout: SimultaneousMusic with 1+ staff-like children.
+               ;; "Staff-like" = anonymous Staff/TabStaff/DrumStaff/RhythmicStaff child, OR
+               ;; any StaffGroup/GrandStaff/PianoStaff/ChoirStaff child (which itself contains
+               ;; multiple staves).  Threshold >= 1 ensures that a single \new Staff inside a
+               ;; StaffGroup (e.g. continuo staff) also gets an auto-numbered ID — otherwise
+               ;; its inner SimultaneousMusic would have cnt=1 < 2 and fall through to staff="1".
+               ;; \clef/\key expansions are ContextSpeccedMusic{Staff} inside SequentialMusic,
+               ;; not direct SimultaneousMusic children, so no false positives.
                (has-staff-children
                 (let scan ((es elts) (cnt 0))
-                  (if (>= cnt 2) #t
+                  (if (>= cnt 1) #t
                       (if (null? es) #f
                           (let* ((e (car es))
+                                 (ctype (and (ly:music? e)
+                                             (eq? (ly:music-property e 'name) 'ContextSpeccedMusic)
+                                             (ly:music-property e 'context-type 'x)))
                                  (is-anon-staff
-                                  (and (ly:music? e)
-                                       (eq? (ly:music-property e 'name) 'ContextSpeccedMusic)
-                                       (memq (ly:music-property e 'context-type 'x)
-                                             '(Staff TabStaff DrumStaff RhythmicStaff))
-                                       (string-null? (ly:music-property e 'context-id "")))))
+                                  (and ctype
+                                       (or (and (memq ctype '(Staff TabStaff DrumStaff RhythmicStaff))
+                                                (string-null? (ly:music-property e 'context-id "")))
+                                           (memq ctype '(StaffGroup GrandStaff PianoStaff ChoirStaff))))))
                             (scan (cdr es) (if is-anon-staff (+ cnt 1) cnt)))))))) ;; closes: body/let*/inner-if/outer-if/let-scan/binding-pair/binding-list
           (let loop ((es elts) (v 1) (max-end onset))
             (if (null? es) max-end

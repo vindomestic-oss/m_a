@@ -20,7 +20,7 @@ IMG_DIR = "my_hand_png"
 FIGURE_MAP = {
     "BWV 852":                         "wtc1p07_krn_1_16_1_p1p1_inv.png",
     "BWV 857":                         "wtc1f12_krn_1_16_1_p1p1p1.png",
-    "BWV 944":                         "bwv_994_fugue_1_16-theme-seed.png",
+    "BWV 944":                         "bwv_944_2_xml_1_16_0_p2m1m1.png",
 }
 
 # ── helpers ───────────────────────────────────────────────────────────────────

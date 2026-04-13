@@ -39,6 +39,18 @@ LABEL_IDX    = {'T': 0, 'S': 1, 'D': 2}
 IDX_LABEL    = ['T', 'S', 'D']
 N_FEATURES   = 75   # 27 current + 24 prev + 24 next (12 all-voice + 12 bass each)
 
+# ── v2 feature constants ──────────────────────────────────────────────────────
+# Per (quantum, voice): state(3) + degree_onehot(7) + octave_norm(1) + alt_onehot(3) + rest_decay(1) = 15
+# W_SLOTS_V2 quanta × V_MAX_V2 voices × 15 dims + 3 global = 243 total
+QUANTUM_Q_V2  = 0.25   # 1/16 note
+W_SLOTS_V2    = 4      # fixed quanta slots per window (pad if shorter)
+V_MAX_V2      = 4      # max voices (pad with zeros)
+MAX_REST_Q_V2 = 32     # quanta cap for log rest-decay
+_DIMS_PER_QV  = 15     # dims per (quantum, voice)
+N_FEATURES_V2 = W_SLOTS_V2 * V_MAX_V2 * _DIMS_PER_QV + 3  # 243
+
+_DIATONIC_STEP = {'C': 0, 'D': 1, 'E': 2, 'F': 3, 'G': 4, 'A': 5, 'B': 6}
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _bar_dur_to_metre(bar_dur_q: float) -> str:
@@ -152,6 +164,146 @@ def _beat_hists(notes, tonic_pc: int, t0: float, bar_dur_q: float):
         bass_hist /= s
 
     return all_hist, bass_hist
+
+
+# ── v2 feature extraction (voice-aware) ──────────────────────────────────────
+
+def _build_timelines_v2(path: str):
+    """
+    Parse score into per-part event timelines.
+    Returns (timelines, tonic_pc, max_onset_q) where
+    timelines = list of sorted [(onset_q, dur_q, info_or_None)] per part where
+    info = (degree, octave, alt):
+      degree: 0-6 diatonic step key-relative ((note_step - tonic_step) % 7)
+      octave: absolute octave (2-6 typically)
+      alt:    semitone alteration: -1=flat, 0=natural, +1=sharp
+    None = rest.
+    """
+    import music21
+    score = music21.converter.parse(path)
+    try:
+        key        = score.analyze('key')
+        tonic_step = _DIATONIC_STEP[key.tonic.step]
+    except Exception:
+        tonic_step = 0   # fallback: C
+
+    def _note_info(pitch):
+        deg = (_DIATONIC_STEP[pitch.step] - tonic_step) % 7
+        oct = pitch.octave if pitch.octave is not None else 4
+        alt = int(round(pitch.alter))
+        return (deg, oct, alt)
+
+    timelines = []
+    max_onset  = 0.0
+    for part in score.parts:
+        events = []
+        for m in part.getElementsByClass('Measure'):
+            m_off = float(m.offset)
+            for el in m.notesAndRests:
+                onset = m_off + float(el.offset)
+                dur   = float(el.duration.quarterLength) or QUANTUM_Q_V2
+                max_onset = max(max_onset, onset)
+                if el.isRest:
+                    events.append((onset, dur, None))
+                elif hasattr(el, 'pitches'):
+                    # chord: take lowest pitch
+                    lowest = min(el.pitches, key=lambda p: p.ps)
+                    events.append((onset, dur, _note_info(lowest)))
+                else:
+                    events.append((onset, dur, _note_info(el.pitch)))
+        events.sort()
+        timelines.append(events)
+
+    return timelines, max_onset
+
+
+def _quantum_feat_v2(events: list, t_q: float) -> np.ndarray:
+    """
+    15-dim feature for one voice at one time quantum t_q:
+      [0]     is_attack    (note started at this quantum)
+      [1]     is_sustained (note started earlier, still sounding)
+      [2]     is_rest
+      [3..9]  degree one-hot 0-6 (key-relative diatonic step mod 7)
+      [10]    octave normalised oct/8  (0 if rest)
+      [11..13] alteration one-hot: {-1→[1,0,0], 0→[0,1,0], +1→[0,0,1]} (0s if rest)
+      [14]    rest_decay   log(1+q_silence)/log(1+MAX_REST_Q_V2)  (0 if not rest)
+    """
+    feat = np.zeros(_DIMS_PER_QV, dtype=np.float32)
+    active_info   = None
+    active_onset  = None
+    prev_note_end = None
+
+    for onset, dur, info in events:
+        end = onset + dur
+        if onset <= t_q < end:
+            active_info  = info
+            active_onset = onset
+            break
+        if end <= t_q and info is not None:
+            prev_note_end = end
+        if onset > t_q:
+            break
+
+    if active_info is not None:
+        deg, oct, alt = active_info
+        q_since = round((t_q - active_onset) / QUANTUM_Q_V2)
+        feat[0 if q_since == 0 else 1] = 1.0          # attack / sustained
+        feat[3 + deg] = 1.0                            # degree one-hot [3..9]
+        feat[10] = oct / 8.0                           # octave normalised
+        alt_idx = max(0, min(2, alt + 1))              # -1→0, 0→1, +1→2
+        feat[11 + alt_idx] = 1.0                       # alteration one-hot [11..13]
+    else:
+        feat[2] = 1.0                                  # rest
+        if prev_note_end is not None:
+            rest_q = round((t_q - prev_note_end) / QUANTUM_Q_V2)
+        else:
+            rest_q = MAX_REST_Q_V2
+        feat[14] = np.log1p(min(rest_q, MAX_REST_Q_V2)) / np.log1p(MAX_REST_Q_V2)
+
+    return feat
+
+
+def extract_features_v2(path: str, bar_dur_q: float, n_labels: int,
+                         beats_per_bar: int = 4) -> np.ndarray | None:
+    """
+    Voice-aware feature extraction (v2).
+    Returns float32 array (n_labels, N_FEATURES_V2) or None on failure.
+
+    Feature layout per label window:
+      W_SLOTS_V2 × V_MAX_V2 × 15 dims  (quantum-major, then voice-major)
+      + 3 global dims (position, binary_phase, bar_phase)
+    Voices = score.parts ordered by appearance; padded to V_MAX_V2 with zeros.
+    W_SLOTS_V2 quanta filled from window start; remainder zero-padded.
+    """
+    try:
+        timelines, max_onset = _build_timelines_v2(path)
+    except Exception:
+        return None
+    if not timelines:
+        return None
+
+    # Pad / trim to V_MAX_V2 voices
+    timelines = (timelines + [[]] * V_MAX_V2)[:V_MAX_V2]
+    W = max(1, round(bar_dur_q / QUANTUM_Q_V2))   # actual quanta in this window
+
+    feats = []
+    for i in range(n_labels):
+        t0       = i * bar_dur_q
+        position = t0 / max_onset if max_onset > 0 else 0.0
+        b_phase  = (i % 2) / 2
+        bar_ph   = (i % beats_per_bar) / beats_per_bar
+
+        row = np.zeros(W_SLOTS_V2 * V_MAX_V2 * _DIMS_PER_QV, dtype=np.float32)
+        for k in range(min(W, W_SLOTS_V2)):
+            t = t0 + k * QUANTUM_Q_V2
+            for vi, tl in enumerate(timelines):
+                vf   = _quantum_feat_v2(tl, t) if tl else np.zeros(_DIMS_PER_QV, np.float32)
+                base = (k * V_MAX_V2 + vi) * _DIMS_PER_QV
+                row[base:base + _DIMS_PER_QV] = vf
+
+        feats.append(np.concatenate([row, [position, b_phase, bar_ph]]))
+
+    return np.array(feats, dtype=np.float32)
 
 
 def extract_features(path: str, bar_dur_q: float, n_labels: int,
@@ -295,31 +447,82 @@ def build_dataset(tsd_data: dict):
 
 # ── evaluation ────────────────────────────────────────────────────────────────
 
-def lofo_eval(tsd_data: dict):
-    """Leave-one-file-out cross-validation."""
+def _lofo_run(tsd_data: dict, feat_fn, n_in: int, n_hid: int = 64, label: str = ''):
+    """Generic LOFO engine. Pre-caches features to avoid re-parsing on every fold."""
     files = list(tsd_data.keys())
+
+    # ── 1. Pre-compute features for all files (once) ──────────────────────────
+    print(f"  Pre-computing features for {len(files)} files...")
+    cache = {}   # fname → (X: np.ndarray, y: np.ndarray)
+    for fname, (bdq, bpb, labs) in tsd_data.items():
+        p = find_file(fname)
+        if p is None:
+            print(f"    [skip] {fname}: not found")
+            continue
+        f = feat_fn(p, bdq, len(labs), bpb)
+        if f is None or len(f) == 0:
+            print(f"    [skip] {fname}: feature extraction failed")
+            continue
+        n = min(len(f), len(labs))
+        cache[fname] = (
+            f[:n].astype(np.float32),
+            np.array([LABEL_IDX[l] for l in labs[:n]], np.int32)
+        )
+        print(f"    [ok]   {fname}: {n} windows")
+    print(f"  Cached {len(cache)}/{len(files)} files.\n")
+
+    # ── 2. LOFO loop (only model training varies) ─────────────────────────────
+    try:
+        from sklearn.neural_network import MLPClassifier
+        _use_sklearn = True
+    except ImportError:
+        _use_sklearn = False
+
+    valid = [f for f in files if f in cache]
+    print(f"  Running {len(valid)} folds... ({'sklearn' if _use_sklearn else 'numpy TSDNet'})")
     correct = total = 0
-    for held_out in files:
-        train_data = {k: v for k, v in tsd_data.items() if k != held_out}
-        X_tr, y_tr = build_dataset(train_data)
+    per_file = []
+    for fi, held_out in enumerate(valid):
+        X_tr = np.concatenate([cache[f][0] for f in cache if f != held_out])
+        y_tr = np.concatenate([cache[f][1] for f in cache if f != held_out])
         if len(X_tr) < 10:
             continue
-        net = TSDNet()
-        net.train(X_tr, y_tr, verbose=False)
-        path = find_file(held_out)
-        if path is None:
-            continue
-        bar_dur_q, beats_per_bar, labels = tsd_data[held_out]
-        feats = extract_features(path, bar_dur_q, len(labels), beats_per_bar)
-        if feats is None:
-            continue
-        n = min(len(feats), len(labels))
-        preds = net.predict(feats[:n])
-        c = sum(IDX_LABEL[p] == labels[i] for i, p in enumerate(preds))
-        print(f"  {held_out:50s}  {c}/{n} = {c/n:.0%}")
+        if _use_sklearn:
+            clf = MLPClassifier(
+                hidden_layer_sizes=(n_hid,),
+                activation='relu',
+                max_iter=300,
+                random_state=42,
+                early_stopping=False,
+            )
+            clf.fit(X_tr, y_tr)
+            preds = clf.predict(cache[held_out][0])
+        else:
+            net = TSDNet(n_in=n_in, n_hid=n_hid)
+            net.train(X_tr, y_tr, n_epochs=300, batch=len(X_tr), verbose=False)
+            preds = net.predict(cache[held_out][0])
+        X_ho, y_ho = cache[held_out]
+        c = int((preds == y_ho).sum())
+        per_file.append((held_out, c, len(y_ho)))
         correct += c
-        total += n
-    print(f"\nLOFO accuracy: {correct}/{total} = {correct/total:.1%}")
+        total   += len(y_ho)
+        print(f"  [{fi+1:2d}/{len(valid)}] {held_out:45s}  {c}/{len(y_ho)} = {c/len(y_ho):.0%}", flush=True)
+
+    tag = f' [{label}]' if label else ''
+    for fname, c, n in per_file:
+        print(f"  {fname:50s}  {c}/{n} = {c/n:.0%}")
+    print(f"\nLOFO accuracy{tag}: {correct}/{total} = {correct/total:.1%}")
+    return correct / total if total else 0.0
+
+
+def lofo_eval(tsd_data: dict):
+    """Leave-one-file-out cross-validation (v1 features, 75-dim)."""
+    _lofo_run(tsd_data, extract_features, N_FEATURES, n_hid=64, label='v1')
+
+
+def lofo_eval_v2(tsd_data: dict):
+    """Leave-one-file-out cross-validation (v2 voice-aware features, 259-dim)."""
+    _lofo_run(tsd_data, extract_features_v2, N_FEATURES_V2, n_hid=128, label='v2')
 
 # ── inference on chorales ─────────────────────────────────────────────────────
 
@@ -438,14 +641,20 @@ def write_generated(results: dict, out_path: str):
 # ── main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    eval_mode = '--eval' in sys.argv
+    eval_mode    = '--eval'    in sys.argv
+    eval_v2_mode = '--eval-v2' in sys.argv
 
     print("Loading TSD.txt...")
     tsd_data = load_tsd_data()
     print(f"  {len(tsd_data)} annotated files")
 
+    if eval_v2_mode:
+        print("\nLeave-one-file-out cross-validation (v2 voice-aware, 259-dim):")
+        lofo_eval_v2(tsd_data)
+        sys.exit(0)
+
     if eval_mode:
-        print("\nLeave-one-file-out cross-validation:")
+        print("\nLeave-one-file-out cross-validation (v1, 75-dim):")
         lofo_eval(tsd_data)
         sys.exit(0)
 

@@ -40,7 +40,7 @@ Treble = {
 	a'(  gis') e'' b'(  a') e'' |
 	c''(  b') e'' d''(  c'') e'' |
 	a''8. \trill gis''16 a''8 b''8. c'''16 a''8 |
-	\slashedGrace a''8 gis''4.(  gis''4) b''8 |
+	\slashedGrace a''8 gis''4.~  gis''4 b''8 |
 	b''(  c''') gis'' gis''(  a'') e'' |
 %10
 	e''(  f'') cis'' cis''(  d'') a'' |
@@ -50,7 +50,7 @@ Treble = {
 	b''(  c''') e'' e''(  dis'') a''32( b''  c'''16) |
 %15
 	b''8. dis''16 e''8 fis''16 g'' a'' g'' fis''8 \trill |
-	\slashedGrace fis''8 e''4.(  e''4)
+	\slashedGrace fis''8 e''4.~  e''4
 }
 \repeat "volta" 2 {
 	b''8 |
@@ -61,8 +61,8 @@ Treble = {
 	\slashedGrace g''8 f''8. e''16 d''8 d''4 f''8 |
 	c''(  b') f'' a'(  g') f'' |
 	f''(  e'') bes'' bes''(  a'') c'' |
-	b'16 c'' d'' e'' f''8(  f''16) e'' d'' c'' fis''8 |
-	\slashedGrace fis''8( g''4.  g''4) \mordent g'8 |
+	b'16 c'' d'' e'' f''8~  f''16 e'' d'' c'' fis''8 |
+	\slashedGrace fis''8( g''4.~  g''4) \mordent g'8 |
 %25
 	d''(  c'') g' e''(  d'') g' |
 	f''(  e'') g' g''(  f'') g' |
@@ -72,7 +72,7 @@ Treble = {
 %30
 	c''(  b') d'' aes'(  g') d''32( e''  f''16) |
 	e''8. a''16 g''8 e''8. \trill d''16 c''8 |
-	c''4.(  c''4) c'''8 |
+	c''4.~  c''4 c'''8 |
 	gis''(  a'') e'' e''(  f'') g'' |
 	cis''(  d'') a' a'(  bes') d'' |
 %35
@@ -91,7 +91,7 @@ Treble = {
 	cis''(  d'') a' a'(  bes') e'' |
 	e''(  f'') a' a'(  gis') d''32( e''  f''16) |
 	e''8. gis'16 a'8 b'16 c'' d'' c'' b'8 \trill |
-	\slashedGrace b'8( a'4.  a'4)
+	\slashedGrace b'8( a'4.~  a'4)
 }
 }
 Bass = {
@@ -147,7 +147,7 @@ Bass = {
 	f'4 e'8 d'4 c'8 |
 %35
 	b4 e8 a4 f8 |
-	e4.(  e8.) fis16 gis8 |
+	e4.~  e8. fis16 gis8 |
 	a4 r8 g4 r8 |
 	f4 r8 c'4 r8 |
 	d'4 r8 e'4 r8 |

@@ -433,8 +433,10 @@ def _bach_cycle(rel: str) -> str:
         return 'Concertos'
     if stem.startswith('brandenbur') or _re.match(r'brand\d', stem):
         return 'Brandenburg Concertos'
-    if stem in ('air', 'air_tromb'):
+    if stem == 'air_tromb':
         return 'Concertos'
+    if stem == 'air':
+        return 'Other Bach'
     if 'sonataiv' in stem.replace('_', ''):
         return 'Violin Sonatas with Keyboard'
     if 'cantata' in stem:
@@ -910,7 +912,8 @@ def find_lilypond_files():
 
     # ── Instrument-part exclusion ─────────────────────────────────────────────
     # Explicit single-file exclusions (bare file superseded by score splits)
-    _PART_FILES = {'concerto_in_d_minor.xml', 'concerto_in_e_major.xml', 'air_tromb.xml'}
+    _PART_FILES = {'concerto_in_d_minor.xml', 'concerto_in_e_major.xml', 'air_tromb.xml',
+                   'concerto_in_d_minor_score.xml', 'concerto_in_e_major_score.xml'}
 
     # Group rules: file starts with prefix → keep only stems matching allowed_re
     _SCORE_GROUPS = {
@@ -1120,20 +1123,18 @@ def _extract_movement(xml_str: str, start_mnum: str, end_mnum: str,
         for msr in measures:
             if msr.get('number', '') == start_mnum:
                 break
-            attrs = msr.find('attributes')
-            if attrs is None:
-                continue
-            for child in attrs:
-                if child.tag == 'divisions':
-                    acc_divs = copy.deepcopy(child)
-                elif child.tag == 'key':
-                    acc_key = copy.deepcopy(child)
-                elif child.tag == 'time':
-                    acc_time = copy.deepcopy(child)
-                elif child.tag == 'staves':
-                    acc_staves = copy.deepcopy(child)
-                elif child.tag == 'clef':
-                    acc_clefs[child.get('number', '1')] = copy.deepcopy(child)
+            for attrs in msr.findall('attributes'):
+                for child in attrs:
+                    if child.tag == 'divisions':
+                        acc_divs = copy.deepcopy(child)
+                    elif child.tag == 'key':
+                        acc_key = copy.deepcopy(child)
+                    elif child.tag == 'time':
+                        acc_time = copy.deepcopy(child)
+                    elif child.tag == 'staves':
+                        acc_staves = copy.deepcopy(child)
+                    elif child.tag == 'clef':
+                        acc_clefs[child.get('number', '1')] = copy.deepcopy(child)
 
         # Drop out-of-range measures
         for msr in list(measures):
@@ -1226,10 +1227,16 @@ def find_tobis_files():
             import re as _r
             m = _r.match(r'(BWV_\d+[a-z]?)_(\d+)', fn, _r.I)
             return (m.group(1).upper() if m else fn, int(m.group(2)) if m else 0)
+        _TOBIS_EXCL_BWV = {'BWV_1024'}
         for fname in sorted(os.listdir(subpath), key=_mvt_key):
-            if fname.lower().endswith('.xml'):
-                full = os.path.join(subpath, fname)
-                files.append((f'tobis/{subdir}/{fname}', full))
+            if not fname.lower().endswith('.xml'):
+                continue
+            import re as _re2
+            _bm = _re2.match(r'(BWV_\d+[a-z]?)', fname, _re2.I)
+            if _bm and _bm.group(1).upper() in _TOBIS_EXCL_BWV:
+                continue
+            full = os.path.join(subpath, fname)
+            files.append((f'tobis/{subdir}/{fname}', full))
     return files
 
 
@@ -2722,70 +2729,74 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         rpt_start = rpt_end = shift = play2_end = 0.0
 
         _all_rpt_ranges = []   # [(p1_start, p1_end, shift, p2_end), ...]
-        if volta_groups:
-            # ── VOLTA: unfold every volta group in sequence ───────────────────
-            vg0 = volta_groups[0]
-            rpt_start = vg0['body'][0]
-            rpt_end   = vg0['volta1'][1]
-            shift     = rpt_end - rpt_start
-            play2_end = rpt_end + (vg0['body'][1] - vg0['body'][0])
+        # ── Build merged action list: simple repeats + volta groups in timeline order ──
+        # Skip repeat_ranges that are covered by a volta group (overlap check).
+        _volta_spans = [(vg['body'][0], vg['volta2'][1]) for vg in volta_groups]
+        _actions = []  # (start, 'volta'|'simple', payload)
+        for rs, re in repeat_ranges:
+            if any(rs < vce and re > vcs for vcs, vce in _volta_spans):
+                continue   # covered by a volta group — skip
+            _actions.append((rs, 'simple', (rs, re)))
+        for vg in volta_groups:
+            _actions.append((vg['body'][0], 'volta', vg))
+        _actions.sort(key=lambda x: x[0])
+
+        # Only unfold when: volta present, or exactly one simple repeat remains
+        if not (volta_groups or len(_actions) == 1):
+            _actions = []
+
+        if _actions:
+            # Set rpt_start/rpt_end/shift/play2_end for _is_spl_rpt flag
+            if volta_groups:
+                vg0 = volta_groups[0]
+                rpt_start = vg0['body'][0]
+                rpt_end   = vg0['volta1'][1]
+                shift     = rpt_end - rpt_start
+                play2_end = rpt_end + (vg0['body'][1] - vg0['body'][0])
+            else:
+                rpt_start, rpt_end = _actions[0][2]
+                shift     = rpt_end - rpt_start
+                play2_end = rpt_end + shift
             seq_voices = {vk: list(notes) for vk, notes in voices.items()}
             cum_shift = 0.0
-            for vg in volta_groups:
-                bs, be   = vg['body']
-                v1s, v1e = vg['volta1']
-                v2s, v2e = vg['volta2']
-                body_dur = be  - bs
-                gap      = v1e - bs
-                bs_u  = bs  + cum_shift;  be_u  = be  + cum_shift
-                v1e_u = v1e + cum_shift;  v2s_u = v2s + cum_shift;  v2e_u = v2e + cum_shift
-                next_v = {}
-                for vk, notes in seq_voices.items():
-                    pre     = [n for n in notes if n[5] < bs_u]
-                    body    = [n for n in notes if bs_u  <= n[5] < be_u]
-                    v1      = [n for n in notes if be_u  <= n[5] < v1e_u]
-                    v2      = [n for n in notes if v2s_u <= n[5] < v2e_u]
-                    post    = [n for n in notes if n[5] >= v2e_u]
-                    body_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5] + gap)     for n in body]
-                    v2_sh   = [(n[0],        n[1], n[2], n[3], n[4], n[5] + body_dur) for n in v2]
-                    post_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5] + body_dur) for n in post]
-                    next_v[vk] = pre + body + v1 + body_p2 + v2_sh + post_sh
-                seq_voices = next_v
-                _all_rpt_ranges.append((bs_u, v1e_u, gap, v1e_u + body_dur))
-                cum_shift += body_dur
-            # Also unfold any simple repeats after all volta groups
-            last_v2e = volta_groups[-1]['volta2'][1]
-            for rs, re in repeat_ranges:
-                if rs < last_v2e:
-                    continue
-                rs_u = rs + cum_shift;  re_u = re + cum_shift;  sh_r = re - rs
-                next_v = {}
-                for vk, notes in seq_voices.items():
-                    pre_r  = [n for n in notes if n[5] < rs_u]
-                    rep_r  = [n for n in notes if rs_u <= n[5] < re_u]
-                    post_r = [n for n in notes if n[5] >= re_u]
-                    rep_r2  = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5] + sh_r) for n in rep_r]
-                    post_r2 = [(n[0],        n[1], n[2], n[3], n[4], n[5] + sh_r) for n in post_r]
-                    next_v[vk] = pre_r + rep_r + rep_r2 + post_r2
-                seq_voices = next_v
-                _all_rpt_ranges.append((rs_u, re_u, sh_r, re_u + sh_r))
-                cum_shift += sh_r
-
-        elif not volta_groups and len(repeat_ranges) == 1:
-            # ── SIMPLE_REPEAT: ||:A:|| or ||:A:||B ───────────────────────────
-            rpt_start, rpt_end = repeat_ranges[0]
-            shift     = rpt_end - rpt_start
-            play2_end = rpt_end + shift
-            unfolded  = {}
-            for vk, notes in voices.items():
-                pre     = [n for n in notes if n[5] < rpt_start]
-                rep     = [n for n in notes if rpt_start <= n[5] < rpt_end]
-                post    = [n for n in notes if n[5] >= rpt_end]
-                rep_p2  = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+shift) for n in rep]
-                post_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5]+shift) for n in post]
-                unfolded[vk] = pre + rep + rep_p2 + post_sh
-            seq_voices = unfolded
-
+            for _, _atype, _payload in _actions:
+                if _atype == 'volta':
+                    vg = _payload
+                    bs, be   = vg['body']
+                    v1s, v1e = vg['volta1']
+                    v2s, v2e = vg['volta2']
+                    body_dur = be  - bs
+                    gap      = v1e - bs
+                    bs_u  = bs  + cum_shift;  be_u  = be  + cum_shift
+                    v1e_u = v1e + cum_shift;  v2s_u = v2s + cum_shift;  v2e_u = v2e + cum_shift
+                    next_v = {}
+                    for vk, notes in seq_voices.items():
+                        pre     = [n for n in notes if n[5] < bs_u]
+                        body    = [n for n in notes if bs_u  <= n[5] < be_u]
+                        v1      = [n for n in notes if be_u  <= n[5] < v1e_u]
+                        v2      = [n for n in notes if v2s_u <= n[5] < v2e_u]
+                        post    = [n for n in notes if n[5] >= v2e_u]
+                        body_p2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5] + gap)     for n in body]
+                        v2_sh   = [(n[0],        n[1], n[2], n[3], n[4], n[5] + body_dur) for n in v2]
+                        post_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5] + body_dur) for n in post]
+                        next_v[vk] = pre + body + v1 + body_p2 + v2_sh + post_sh
+                    seq_voices = next_v
+                    _all_rpt_ranges.append((bs_u, v1e_u, gap, v1e_u + body_dur))
+                    cum_shift += body_dur
+                else:  # 'simple'
+                    rs, re = _payload
+                    rs_u = rs + cum_shift;  re_u = re + cum_shift;  sh_r = re - rs
+                    next_v = {}
+                    for vk, notes in seq_voices.items():
+                        pre_r  = [n for n in notes if n[5] < rs_u]
+                        rep_r  = [n for n in notes if rs_u <= n[5] < re_u]
+                        post_r = [n for n in notes if n[5] >= re_u]
+                        rep_r2  = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5] + sh_r) for n in rep_r]
+                        post_r2 = [(n[0],        n[1], n[2], n[3], n[4], n[5] + sh_r) for n in post_r]
+                        next_v[vk] = pre_r + rep_r + rep_r2 + post_r2
+                    seq_voices = next_v
+                    _all_rpt_ranges.append((rs_u, re_u, sh_r, re_u + sh_r))
+                    cum_shift += sh_r
         else:
             seq_voices = voices
 
@@ -3599,64 +3610,60 @@ def render_score(path: str, version: str = "1") -> tuple:
     # compute interval sequences for the /search endpoint + build note label map
     _search_rpt_info = None
     try:
-        if _vg_s:
-            # ── VOLTA: unfold every volta group in sequence ───────────────────
-            _search_rpt_info = []   # list of {rpt_start, rpt_end, shift, play2_end}
+        # ── Build merged action list (simple repeats + volta groups) in order ──
+        _volta_spans_s = [(vg['body'][0], vg['volta2'][1]) for vg in _vg_s]
+        _acts_s = []
+        for _rs, _re in _rr_s:
+            if any(_rs < _vce and _re > _vcs for _vcs, _vce in _volta_spans_s):
+                continue
+            _acts_s.append((_rs, 'simple', (_rs, _re)))
+        for _vg in _vg_s:
+            _acts_s.append((_vg['body'][0], 'volta', _vg))
+        _acts_s.sort(key=lambda x: x[0])
+        if not (_vg_s or len(_acts_s) == 1):
+            _acts_s = []
+
+        if _acts_s:
+            _search_rpt_info = []
             _uf = {vk: list(notes) for vk, notes in _voices_s.items()}
             _cum = 0.0
-            for _vg in _vg_s:
-                _bs, _be   = _vg['body'];  _v1s, _v1e = _vg['volta1'];  _v2s, _v2e = _vg['volta2']
-                _bdur = _be - _bs;  _gap = _v1e - _bs
-                _bs_u = _bs + _cum;  _be_u = _be + _cum;  _v1e_u = _v1e + _cum
-                _v2s_u = _v2s + _cum;  _v2e_u = _v2e + _cum
-                _nxt = {}
-                for vk, notes in _uf.items():
-                    _pre   = [n for n in notes if n[5] < _bs_u]
-                    _body  = [n for n in notes if _bs_u  <= n[5] < _be_u]
-                    _v1    = [n for n in notes if _be_u  <= n[5] < _v1e_u]
-                    _v2    = [n for n in notes if _v2s_u <= n[5] < _v2e_u]
-                    _post  = [n for n in notes if n[5] >= _v2e_u]
-                    _body2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5] + _gap)  for n in _body]
-                    _v2_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5] + _bdur) for n in _v2]
-                    _post2 = [(n[0],        n[1], n[2], n[3], n[4], n[5] + _bdur) for n in _post]
-                    _nxt[vk] = _pre + _body + _v1 + _body2 + _v2_sh + _post2
-                _uf = _nxt
-                _search_rpt_info.append({'rpt_start': _bs_u, 'rpt_end': _v1e_u,
-                                         'shift': _gap, 'play2_end': _v1e_u + _bdur})
-                _cum += _bdur
-            _last_v2e_s = _vg_s[-1]['volta2'][1]
-            for _rs, _re in _rr_s:
-                if _rs < _last_v2e_s:
-                    continue
-                _rs_u = _rs + _cum;  _re_u = _re + _cum;  _sh_r = _re - _rs
-                _nxt = {}
-                for vk, notes in _uf.items():
-                    _pr = [n for n in notes if n[5] < _rs_u]
-                    _rp = [n for n in notes if _rs_u <= n[5] < _re_u]
-                    _po = [n for n in notes if n[5] >= _re_u]
-                    _nxt[vk] = _pr + _rp + [(n[0]+'__p2',n[1],n[2],n[3],n[4],n[5]+_sh_r) for n in _rp] + [(n[0],n[1],n[2],n[3],n[4],n[5]+_sh_r) for n in _po]
-                _uf = _nxt
-                _search_rpt_info.append({'rpt_start': _rs_u, 'rpt_end': _re_u,
-                                         'shift': _sh_r, 'play2_end': _re_u + _sh_r})
-                _cum += _sh_r
+            for _, _atype_s, _payload_s in _acts_s:
+                if _atype_s == 'volta':
+                    _vg = _payload_s
+                    _bs, _be   = _vg['body'];  _v1s, _v1e = _vg['volta1'];  _v2s, _v2e = _vg['volta2']
+                    _bdur = _be - _bs;  _gap = _v1e - _bs
+                    _bs_u = _bs + _cum;  _be_u = _be + _cum;  _v1e_u = _v1e + _cum
+                    _v2s_u = _v2s + _cum;  _v2e_u = _v2e + _cum
+                    _nxt = {}
+                    for vk, notes in _uf.items():
+                        _pre   = [n for n in notes if n[5] < _bs_u]
+                        _body  = [n for n in notes if _bs_u  <= n[5] < _be_u]
+                        _v1    = [n for n in notes if _be_u  <= n[5] < _v1e_u]
+                        _v2    = [n for n in notes if _v2s_u <= n[5] < _v2e_u]
+                        _post  = [n for n in notes if n[5] >= _v2e_u]
+                        _body2 = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5] + _gap)  for n in _body]
+                        _v2_sh = [(n[0],        n[1], n[2], n[3], n[4], n[5] + _bdur) for n in _v2]
+                        _post2 = [(n[0],        n[1], n[2], n[3], n[4], n[5] + _bdur) for n in _post]
+                        _nxt[vk] = _pre + _body + _v1 + _body2 + _v2_sh + _post2
+                    _uf = _nxt
+                    _search_rpt_info.append({'rpt_start': _bs_u, 'rpt_end': _v1e_u,
+                                             'shift': _gap, 'play2_end': _v1e_u + _bdur})
+                    _cum += _bdur
+                else:  # 'simple'
+                    _rs_s, _re_s = _payload_s
+                    _rs_u = _rs_s + _cum;  _re_u = _re_s + _cum;  _sh_r = _re_s - _rs_s
+                    _nxt = {}
+                    for vk, notes in _uf.items():
+                        _pr = [n for n in notes if n[5] < _rs_u]
+                        _rp = [n for n in notes if _rs_u <= n[5] < _re_u]
+                        _po = [n for n in notes if n[5] >= _re_u]
+                        _nxt[vk] = _pr + _rp + [(n[0]+'__p2',n[1],n[2],n[3],n[4],n[5]+_sh_r) for n in _rp] + [(n[0],n[1],n[2],n[3],n[4],n[5]+_sh_r) for n in _po]
+                    _uf = _nxt
+                    _search_rpt_info.append({'rpt_start': _rs_u, 'rpt_end': _re_u,
+                                             'shift': _sh_r, 'play2_end': _re_u + _sh_r})
+                    _cum += _sh_r
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _uf.items() if len(notes) >= 4]
-        elif not _vg_s and len(_rr_s) == 1:
-            # ── SIMPLE_REPEAT ────────────────────────────────────────────────
-            _rpt_s, _rpt_e = _rr_s[0]
-            _sh = _rpt_e - _rpt_s
-            _uf = {}
-            for vk, notes in _voices_s.items():
-                _pre   = [n for n in notes if n[5] < _rpt_s]
-                _rep   = [n for n in notes if _rpt_s <= n[5] < _rpt_e]
-                _post  = [n for n in notes if n[5] >= _rpt_e]
-                _rep2  = [(n[0]+'__p2', n[1], n[2], n[3], n[4], n[5]+_sh) for n in _rep]
-                _post2 = [(n[0],        n[1], n[2], n[3], n[4], n[5]+_sh) for n in _post]
-                _uf[vk] = _pre + _rep + _rep2 + _post2
-            all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
-                        for vk, notes in _uf.items() if len(notes) >= 4]
-            _search_rpt_info = [{'rpt_start': _rpt_s, 'rpt_end': _rpt_e,
-                                  'shift': _sh, 'play2_end': _rpt_e + _sh}]
         else:
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _voices_s.items() if len(notes) >= 4]
