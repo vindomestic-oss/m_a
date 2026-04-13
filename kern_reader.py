@@ -3916,8 +3916,8 @@ _STEP_IDX = {'c': 0, 'd': 1, 'e': 2, 'f': 3, 'g': 4, 'a': 5, 'b': 6}
 _IDX_STEP = ['c', 'd', 'e', 'f', 'g', 'a', 'b']
 # Major root letter for each key signature (determines diatonic step offset)
 _SIG_TO_ROOT_LETTER = {
-    '0': 'c', '1s': 'g', '2s': 'd', '3s': 'a', '4s': 'e', '5s': 'b', '6s': 'f',
-    '1f': 'f', '2f': 'b', '3f': 'e', '4f': 'a', '5f': 'd', '6f': 'g',
+    '0': 'c', '1s': 'g', '2s': 'd', '3s': 'a', '4s': 'e', '5s': 'b', '6s': 'f', '7s': 'c',
+    '1f': 'f', '2f': 'b', '3f': 'e', '4f': 'a', '5f': 'd', '6f': 'g', '7f': 'c',
 }
 # MIDI class → (pname, accid or None); sharp and flat variants
 _SHARP_SPELLS = [
@@ -3930,12 +3930,12 @@ _FLAT_SPELLS = [
 ]
 # key-sig string → MIDI class of the corresponding major-key root
 _SIG_TO_ROOT = {
-    '0': 0, '1s': 7, '2s': 2, '3s': 9, '4s': 4, '5s': 11, '6s': 6,
-    '1f': 5, '2f': 10, '3f': 3, '4f': 8, '5f': 1, '6f': 6,
+    '0': 0, '1s': 7, '2s': 2, '3s': 9, '4s': 4, '5s': 11, '6s': 6, '7s': 1,
+    '1f': 5, '2f': 10, '3f': 3, '4f': 8, '5f': 1, '6f': 6, '7f': 11,
 }
 # major-key root MIDI class → preferred key-sig string (sharp / flat)
-_ROOT_TO_SIG_SHARP = {0: '0', 7: '1s', 2: '2s', 9: '3s', 4: '4s', 11: '5s', 6: '6s'}
-_ROOT_TO_SIG_FLAT  = {0: '0', 5: '1f', 10: '2f', 3: '3f', 8: '4f', 1: '5f', 6: '6f'}
+_ROOT_TO_SIG_SHARP = {0: '0', 7: '1s', 2: '2s', 9: '3s', 4: '4s', 11: '5s', 6: '6s', 1: '7s'}
+_ROOT_TO_SIG_FLAT  = {0: '0', 5: '1f', 10: '2f', 3: '3f', 8: '4f', 1: '5f', 6: '6f', 11: '7f'}
 # key-sig string → {pname: accid_type} for each pitch altered by the key signature
 _KEY_ACCS = {
     '0':  {},
@@ -3945,12 +3945,14 @@ _KEY_ACCS = {
     '4s': {'f': 's', 'c': 's', 'g': 's', 'd': 's'},
     '5s': {'f': 's', 'c': 's', 'g': 's', 'd': 's', 'a': 's'},
     '6s': {'f': 's', 'c': 's', 'g': 's', 'd': 's', 'a': 's', 'e': 's'},
+    '7s': {'f': 's', 'c': 's', 'g': 's', 'd': 's', 'a': 's', 'e': 's', 'b': 's'},
     '1f': {'b': 'f'},
     '2f': {'b': 'f', 'e': 'f'},
     '3f': {'b': 'f', 'e': 'f', 'a': 'f'},
     '4f': {'b': 'f', 'e': 'f', 'a': 'f', 'd': 'f'},
     '5f': {'b': 'f', 'e': 'f', 'a': 'f', 'd': 'f', 'g': 'f'},
     '6f': {'b': 'f', 'e': 'f', 'a': 'f', 'd': 'f', 'g': 'f', 'c': 'f'},
+    '7f': {'b': 'f', 'e': 'f', 'a': 'f', 'd': 'f', 'g': 'f', 'c': 'f', 'f': 'f'},
 }
 
 
@@ -3995,8 +3997,15 @@ def _transpose_mei_pitches(mei_str: str, semitones: int) -> str:
     elif new_sig_f is None:
         new_sig = new_sig_s
     else:
-        # Ambiguous (root 0 = C, root 6 = F#/Gb): keep same sharp/flat direction as before
-        new_sig = new_sig_f if 'f' in old_sig else new_sig_s
+        # Prefer simpler key (fewer accidentals); if tied (F#/Gb = 6 each), keep direction
+        n_s = len(_KEY_ACCS.get(new_sig_s, {}))
+        n_f = len(_KEY_ACCS.get(new_sig_f, {}))
+        if n_s < n_f:
+            new_sig = new_sig_s
+        elif n_f < n_s:
+            new_sig = new_sig_f
+        else:
+            new_sig = new_sig_f if 'f' in old_sig else new_sig_s
 
     new_key_accs = _KEY_ACCS.get(new_sig, {})
 
@@ -4124,7 +4133,15 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
     elif new_sig_f is None:
         new_sig = new_sig_s
     else:
-        new_sig = new_sig_f if 'f' in old_sig else new_sig_s
+        # Prefer simpler key (fewer accidentals); if tied (F#/Gb = 6 each), keep direction
+        n_s = len(_KEY_ACCS.get(new_sig_s, {}))
+        n_f = len(_KEY_ACCS.get(new_sig_f, {}))
+        if n_s < n_f:
+            new_sig = new_sig_s
+        elif n_f < n_s:
+            new_sig = new_sig_f
+        else:
+            new_sig = new_sig_f if 'f' in old_sig else new_sig_s
 
     new_key_accs = _KEY_ACCS.get(new_sig, {})
     new_fifths   = (int(new_sig[:-1]) if 's' in new_sig
