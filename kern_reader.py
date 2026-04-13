@@ -3910,7 +3910,7 @@ def _mini_staff_svg(notes_info, beam_of=None):
 
 
 _PNAME_SEMI   = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
-_ACCID_SEMI   = {'s': 1, 'ss': 2, 'f': -1, 'ff': -2, 'n': 0}
+_ACCID_SEMI   = {'s': 1, 'ss': 2, 'x': 2, 'f': -1, 'ff': -2, 'n': 0}
 # Diatonic step helpers (for MusicXML transposition)
 _STEP_IDX = {'c': 0, 'd': 1, 'e': 2, 'f': 3, 'g': 4, 'a': 5, 'b': 6}
 _IDX_STEP = ['c', 'd', 'e', 'f', 'g', 'a', 'b']
@@ -3999,7 +3999,15 @@ def _transpose_mei_pitches(mei_str: str, semitones: int) -> str:
         new_sig = new_sig_f if 'f' in old_sig else new_sig_s
 
     new_key_accs = _KEY_ACCS.get(new_sig, {})
-    spell_table  = _FLAT_SPELLS if 'f' in new_sig else _SHARP_SPELLS
+
+    # Diatonic offset: same algorithm as MusicXML path — preserves step-name
+    # relationships so f## and g# stay on different letters after transposition.
+    old_root_letter = _SIG_TO_ROOT_LETTER.get(old_sig, 'c')
+    new_root_letter = _SIG_TO_ROOT_LETTER.get(new_sig, 'c')
+    diatonic_offset = (_STEP_IDX[new_root_letter] - _STEP_IDX[old_root_letter]) % 7
+
+    # accid value (int) → MEI accid string ('x' = double sharp, matches verovio output)
+    _IVAL_TO_ACCID = {1: 's', -1: 'f', 2: 'x', -2: 'ff'}
 
     # --- update all keySig and scoreDef key.sig attributes ---
     for el in root.iter(f'{{{MEI_NS}}}keySig'):
@@ -4009,36 +4017,58 @@ def _transpose_mei_pitches(mei_str: str, semitones: int) -> str:
         if 'key.sig' in el.attrib:
             el.set('key.sig', new_sig)
 
-    # --- transpose every note ---
+    # --- transpose every note, tracking within-bar accidentals per staff ---
     # For kern→MEI, verovio always sets accid.ges for key-sig notes (e.g. Bb→accid.ges='f')
     # and accid='n' for written naturals; notes with no attrs are within-bar naturals.
-    # So we read accid.ges / accid directly — no key-sig fallback needed here.
-    for note in root.iter(f'{{{MEI_NS}}}note'):
-        pname = note.get('pname', '').lower()
-        if pname not in _PNAME_SEMI:
-            continue
-        oct_n   = int(note.get('oct', '4'))
-        acc_ges = note.get('accid.ges', '') or ''
-        acc_wr  = note.get('accid', '')     or ''
-        acc_val = _ACCID_SEMI.get(acc_ges, _ACCID_SEMI.get(acc_wr, 0))
-        midi    = (oct_n + 1) * 12 + _PNAME_SEMI[pname] + acc_val + semitones
-        new_oct = midi // 12 - 1
-        new_pname, new_acc = spell_table[midi % 12]
-        note.set('pname', new_pname)
-        note.set('oct',   str(new_oct))
-        # clear both accidental attributes first
-        for attr in ('accid.ges', 'accid'):
-            if attr in note.attrib:
-                del note.attrib[attr]
-        # set accidentals based on key signature context
-        if new_acc:
-            if new_key_accs.get(new_pname) == new_acc:
-                note.set('accid.ges', new_acc)  # key-implied → gestural only
-            else:
-                note.set('accid', new_acc)      # chromatic → written accidental
-        else:
-            if new_pname in new_key_accs:
-                note.set('accid', 'n')          # cancels key sig → written natural
+    #
+    # bar_accs[staff_n][pname] = alter_val (int): the last *written* accidental seen
+    # for this pitch letter in the current measure on this staff.  Resets each measure.
+    # This lets us add a natural sign when a plain-natural note follows an in-bar sharp.
+    for msr in root.iter(f'{{{MEI_NS}}}measure'):
+        bar_accs: dict = {}   # staff_n (str) → {pname: alter_val}
+        for staff_el in msr.iter(f'{{{MEI_NS}}}staff'):
+            staff_n = staff_el.get('n', '1')
+            bar_accs.setdefault(staff_n, {})
+            for note in staff_el.iter(f'{{{MEI_NS}}}note'):
+                pname = note.get('pname', '').lower()
+                if pname not in _PNAME_SEMI:
+                    continue
+                oct_n   = int(note.get('oct', '4'))
+                acc_ges = note.get('accid.ges', '') or ''
+                acc_wr  = note.get('accid', '')     or ''
+                acc_val = _ACCID_SEMI.get(acc_ges, _ACCID_SEMI.get(acc_wr, 0))
+                midi    = (oct_n + 1) * 12 + _PNAME_SEMI[pname] + acc_val + semitones
+                new_oct = midi // 12 - 1
+
+                # Diatonic step preservation: advance step letter by diatonic_offset
+                new_pname = _IDX_STEP[(_STEP_IDX[pname] + diatonic_offset) % 7]
+                # Chromatic accidental from remainder
+                raw_alter     = (midi % 12) - _PNAME_SEMI[new_pname]
+                new_alter_val = ((raw_alter + 6) % 12) - 6   # normalise to –2..+2
+
+                note.set('pname', new_pname)
+                note.set('oct',   str(new_oct))
+                # clear both accidental attributes first
+                for attr in ('accid.ges', 'accid'):
+                    if attr in note.attrib:
+                        del note.attrib[attr]
+
+                # Determine accidental based on key sig context
+                new_accid_type = _IVAL_TO_ACCID.get(new_alter_val)  # 's','f','x','ff' or None
+                if new_accid_type and new_key_accs.get(new_pname) == new_accid_type:
+                    note.set('accid.ges', new_accid_type)  # key-implied → gestural only
+                elif new_accid_type:
+                    note.set('accid', new_accid_type)      # chromatic → written accidental
+                    bar_accs[staff_n][new_pname] = new_alter_val
+                elif new_pname in new_key_accs:
+                    note.set('accid', 'n')                 # cancels key sig → written natural
+                    bar_accs[staff_n][new_pname] = 0
+                else:
+                    # Plain natural: check if within-bar context requires a natural sign
+                    prev = bar_accs[staff_n].get(new_pname)
+                    if prev is not None and prev != 0:
+                        note.set('accid', 'n')             # cancels in-bar sharp/flat
+                        bar_accs[staff_n][new_pname] = 0
 
     return ET.tostring(root, encoding='unicode')
 
