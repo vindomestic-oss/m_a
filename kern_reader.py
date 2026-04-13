@@ -4046,13 +4046,15 @@ def _transpose_mei_pitches(mei_str: str, semitones: int) -> str:
                         acc_wr  = child_acc_wr
                 acc_val = _ACCID_SEMI.get(acc_ges, _ACCID_SEMI.get(acc_wr, 0))
                 midi    = (oct_n + 1) * 12 + _PNAME_SEMI[pname] + acc_val + semitones
-                new_oct = midi // 12 - 1
 
                 # Diatonic step preservation: advance step letter by diatonic_offset
                 new_pname = _IDX_STEP[(_STEP_IDX[pname] + diatonic_offset) % 7]
                 # Chromatic accidental from remainder
                 raw_alter     = (midi % 12) - _PNAME_SEMI[new_pname]
                 new_alter_val = ((raw_alter + 6) % 12) - 6   # normalise to –2..+2
+                # Octave must be computed AFTER new_alter_val: B#4 = midi 72 = oct 4,
+                # but midi//12-1 = 5 (chromatic C5). Use: (midi - semi - alter)//12 - 1.
+                new_oct = (midi - _PNAME_SEMI[new_pname] - new_alter_val) // 12 - 1
 
                 note.set('pname', new_pname)
                 note.set('oct',   str(new_oct))
@@ -4152,7 +4154,6 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
 
         # New MIDI
         midi      = (oct_n + 1) * 12 + _STEP_SEMI_U.get(step, 0) + alter + semitones
-        new_oct_n = midi // 12 - 1
 
         # New step letter via diatonic interval (preserves G/Ab → A/Bb, not A/A#)
         new_step_idx = (_STEP_IDX[step.lower()] + diatonic_offset) % 7
@@ -4162,6 +4163,8 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
         raw_alter    = (midi % 12) - _PNAME_SEMI[new_step]
         # Normalise to closest value in –2..+2 range
         new_alter_val = ((raw_alter + 6) % 12) - 6
+        # Octave computed after alter: B#4 = midi 72, but midi//12-1 = 5 (chromatic C5).
+        new_oct_n = (midi - _PNAME_SEMI[new_step] - new_alter_val) // 12 - 1
 
         # Update <step>
         step_el = pitch.find('step')
