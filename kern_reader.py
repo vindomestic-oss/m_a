@@ -81,6 +81,8 @@ Select a kern file in the panel.</body></html>""",
     "beat_dur_q":       1.0,
     "pickup_dur_q":     0.0,
     "search_rpt_info":  [],     # list of {rpt_start, rpt_end, shift, play2_end}
+    "nid_to_note":      {},     # nid → (nid, pname, oct_int, dur_q, midi_val, onset_q)
+    "beam_of":          {},     # nid → beam_group_id
 }
 _state_lock = threading.Lock()
 
@@ -205,6 +207,24 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         if path == "/events":
             self.do_GET_events()
+            return
+        if path == "/staff_svg":
+            from urllib.parse import parse_qs, urlparse as _urlparse
+            _qs   = parse_qs(_urlparse(self.path).query)
+            _nids = [n for n in _qs.get('nids', [''])[0].split(',') if n]
+            with _state_lock:
+                _n2n = _state.get("nid_to_note", {})
+                _bof = _state.get("beam_of", {})
+            _ni = [((_n2n[n][1]).lower(), _n2n[n][2], _n2n[n][3], _n2n[n][4], n)
+                   for n in _nids if n in _n2n]
+            _svg = _mini_staff_svg(_ni, _bof) if _ni else ''
+            _body = _svg.encode('utf-8')
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+            self.send_header("Content-Length", len(_body))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(_body)
             return
         if path == "/shutdown":
             self.send_response(200)
@@ -897,6 +917,7 @@ def find_lilypond_files():
     if not os.path.isdir(xml_dir):
         return []
     _EXCLUDED = {'bwv1013.xml', 'bwv1017.xml', 'BWV_827_BWV_827.xml'}
+    _EXCL_BWV = {1024}   # BWV numbers excluded entirely (all movements)
 
     all_fnames = sorted(f for f in os.listdir(xml_dir)
                         if f.endswith('.xml') and f not in _EXCLUDED)
@@ -942,6 +963,11 @@ def find_lilypond_files():
 
         # Skip explicit part files
         if fname in _PART_FILES:
+            continue
+
+        # Skip excluded BWV numbers entirely
+        m_bwv = _re.search(r'bwv[-_]?(\d+)', stem, _re.I)
+        if m_bwv and int(m_bwv.group(1)) in _EXCL_BWV:
             continue
 
         # Skip standard WTC pieces (BWV 846-893, no letter suffix) — covered by .krn collection
@@ -1257,7 +1283,7 @@ def _regen_tobis_splits(subdir='engl-suites'):
 
     base = os.path.join(os.path.dirname(__file__), 'tobis-notenarchiv.de')
     src_dir = os.path.join(base, subdir)
-    out_dir = os.path.join(base, 'split', subdir)
+    out_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
     os.makedirs(out_dir, exist_ok=True)
 
     for src_fname in sorted(os.listdir(src_dir)):
@@ -1405,6 +1431,17 @@ _MOTIF_COLORS  = [
 ]
 _MEI_NS = 'http://www.music-encoding.org/ns/mei'
 _XML_ID = '{http://www.w3.org/XML/1998/namespace}id'
+
+# Predefined rhythmic vocab patterns — always searched and shown in the motif dict.
+# Format: any valid /search query string (rhythm-only, interval, contour).
+VOCAB_QUERIES: list[str] = [
+    "(1/4)3/16,1/16;0",          # dotted rhythm: dotted-8th + 16th at quarter-beat start
+    "(1/8)3/32,1/32;0",          # dotted rhythm: dotted-16th + 32nd at eighth-beat start
+    "(1/4)3/16,1/32,1/32;0",     # double-dotted variant
+    "(1/4)1/16?,1/8,>=1/16;0",   # syncope: 8th on 2nd 16th of beat (opt. leading 16th)
+    "(1/8)1/16;01_",             # attack-grid syncope: no attack at beat, attack at 1/16, held (not rest) at 2/16
+    "(1/4)1/8;01_",              # same at quarter-beat scale: attack on 2nd 8th of quarter, held at next beat
+]
 
 # Per-file beat_dur_q overrides (filename substring → beat_dur_q in quarter notes).
 # Use to force a specific metric feel when the time signature is ambiguous.
@@ -1703,6 +1740,45 @@ def _fix_musicxml_voice_order(content: str) -> str:
     if not changed:
         return content
     return ET.tostring(root, encoding='unicode')
+
+
+def _fix_backward_repeat_on_left(content: str) -> str:
+    """Move non-standard <barline location="left"><repeat direction="backward"/>
+    to a <barline location="right"> on the previous measure.
+    Some musedata MusicXML files encode backward repeats on the left barline of
+    the next measure rather than the right barline of the last measure of the
+    repeated section.  Verovio misinterprets these as forward repeats (rptstart).
+    """
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content.encode())
+    except ET.ParseError:
+        return content
+
+    changed = False
+    for part in root.findall('.//part'):
+        measures = part.findall('measure')
+        for idx, msr in enumerate(measures):
+            if idx == 0:
+                continue
+            for bar in list(msr.findall('barline')):
+                if bar.get('location') != 'left':
+                    continue
+                rep = bar.find('repeat')
+                if rep is None or rep.get('direction') != 'backward':
+                    continue
+                # Move to right barline of previous measure
+                prev = measures[idx - 1]
+                new_bar = ET.SubElement(prev, 'barline')
+                new_bar.set('location', 'right')
+                new_rep = ET.SubElement(new_bar, 'repeat')
+                new_rep.set('direction', 'backward')
+                msr.remove(bar)
+                changed = True
+
+    if not changed:
+        return content
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding='unicode')
 
 
 # ── TSD harmony labels ────────────────────────────────────────────────────────
@@ -2442,6 +2518,128 @@ def _dur_matches(actual, spec):
     return False
 
 
+def _search_attack_grid(cell_q, subdiv_q, pattern, seqs, pickup_dur_q, search_rpt_info):
+    """
+    Attack-grid search: pattern string aligned to repeating cells.
+    cell_q    = cell duration in quarter notes (e.g. 0.5 for 1/8-cell).
+    subdiv_q  = slot duration in quarter notes (e.g. 0.25 for 1/16-slots).
+    pattern   = string of '0'/'1'/'_':
+        '1' = note attack required at this slot
+        '0' = no attack (rest OR held note — either is fine)
+        '_' = no attack AND the most-recently-attacked note in the pattern must still
+              be ringing (its duration reaches past this slot); rejects rests
+    Slots beyond ceil(cell_q/subdiv_q) are look-ahead into the next cell;
+    they constrain but do NOT block the greedy advance (next cell starts at +cell_q).
+    Returns {"occs": [[nid,...], ...], "count": N, ...}.
+    """
+    attack_ks = [k for k, ch in enumerate(pattern) if ch == '1']
+    if not attack_ks:
+        return {"occs": [], "count": 0, "repeat_pairs": [], "is_inv": [], "is_volta": False}
+
+    all_cands = []   # (onset_q16, vi_idx, onset_f, nids)
+    for vi, (_vk, seq) in enumerate(seqs):
+        if not seq:
+            continue
+        # onset → nid and onset → duration for all notes
+        # seq[j][2]=nid, seq[j][4]=onset (quarters), seq[j][1]=duration (quarters)
+        onset_to_nid = {round(seq[j][4] * 16): seq[j][2] for j in range(len(seq))}
+        onset_to_dur = {round(seq[j][4] * 16): seq[j][1] for j in range(len(seq))}
+        # last note of voice: nid = seq[-1][3], onset ≈ seq[-1][4] + seq[-1][1]
+        _lkey = round((seq[-1][4] + seq[-1][1]) * 16)
+        if _lkey not in onset_to_nid:
+            onset_to_nid[_lkey] = seq[-1][3]
+        onset_set = set(onset_to_nid)
+
+        first_q = seq[0][4]
+        last_q  = seq[-1][4]
+        # first cell start at or before first note onset
+        k0 = int((first_q - pickup_dur_q) / cell_q)
+        cs = pickup_dur_q + k0 * cell_q
+        if cs > first_q + 1e-9:
+            cs -= cell_q
+
+        while cs <= last_q + 1e-9:
+            ok = True
+            nids_here = []
+            for k, ch in enumerate(pattern):
+                t16 = round((cs + k * subdiv_q) * 16)
+                has_atk = t16 in onset_set
+                if ch == '1':
+                    if not has_atk:
+                        ok = False; break
+                    nids_here.append(onset_to_nid[t16])
+                elif ch == '0':
+                    if has_atk:
+                        ok = False; break
+                else:  # '_': no attack + the note from the most recent '1' still rings here
+                    if has_atk:
+                        ok = False; break
+                    # find most recent '1' slot before k and check its duration
+                    _ringing = False
+                    for _kk in range(k - 1, -1, -1):
+                        if pattern[_kk] == '1':
+                            _atk16 = round((cs + _kk * subdiv_q) * 16)
+                            _dur_q = onset_to_dur.get(_atk16)
+                            if _dur_q is not None:
+                                # note must end strictly after t16
+                                _end16 = _atk16 + round(_dur_q * 16)
+                                _ringing = _end16 > t16
+                            break
+                    if not _ringing:
+                        ok = False; break
+            if ok and nids_here:
+                first_atk_q = cs + attack_ks[0] * subdiv_q
+                all_cands.append((round(first_atk_q * 16), vi, first_atk_q, nids_here))
+            cs += cell_q   # advance by one full cell (look-ahead does not block)
+
+    # cross-voice dedup: same onset counted once
+    all_cands.sort(key=lambda x: (x[0], x[1]))
+    seen = set()
+    occs_with_onset = []
+    is_inv_flags = []
+    for oq, _vi, of_, ns in all_cands:
+        if oq in seen:
+            continue
+        seen.add(oq)
+        occs_with_onset.append((of_, ns))
+        is_inv_flags.append(False)
+
+    # repeat unfolding (mirrors _search_motif logic)
+    def _sp2(nid):
+        return nid[:-4] if nid.endswith('__p2') else nid
+    repeat_pairs = []
+    if search_rpt_info:
+        _rpt_list = search_rpt_info if isinstance(search_rpt_info, list) else [search_rpt_info]
+        all_p2 = set(); all_pairs_s = []
+        for rr in _rpt_list:
+            rpt_start_q = rr['rpt_start']; rpt_end_q = rr['rpt_end']
+            shift_q = rr['shift'];         play2_end_q = rr['play2_end']
+            p1_idxs = [j for j, (o, _) in enumerate(occs_with_onset)
+                       if rpt_start_q - 1e-9 <= o < rpt_end_q - 1e-9]
+            p2_idxs = [j for j, (o, _) in enumerate(occs_with_onset)
+                       if rpt_end_q - 1e-9 <= o < play2_end_q - 1e-9]
+            all_p2.update(p2_idxs)
+            if p2_idxs:
+                p1_by_oq16 = {round(occs_with_onset[j][0] * 16): j for j in p1_idxs}
+                for j2 in p2_idxs:
+                    o2 = occs_with_onset[j2][0]
+                    j1 = p1_by_oq16.get(round((o2 - shift_q) * 16))
+                    if j1 is not None:
+                        all_pairs_s.append((j1, j2))
+        if all_p2:
+            def _nids_overlap(i1, i2):
+                s1 = {_sp2(n) for n in occs_with_onset[i1][1]}
+                s2 = {_sp2(n) for n in occs_with_onset[i2][1]}
+                return bool(s1 & s2)
+            repeat_pairs = [(j1, j2, _nids_overlap(j1, j2)) for j1, j2 in all_pairs_s]
+
+    occs_with_onset = [(o, [_sp2(nid) for nid in nids]) for o, nids in occs_with_onset]
+    occs = [nids for _, nids in occs_with_onset]
+    skip = sum(1 for _, _, s in repeat_pairs if s)
+    return {"occs": occs, "count": len(occs) - skip, "repeat_pairs": repeat_pairs,
+            "is_inv": is_inv_flags, "is_volta": bool(search_rpt_info)}
+
+
 def _search_motif(query):
     """
     Parse query "dur[,dur...];phase;+iv-iv..." (phase optional, default 0).
@@ -2458,6 +2656,18 @@ def _search_motif(query):
         _, scale_val = _parse_dur(m_scale.group(1).strip())
         explicit_scale_q = scale_val
         query = m_scale.group(2)
+
+    # detect attack-grid format: (cell)subdiv;010... where pattern is all 0s and 1s, len>=2
+    if explicit_scale_q is not None:
+        _ag_m = re.match(r'^([^;]+);([01_]{2,})$', query.strip())
+        if _ag_m:
+            _, _ag_subdiv_q = _parse_dur(_ag_m.group(1).strip())
+            with _state_lock:
+                _ag_seqs   = list(_state.get("seqs", []))
+                _ag_pickup = _state.get("pickup_dur_q", 0.0)
+                _ag_rpt    = _state.get("search_rpt_info")
+            return _search_attack_grid(explicit_scale_q, _ag_subdiv_q, _ag_m.group(2),
+                                       _ag_seqs, _ag_pickup, _ag_rpt)
 
     parts = query.split(';')
     # strip optional ;inv modifier
@@ -2483,7 +2693,12 @@ def _search_motif(query):
     else:
         raise ValueError("Формат: длит;фаза;+iv-iv… или длит;фаза (только ритм)")
 
-    durs = [_parse_dur(s) for s in dur_str.split(',')]
+    # detect ? on first duration token → optional leading note
+    _dur_tokens = dur_str.split(',')
+    _opt_first_flag = len(_dur_tokens) > 0 and _dur_tokens[0].strip().endswith('?')
+    if _opt_first_flag:
+        _dur_tokens[0] = _dur_tokens[0].strip()[:-1]
+    durs = [_parse_dur(s) for s in _dur_tokens]
 
     if rhythm_only:
         if len(durs) < 2:
@@ -2495,12 +2710,20 @@ def _search_motif(query):
             durs = durs[1:]
             if len(durs) < 2:
                 raise ValueError("После условия паузы нужно минимум 2 длительности нот")
+        # optional first note (? suffix): may be present or absent (rest/tie)
+        opt_first_dur = None
+        if _opt_first_flag and pre_gap_spec is None:
+            opt_first_dur = durs[0]
+            durs = durs[1:]
+            if len(durs) < 2:
+                raise ValueError("После '?' нужно минимум 2 длительности")
         n = len(durs) - 1
         last_dur = durs[n]
         durs = durs[:n]
         intervals = None   # any interval accepted
         pattern = None
     else:
+        opt_first_dur = None
         pre_gap_spec = None
         # contour mode: ivs_str contains only +/-/= chars, no digits (e.g. "+-+")
         contour_chars = re.findall(r'[+\-=]', ivs_str)
@@ -2554,7 +2777,8 @@ def _search_motif(query):
     # rhythm_only: durs elements are (op, val) → s[1] = val
     # interval:    pattern elements are (interval, (op, val)) → s[1][1] = val
     if rhythm_only:
-        all_dur_vals = [s[1] for s in durs] + ([last_dur[1]] if last_dur is not None else [])
+        all_dur_vals = (([opt_first_dur[1]] if opt_first_dur is not None else []) +
+                        [s[1] for s in durs] + ([last_dur[1]] if last_dur is not None else []))
     else:
         # pattern elements are (contour_char_or_interval, dur_spec); dur_spec = (op, val)
         all_dur_vals = [s[1][1] for s in pattern] + ([last_dur[1]] if last_dur is not None else [])
@@ -2580,11 +2804,14 @@ def _search_motif(query):
                     ph = n_pb  # sentinel — off-grid or at period boundary, never matches
                 else:
                     ph = rounded_ph
+                _tgt_ph = (start_phase + 1) % n_pb if opt_first_dur is not None else start_phase
             elif min_dur_q is not None:
                 ph = _metric_phase(seq[i][4] - pickup_dur_q, min_dur_q, beat_dur_q)
+                _tgt_ph = start_phase  # no n_pb available; opt_first not fully supported
             else:
                 ph = seq[i][5]
-            if ph != start_phase:
+                _tgt_ph = start_phase
+            if ph != _tgt_ph:
                 continue
             # pre-gap check: first spec was >x / >=x / <x / <=x → gap before this note
             if pre_gap_spec is not None:
@@ -2632,9 +2859,30 @@ def _search_motif(query):
             # exclude matches with rests between notes (use precomputed contiguous flag)
             if not all(seq[i + k][6] for k in range(n)):
                 continue
-            onset_q = round(seq[i][4] * 16)
-            nids = [seq[i][2]] + [seq[i + k][3] for k in range(n)]
-            _all_cands.append((onset_q, _curr_is_inv, _vi_idx, i, seq[i][4], nids))
+            # optional leading note: include if contiguous, right duration, right phase
+            _opt_nid = None
+            if opt_first_dur is not None and i > 0 and seq[i - 1][6]:
+                if _dur_matches(seq[i - 1][1], opt_first_dur):
+                    if explicit_scale_q is not None and min_dur_q is not None:
+                        _n_pb2 = max(1, round(explicit_scale_q / min_dur_q))
+                        _pos2  = (seq[i - 1][4] - pickup_dur_q) % explicit_scale_q
+                        _rph2  = _pos2 / min_dur_q
+                        _iph2  = int(round(_rph2))
+                        if abs(_rph2 - _iph2) <= 0.35 and _iph2 == start_phase % _n_pb2:
+                            _opt_nid = seq[i - 1][2]
+                    else:
+                        _opt_nid = seq[i - 1][2]
+            onset_q = round((seq[i - 1][4] if _opt_nid else seq[i][4]) * 16)
+            nids = ([_opt_nid] if _opt_nid else []) + [seq[i][2]] + [seq[i + k][3] for k in range(n)]
+            # compute next valid start: after scale period end (if scale given), else i+n+1
+            _next_start_i = i + n + 1
+            if explicit_scale_q is not None and min_dur_q is not None:
+                _scale_end = seq[i][4] - _tgt_ph * min_dur_q + explicit_scale_q
+                _nsi = i + n + 1
+                while _nsi < len(seq) and seq[_nsi][4] < _scale_end - 1e-9:
+                    _nsi += 1
+                _next_start_i = _nsi
+            _all_cands.append((onset_q, _curr_is_inv, _vi_idx, i, seq[i][4], nids, _next_start_i))
 
     # Phase 2: sort (direct before inverted at same onset, then by voice), joint greedy.
     # Cross-dedup does NOT advance per-voice last_end — same semantics as _find_motifs.
@@ -2643,7 +2891,7 @@ def _search_motif(query):
     seen_onsets = set()
     occs_with_onset = []
     is_inv_flags    = []
-    for _oq, _inv, _vi, _i, _of, _ns in _all_cands:
+    for _oq, _inv, _vi, _i, _of, _ns, _nsi in _all_cands:
         if _i < _last_end_v.get(_vi, -1):
             continue
         if _oq in seen_onsets:
@@ -2651,7 +2899,7 @@ def _search_motif(query):
         occs_with_onset.append((_of, _ns))
         is_inv_flags.append(_inv)
         seen_onsets.add(_oq)
-        _last_end_v[_vi] = _i + n + 1
+        _last_end_v[_vi] = _nsi
 
     def _strip_p2(nid):
         return nid[:-4] if nid.endswith('__p2') else nid
@@ -3159,11 +3407,24 @@ def prepare_grand_staff(content: str) -> str:
     if any(l.startswith("*staff") for l in lines):
         return content
 
-    # If the file has non-kern spines (e.g. **dynam, **text), leave it unchanged —
-    # duplicating rows would produce wrong column counts.
     header_tokens = lines[header_idx].rstrip().split("\t")
-    if len(header_tokens) > n_initial:
-        return content
+    # If there are non-kern spines (e.g. **dynam), strip them and recurse.
+    # Non-kern spines never split in these files, so they stay in the rightmost
+    # positions throughout; stripping the last n_extra columns is safe.
+    n_extra = len(header_tokens) - n_initial
+    if n_extra > 0:
+        new_lines = []
+        for line in lines:
+            raw = line.rstrip("\n\r")
+            if not raw or raw.startswith("!!"):
+                new_lines.append(line)
+                continue
+            tokens = raw.split("\t")
+            # Count how many columns are currently active (kern + non-kern);
+            # keep all but the rightmost n_extra (non-kern spines never split).
+            kept = tokens[:len(tokens) - n_extra]
+            new_lines.append("\t".join(kept) + "\n")
+        return prepare_grand_staff("".join(new_lines))
 
     split_idxs = []
     spine_count = 1
@@ -3577,6 +3838,7 @@ def render_score(path: str, version: str = "1") -> tuple:
             content = _strip_new_system_hints(content)
             content = _fix_implicit_pickup_measures(content)
             content = _fix_musicxml_voice_order(content)
+            content = _fix_backward_repeat_on_left(content)
         ok = _vtk.loadData(content)
         if not ok:
             raise RuntimeError("verovio could not parse this file")
@@ -3766,6 +4028,7 @@ def render_score(path: str, version: str = "1") -> tuple:
                    "is_volta": m.get("is_volta", False)}
                   for m in motifs]
     motif_json = json.dumps(motif_data)
+    vocab_json = json.dumps(VOCAB_QUERIES)
     note_labels_json = json.dumps(nid_labels)
 
     # ── TSD harmony labels ────────────────────────────────────────────────────
@@ -3904,9 +4167,14 @@ var motifs={motif_json};
 var noteLabels={note_labels_json};
 var customMotifs=[];
 var CUSTOM_COLORS=['#ff6b35','#c77dff','#06d6a0','#ffd166'];
+var VOCAB_QUERIES={vocab_json};
+var vocabMotifs=[];
+var VOCAB_COLORS=['#2e86ab','#a23b72','#f18f01','#c73e1d'];
 var activeKey=null;
 var activeFilter='all';
 var drawnRects=[];
+var _activeOccs=[];
+var _activeOccIdx=0;
 
 function clearRects(){{
   drawnRects.forEach(function(r){{if(r.parentNode)r.parentNode.removeChild(r);}});
@@ -4062,10 +4330,22 @@ function drawBoxes(m){{
 }}
 
 document.addEventListener('keydown',function(e){{
-  if(e.key==='Backspace'&&e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA'){{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.key==='Backspace'){{
     e.preventDefault();
     var d=document.getElementById('motif-dict');
     if(d)d.scrollIntoView({{behavior:'smooth',block:'start'}});
+  }}else if(e.key==='Tab'){{
+    if(_activeOccs.length===0)return;
+    e.preventDefault();
+    _activeOccIdx=e.shiftKey
+      ?(_activeOccIdx-1+_activeOccs.length)%_activeOccs.length
+      :(_activeOccIdx+1)%_activeOccs.length;
+    var occ=_activeOccs[_activeOccIdx];
+    if(occ&&occ[0]){{
+      var el=document.getElementById(occ[0]);
+      if(el)el.scrollIntoView({{behavior:'smooth',block:'center'}});
+    }}
   }}
 }});
 
@@ -4113,8 +4393,9 @@ document.addEventListener('DOMContentLoaded',function(){{
 }});
 
 function clearActiveRows(){{
-  document.querySelectorAll('#motif-dict tr[data-midx],#motif-dict tr[data-cidx]').forEach(function(r){{
-    r.style.background=''; r.setAttribute('data-active','0');
+  document.querySelectorAll('#motif-dict tr[data-midx],#motif-dict tr[data-cidx],#motif-dict tr[data-vidx]').forEach(function(r){{
+    r.style.background=r.hasAttribute('data-vidx')?'#f0fff4':'';
+    r.setAttribute('data-active','0');
   }});
   document.querySelectorAll('.cnt-f').forEach(function(s){{
     s.style.textDecoration=''; s.style.fontWeight='';
@@ -4172,6 +4453,7 @@ function isSmooth(k){{
 
 function scrollToFirst(m){{
   if(!m.occs||!m.occs[0]||!m.occs[0][0])return;
+  _activeOccs=m.occs; _activeOccIdx=0;
   var el=document.getElementById(m.occs[0][0]);
   if(el)el.scrollIntoView({{behavior:'smooth',block:'center'}});
 }}
@@ -4328,6 +4610,60 @@ function addCustomMotif(occs,queryStr,repeat_pairs,displayCount,isVolta){{
   scrollToFirst({{occs:occs}});
 }}
 
+function addVocabMotif(occs,queryStr,repeat_pairs,displayCount,isVolta,vidx){{
+  var color=VOCAB_COLORS[vidx%VOCAB_COLORS.length];
+  repeat_pairs=repeat_pairs||[];
+  vocabMotifs.push({{color:color,occs:occs,repeat_pairs:repeat_pairs,is_volta:isVolta}});
+  var cnt=displayCount!=null?displayCount:occs.length;
+  var tbody=document.querySelector('#motif-dict tbody');
+  if(!tbody)return;
+  var tr=document.createElement('tr');
+  tr.setAttribute('data-vidx',String(vidx));
+  tr.style.cssText='border-bottom:1px solid #e8e8e8;cursor:pointer;background:#f0fff4';
+  var nNotes=occs[0]?occs[0].length:'?';
+  var esc=queryStr.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  tr.innerHTML=
+    '<td style="padding:5px 10px 5px 0;white-space:nowrap">'+
+    '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'+
+    'background:'+color+';margin-right:5px;vertical-align:middle"></span>'+
+    '<b>R_'+(vidx+1)+'</b></td>'+
+    '<td id="vocab-pat-'+vidx+'" style="padding:3px 16px 3px 0">'+
+    '<div style="display:flex;align-items:center;gap:8px">'+
+    '<span style="font-family:monospace;font-size:11px;color:#aaa">'+esc+'</span></div></td>'+
+    '<td style="padding:5px 10px 5px 0;text-align:center">\xd7'+(isSmooth(cnt)&&cnt>=8?'<b>'+cnt+'</b>':String(cnt))+'</td>'+
+    '<td style="padding:5px 0;text-align:center;color:#888">'+nNotes+'</td>'+
+    '<td></td>';
+  tbody.appendChild(tr);
+  // fetch staff SVG for first occurrence
+  if(occs[0]&&occs[0].length){{
+    var nidsParam=occs[0].join(',');
+    fetch('/staff_svg?nids='+encodeURIComponent(nidsParam))
+    .then(function(r){{return r.text();}})
+    .then(function(svg){{
+      if(!svg)return;
+      var patCell=document.getElementById('vocab-pat-'+vidx);
+      if(patCell)patCell.innerHTML='<div style="display:flex;align-items:center;gap:8px">'+svg+'</div>';
+    }})
+    .catch(function(){{}});
+  }}
+  tr.onmouseover=function(){{if(tr.getAttribute('data-active')!=='1')tr.style.background='#e0f5e0';}};
+  tr.onmouseout=function(){{if(tr.getAttribute('data-active')!=='1')tr.style.background='#f0fff4';}};
+  tr.addEventListener('click',function(){{
+    var key='vocab:'+vidx;
+    var wasActive=(activeKey===key);
+    clearActiveRows(); clearRects();
+    if(wasActive){{
+      activeKey=null;
+    }}else{{
+      activeKey=key;
+      tr.style.background='#e8f0fe';
+      tr.setAttribute('data-active','1');
+      drawBoxes({{color:color,occs:occs,repeat_pairs:repeat_pairs,is_volta:isVolta}});
+      scrollToFirst({{occs:occs}});
+    }}
+  }});
+}}
+
 function _invertQueryStr(q){{
   // Invert the intervals part of a query string "[(<scale>)]dur;phase;ivs" → same with -ivs
   // Preserve optional (scale) prefix.
@@ -4420,8 +4756,22 @@ window.searchMotif=function(){{
   .catch(function(e){{st.style.color='#c0392b';st.textContent=String(e);}});
 }};
 
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',highlight);
-else highlight();
+function _runVocab(){{
+  VOCAB_QUERIES.forEach(function(q,vi){{
+    (function(qi,vidx){{
+      fetch('/search',{{method:'POST',headers:{{'Content-Type':'text/plain'}},body:qi}})
+      .then(function(r){{return r.json();}})
+      .then(function(data){{
+        if(data&&data.count>0)
+          addVocabMotif(data.occs,qi,data.repeat_pairs,data.count,data.is_volta,vidx);
+      }})
+      .catch(function(){{}});
+    }})(q,vi);
+  }});
+}}
+function _onReady(){{highlight();_runVocab();}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_onReady);
+else _onReady();
 
 // ── TSD harmony labels ──────────────────────────────────────────────────────
 var tsdLabels={tsd_json};
@@ -4595,15 +4945,15 @@ window.toggleTSDGen8=function(){{
 <div id="score-pages" style="position:relative">{pages}</div>
 </body>
 </html>"""
-    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s, _search_rpt_info
+    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s, _search_rpt_info, nid_to_note, beam_of
 
 # ── background render + update ────────────────────────────────────────────────
 
 def _render_worker(path: str, version: str, queue):
     """Runs in a subprocess to isolate verovio segfaults from the main process."""
     try:
-        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info = render_score(path, version)
-        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info))
+        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of = render_score(path, version)
+        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of))
     except Exception as e:
         queue.put(('error', str(e)))
 
@@ -4638,7 +4988,7 @@ def load_file_bg(path: str, status_cb):
         status_cb(f"ERROR: {result[1]}", error=True)
         return
 
-    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info = result
+    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of = result
     with _state_lock:
         _state["html"]            = html
         _state["version"]         = ver
@@ -4646,6 +4996,8 @@ def load_file_bg(path: str, status_cb):
         _state["beat_dur_q"]      = beat_dur_q
         _state["pickup_dur_q"]    = pickup_dur_q
         _state["search_rpt_info"] = search_rpt_info
+        _state["nid_to_note"]     = nid_to_note
+        _state["beam_of"]         = beam_of
     _notify_sse(ver)
     status_cb(f"{n_pages} page{'s' if n_pages != 1 else ''} — {os.path.basename(path)}")
 
@@ -4683,7 +5035,7 @@ class FileBrowser(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
 
-        self._files        = find_generated_files() + find_lilypond_files() + find_tobis_files() + find_kern_files(KERN_DIR) + find_music21_files()
+        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_music21_files()
         self._current_path = None
 
         self._build_ui()
