@@ -83,6 +83,8 @@ Select a kern file in the panel.</body></html>""",
     "search_rpt_info":  [],     # list of {rpt_start, rpt_end, shift, play2_end}
     "nid_to_note":      {},     # nid → (nid, pname, oct_int, dur_q, midi_val, onset_q)
     "beam_of":          {},     # nid → beam_group_id
+    "transpose_semitones": 0,   # chromatic semitone shift applied to rendered score
+    "current_path":     None,   # path of the last successfully loaded file
 }
 _state_lock = threading.Lock()
 
@@ -90,6 +92,8 @@ _state_lock = threading.Lock()
 
 _sse_clients = []
 _sse_lock    = threading.Lock()
+
+_browser_pid = None  # int PID of the browser process, set at launch
 
 def _notify_sse(version):
     """Push new version to all connected SSE clients."""
@@ -199,6 +203,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", len(msg))
                 self.end_headers()
                 self.wfile.write(msg)
+        elif self.path == "/transpose":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8").strip()
+            try:
+                semitones = int(body)
+            except ValueError:
+                semitones = 0
+            with _state_lock:
+                _state["transpose_semitones"] = semitones
+                _cur_path = _state.get("current_path")
+            if _cur_path:
+                import threading as _th
+                _th.Thread(target=load_file_bg, args=(_cur_path, lambda s, **kw: None), daemon=True).start()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", 2)
+            self.end_headers()
+            self.wfile.write(b"ok")
         else:
             self.send_response(405)
             self.end_headers()
@@ -1437,10 +1459,18 @@ _XML_ID = '{http://www.w3.org/XML/1998/namespace}id'
 VOCAB_QUERIES: list[str] = [
     "(1/4)3/16,1/16;0",          # dotted rhythm: dotted-8th + 16th at quarter-beat start
     "(1/8)3/32,1/32;0",          # dotted rhythm: dotted-16th + 32nd at eighth-beat start
-    "(1/4)3/16,1/32,1/32;0",     # double-dotted variant
+    "(1/4)1/16,3/16;0",          # reverse dotted rhythm
+    "(1/8)1/32,3/32;0",          # reverse dotted rhythm
+
+    "(1/4)3/16,1/32,1/32;0",     # dotted variant with 2 1/32
+    "(1/4)1/16,1/16,1/8;0",
+    "(1/8)1/32,1/32,1/16;0",
+
     "(1/4)1/16?,1/8,>=1/16;0",   # syncope: 8th on 2nd 16th of beat (opt. leading 16th)
+    
     "(1/8)1/16;01_",             # attack-grid syncope: no attack at beat, attack at 1/16, held (not rest) at 2/16
     "(1/4)1/8;01_",              # same at quarter-beat scale: attack on 2nd 8th of quarter, held at next beat
+    "(1/4)1/16;?0011",           # attacks on 3rd+4th 16th of beat (beat pos wildcard, silence at 2nd 16th)
 ]
 
 # Per-file beat_dur_q overrides (filename substring → beat_dur_q in quarter notes).
@@ -1740,6 +1770,83 @@ def _fix_musicxml_voice_order(content: str) -> str:
     if not changed:
         return content
     return ET.tostring(root, encoding='unicode')
+
+
+def _renumber_measures_from_one(content: str) -> str:
+    """Shift measure numbers so bar 1 = first full bar (pickup bar gets 0).
+    Fixes movements from suites where bar numbers continue from the previous
+    movement (e.g. BWV 995 Allemande starts at bar 224)."""
+    import re as _re, xml.etree.ElementTree as ET
+    nums = [int(m) for m in _re.findall(r'<measure\s[^>]*number="(\d+)"', content)]
+    if not nums:
+        return content
+    offset = min(nums) - 1   # so first bar → 1 (adjusted below if pickup)
+    if offset == 0:
+        # still check for pickup even when numbers start at 1
+        pass
+    # detect pickup: parse first measure, compare actual note content vs. full bar
+    _is_pickup = False
+    try:
+        root = ET.fromstring(content)
+        for part in root.iter('part'):
+            first_msr = next(iter(part.iter('measure')), None)
+            if first_msr is not None:
+                divs  = int(first_msr.findtext('.//divisions') or 0)
+                beats = int(first_msr.findtext('.//beats')     or 0)
+                bt    = int(first_msr.findtext('.//beat-type') or 0)
+                if divs > 0 and beats > 0 and bt > 0:
+                    full_bar = beats * (4.0 / bt) * divs
+                    # sum note durations, excluding chord-continuation notes
+                    actual = sum(int(n.findtext('duration') or 0)
+                                 for n in first_msr.iter('note')
+                                 if n.find('chord') is None)
+                    if actual < full_bar * 0.75:
+                        _is_pickup = True
+            break
+    except Exception:
+        pass
+    if _is_pickup:
+        offset += 1   # pickup → 0, first full bar → 1
+    if offset == 0:
+        return content
+    return _re.sub(r'(<measure\s[^>]*number=")(\d+)(")',
+                   lambda m: m.group(1) + str(int(m.group(2)) - offset) + m.group(3),
+                   content)
+
+
+def _strip_redundant_time_sigs(content: str) -> str:
+    """Remove <time> elements from measures where the time signature has not
+    changed since the last explicit <time>.  Verovio renders time sigs at system
+    starts automatically, so explicit repetitions in the source only cause
+    spurious mid-system display (left-over from _strip_new_system_hints)."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    changed = False
+    for part in root.iter('part'):
+        cur_ts = None
+        for msr in part.iter('measure'):
+            attrs_el = msr.find('attributes')
+            if attrs_el is None:
+                continue
+            time_el = attrs_el.find('time')
+            if time_el is None:
+                continue
+            ts = (time_el.findtext('beats', ''), time_el.findtext('beat-type', ''))
+            if cur_ts is not None and ts == cur_ts:
+                attrs_el.remove(time_el)
+                changed = True
+            else:
+                cur_ts = ts
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
 
 
 def _fix_backward_repeat_on_left(content: str) -> str:
@@ -2571,6 +2678,8 @@ def _search_attack_grid(cell_q, subdiv_q, pattern, seqs, pickup_dur_q, search_rp
                 elif ch == '0':
                     if has_atk:
                         ok = False; break
+                elif ch == '?':
+                    pass  # wildcard: any of attack / rest / held is accepted
                 else:  # '_': no attack + the note from the most recent '1' still rings here
                     if has_atk:
                         ok = False; break
@@ -2659,7 +2768,7 @@ def _search_motif(query):
 
     # detect attack-grid format: (cell)subdiv;010... where pattern is all 0s and 1s, len>=2
     if explicit_scale_q is not None:
-        _ag_m = re.match(r'^([^;]+);([01_]{2,})$', query.strip())
+        _ag_m = re.match(r'^([^;]+);([01_?]{2,})$', query.strip())
         if _ag_m:
             _, _ag_subdiv_q = _parse_dur(_ag_m.group(1).strip())
             with _state_lock:
@@ -3800,7 +3909,279 @@ def _mini_staff_svg(notes_info, beam_of=None):
     return ''.join(out)
 
 
-def render_score(path: str, version: str = "1") -> tuple:
+_PNAME_SEMI   = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
+_ACCID_SEMI   = {'s': 1, 'ss': 2, 'f': -1, 'ff': -2, 'n': 0}
+# Diatonic step helpers (for MusicXML transposition)
+_STEP_IDX = {'c': 0, 'd': 1, 'e': 2, 'f': 3, 'g': 4, 'a': 5, 'b': 6}
+_IDX_STEP = ['c', 'd', 'e', 'f', 'g', 'a', 'b']
+# Major root letter for each key signature (determines diatonic step offset)
+_SIG_TO_ROOT_LETTER = {
+    '0': 'c', '1s': 'g', '2s': 'd', '3s': 'a', '4s': 'e', '5s': 'b', '6s': 'f',
+    '1f': 'f', '2f': 'b', '3f': 'e', '4f': 'a', '5f': 'd', '6f': 'g',
+}
+# MIDI class → (pname, accid or None); sharp and flat variants
+_SHARP_SPELLS = [
+    ('c', None), ('c', 's'), ('d', None), ('d', 's'), ('e', None),
+    ('f', None), ('f', 's'), ('g', None), ('g', 's'), ('a', None), ('a', 's'), ('b', None),
+]
+_FLAT_SPELLS = [
+    ('c', None), ('d', 'f'), ('d', None), ('e', 'f'), ('e', None),
+    ('f', None), ('g', 'f'), ('g', None), ('a', 'f'), ('a', None), ('b', 'f'), ('b', None),
+]
+# key-sig string → MIDI class of the corresponding major-key root
+_SIG_TO_ROOT = {
+    '0': 0, '1s': 7, '2s': 2, '3s': 9, '4s': 4, '5s': 11, '6s': 6,
+    '1f': 5, '2f': 10, '3f': 3, '4f': 8, '5f': 1, '6f': 6,
+}
+# major-key root MIDI class → preferred key-sig string (sharp / flat)
+_ROOT_TO_SIG_SHARP = {0: '0', 7: '1s', 2: '2s', 9: '3s', 4: '4s', 11: '5s', 6: '6s'}
+_ROOT_TO_SIG_FLAT  = {0: '0', 5: '1f', 10: '2f', 3: '3f', 8: '4f', 1: '5f', 6: '6f'}
+# key-sig string → {pname: accid_type} for each pitch altered by the key signature
+_KEY_ACCS = {
+    '0':  {},
+    '1s': {'f': 's'},
+    '2s': {'f': 's', 'c': 's'},
+    '3s': {'f': 's', 'c': 's', 'g': 's'},
+    '4s': {'f': 's', 'c': 's', 'g': 's', 'd': 's'},
+    '5s': {'f': 's', 'c': 's', 'g': 's', 'd': 's', 'a': 's'},
+    '6s': {'f': 's', 'c': 's', 'g': 's', 'd': 's', 'a': 's', 'e': 's'},
+    '1f': {'b': 'f'},
+    '2f': {'b': 'f', 'e': 'f'},
+    '3f': {'b': 'f', 'e': 'f', 'a': 'f'},
+    '4f': {'b': 'f', 'e': 'f', 'a': 'f', 'd': 'f'},
+    '5f': {'b': 'f', 'e': 'f', 'a': 'f', 'd': 'f', 'g': 'f'},
+    '6f': {'b': 'f', 'e': 'f', 'a': 'f', 'd': 'f', 'g': 'f', 'c': 'f'},
+}
+
+
+def _transpose_mei_pitches(mei_str: str, semitones: int) -> str:
+    """Shift every note in an MEI string by `semitones` chromatic semitones.
+    Updates the key signature and sets accid / accid.ges correctly."""
+    if not semitones:
+        return mei_str
+    import xml.etree.ElementTree as ET
+    MEI_NS = 'http://www.music-encoding.org/ns/mei'
+    # Register namespaces BEFORE parsing so ET.tostring re-uses the original prefixes
+    ET.register_namespace('', MEI_NS)
+    ET.register_namespace('xlink', 'http://www.w3.org/1999/xlink')
+    try:
+        root = ET.fromstring(mei_str)
+    except ET.ParseError:
+        return mei_str
+
+    # --- find old key sig (first keySig element, then scoreDef key.sig) ---
+    old_sig = '0'
+    for el in root.iter(f'{{{MEI_NS}}}keySig'):
+        sig = el.get('sig', '')
+        if sig:
+            old_sig = sig
+            break
+    if old_sig == '0':
+        for el in root.iter(f'{{{MEI_NS}}}scoreDef'):
+            sig = el.get('key.sig', '')
+            if sig:
+                old_sig = sig
+                break
+
+    # --- compute new key sig ---
+    old_root = _SIG_TO_ROOT.get(old_sig, 0)
+    new_root = (old_root + semitones) % 12
+    new_sig_s = _ROOT_TO_SIG_SHARP.get(new_root)
+    new_sig_f = _ROOT_TO_SIG_FLAT.get(new_root)
+    if new_sig_s is None and new_sig_f is None:
+        new_sig = '0'
+    elif new_sig_s is None:
+        new_sig = new_sig_f
+    elif new_sig_f is None:
+        new_sig = new_sig_s
+    else:
+        # Ambiguous (root 0 = C, root 6 = F#/Gb): keep same sharp/flat direction as before
+        new_sig = new_sig_f if 'f' in old_sig else new_sig_s
+
+    new_key_accs = _KEY_ACCS.get(new_sig, {})
+    spell_table  = _FLAT_SPELLS if 'f' in new_sig else _SHARP_SPELLS
+
+    # --- update all keySig and scoreDef key.sig attributes ---
+    for el in root.iter(f'{{{MEI_NS}}}keySig'):
+        if 'sig' in el.attrib:
+            el.set('sig', new_sig)
+    for el in root.iter(f'{{{MEI_NS}}}scoreDef'):
+        if 'key.sig' in el.attrib:
+            el.set('key.sig', new_sig)
+
+    # --- transpose every note ---
+    # For kern→MEI, verovio always sets accid.ges for key-sig notes (e.g. Bb→accid.ges='f')
+    # and accid='n' for written naturals; notes with no attrs are within-bar naturals.
+    # So we read accid.ges / accid directly — no key-sig fallback needed here.
+    for note in root.iter(f'{{{MEI_NS}}}note'):
+        pname = note.get('pname', '').lower()
+        if pname not in _PNAME_SEMI:
+            continue
+        oct_n   = int(note.get('oct', '4'))
+        acc_ges = note.get('accid.ges', '') or ''
+        acc_wr  = note.get('accid', '')     or ''
+        acc_val = _ACCID_SEMI.get(acc_ges, _ACCID_SEMI.get(acc_wr, 0))
+        midi    = (oct_n + 1) * 12 + _PNAME_SEMI[pname] + acc_val + semitones
+        new_oct = midi // 12 - 1
+        new_pname, new_acc = spell_table[midi % 12]
+        note.set('pname', new_pname)
+        note.set('oct',   str(new_oct))
+        # clear both accidental attributes first
+        for attr in ('accid.ges', 'accid'):
+            if attr in note.attrib:
+                del note.attrib[attr]
+        # set accidentals based on key signature context
+        if new_acc:
+            if new_key_accs.get(new_pname) == new_acc:
+                note.set('accid.ges', new_acc)  # key-implied → gestural only
+            else:
+                note.set('accid', new_acc)      # chromatic → written accidental
+        else:
+            if new_pname in new_key_accs:
+                note.set('accid', 'n')          # cancels key sig → written natural
+
+    return ET.tostring(root, encoding='unicode')
+
+
+def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
+    """Transpose MusicXML by `semitones` chromatic semitones using diatonic interval
+    preservation: each note's step letter advances by the same diatonic interval as
+    the key change, so Ab→Bb (not A#) when transposing by a major 2nd."""
+    if not semitones:
+        return content
+    import xml.etree.ElementTree as ET
+    _STEP_SEMI_U = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
+    _ACCID_BEFORE = {'time-modification', 'stem', 'notehead', 'notehead-text',
+                     'staff', 'beam', 'notations', 'lyric', 'play'}
+    _ALTER_TO_MXL  = {1: 'sharp', -1: 'flat', 2: 'double-sharp', -2: 'flat-flat'}
+    _ALTER_TO_ACCID = {1: 's', -1: 'f', 2: 'ss', -2: 'ff'}
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+
+    # --- find old key sig from first <key><fifths> ---
+    old_sig = '0'
+    for key_el in root.iter('key'):
+        try:
+            f = int(key_el.findtext('fifths') or 0)
+        except ValueError:
+            f = 0
+        old_sig = f'{f}s' if f > 0 else f'{-f}f' if f < 0 else '0'
+        break
+
+    # --- compute new key sig ---
+    old_root  = _SIG_TO_ROOT.get(old_sig, 0)
+    new_root  = (old_root + semitones) % 12
+    new_sig_s = _ROOT_TO_SIG_SHARP.get(new_root)
+    new_sig_f = _ROOT_TO_SIG_FLAT.get(new_root)
+    if new_sig_s is None and new_sig_f is None:
+        new_sig = '0'
+    elif new_sig_s is None:
+        new_sig = new_sig_f
+    elif new_sig_f is None:
+        new_sig = new_sig_s
+    else:
+        new_sig = new_sig_f if 'f' in old_sig else new_sig_s
+
+    new_key_accs = _KEY_ACCS.get(new_sig, {})
+    new_fifths   = (int(new_sig[:-1]) if 's' in new_sig
+                    else -int(new_sig[:-1]) if 'f' in new_sig else 0)
+
+    # Diatonic offset: how many letter-name steps the transposition spans.
+    # Derived from the major-root letter of old vs new key sig.
+    old_root_letter = _SIG_TO_ROOT_LETTER.get(old_sig, 'c')
+    new_root_letter = _SIG_TO_ROOT_LETTER.get(new_sig, 'c')
+    diatonic_offset = (_STEP_IDX[new_root_letter] - _STEP_IDX[old_root_letter]) % 7
+
+    # --- update all <key><fifths> elements ---
+    for key_el in root.iter('key'):
+        fifths_el = key_el.find('fifths')
+        if fifths_el is not None:
+            fifths_el.text = str(new_fifths)
+
+    # --- transpose every <note><pitch> and update <accidental> ---
+    for note in root.iter('note'):
+        pitch = note.find('pitch')
+        if pitch is None:
+            continue
+        step     = (pitch.findtext('step') or 'C').upper()
+        alter_el = pitch.find('alter')
+        alter    = round(float(alter_el.text)) if (alter_el is not None and alter_el.text) else 0
+        oct_n    = int(pitch.findtext('octave') or 4)
+
+        # New MIDI
+        midi      = (oct_n + 1) * 12 + _STEP_SEMI_U.get(step, 0) + alter + semitones
+        new_oct_n = midi // 12 - 1
+
+        # New step letter via diatonic interval (preserves G/Ab → A/Bb, not A/A#)
+        new_step_idx = (_STEP_IDX[step.lower()] + diatonic_offset) % 7
+        new_step     = _IDX_STEP[new_step_idx]          # e.g. 'b'
+
+        # Accidental needed to match exact MIDI from the new step's natural pitch
+        raw_alter    = (midi % 12) - _PNAME_SEMI[new_step]
+        # Normalise to closest value in –2..+2 range
+        new_alter_val = ((raw_alter + 6) % 12) - 6
+
+        # Update <step>
+        step_el = pitch.find('step')
+        if step_el is not None:
+            step_el.text = new_step.upper()
+
+        # Update <alter>
+        if alter_el is not None:
+            if new_alter_val != 0:
+                alter_el.text = str(new_alter_val)
+            else:
+                pitch.remove(alter_el)
+        elif new_alter_val != 0:
+            oct_el   = pitch.find('octave')
+            new_a_el = ET.Element('alter')
+            new_a_el.text = str(new_alter_val)
+            if oct_el is not None:
+                pitch.insert(list(pitch).index(oct_el), new_a_el)
+            else:
+                pitch.append(new_a_el)
+
+        # Update <octave>
+        oct_el = pitch.find('octave')
+        if oct_el is not None:
+            oct_el.text = str(new_oct_n)
+
+        # --- determine <accidental> display ---
+        new_accid_type = _ALTER_TO_ACCID.get(new_alter_val)  # 's','f','ss','ff' or None
+        if new_accid_type and new_key_accs.get(new_step) == new_accid_type:
+            want = None                              # key-implied → no written accidental
+        elif new_accid_type:
+            want = _ALTER_TO_MXL[new_alter_val]     # chromatic → written sharp/flat
+        elif new_step in new_key_accs:
+            want = 'natural'                        # cancels key sig → written natural
+        else:
+            want = None                             # plain natural, nothing needed
+
+        old_accid = note.find('accidental')
+        if old_accid is not None:
+            note.remove(old_accid)
+        if want is not None:
+            new_accid = ET.Element('accidental')
+            new_accid.text = want
+            children = list(note)
+            idx = len(children)
+            for i, ch in enumerate(children):
+                tag = ch.tag.split('}')[-1] if '}' in ch.tag else ch.tag
+                if tag in _ACCID_BEFORE:
+                    idx = i
+                    break
+            note.insert(idx, new_accid)
+
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
+
+
+def render_score(path: str, version: str = "1", transpose_semitones: int = 0) -> tuple:
     """Returns (html, n_pages, version). Raises RuntimeError on failure."""
     check_file(path)
     _basename_pre = os.path.basename(path)
@@ -3839,6 +4220,12 @@ def render_score(path: str, version: str = "1") -> tuple:
             content = _fix_implicit_pickup_measures(content)
             content = _fix_musicxml_voice_order(content)
             content = _fix_backward_repeat_on_left(content)
+            content = _strip_redundant_time_sigs(content)
+            content = _renumber_measures_from_one(content)
+            # For MusicXML, transpose before loading: <alter> gives exact pitch,
+            # unlike MEI where key-sig notes have no accid.ges.
+            if transpose_semitones:
+                content = _transpose_musicxml_pitches(content, transpose_semitones)
         ok = _vtk.loadData(content)
         if not ok:
             raise RuntimeError("verovio could not parse this file")
@@ -3846,6 +4233,15 @@ def render_score(path: str, version: str = "1") -> tuple:
         raise RuntimeError(f"Parse error: {e}")
 
     n_pages = _vtk.getPageCount()
+
+    # apply chromatic transposition for kern files via MEI post-processing
+    # (verovio explicitly sets accid.ges for key-sig notes in kern→MEI)
+    if transpose_semitones and ext == 'krn':
+        _mei_raw = _vtk.getMEI()
+        _mei_t   = _transpose_mei_pitches(_mei_raw, transpose_semitones)
+        _vtk.loadData(_mei_t)
+        n_pages = _vtk.getPageCount()
+
     svgs = [_vtk.renderToSVG(p) for p in range(1, n_pages + 1)]
     pages = "\n".join(f'<div style="margin-bottom:24px">{s}</div>' for s in svgs)
 
@@ -4131,6 +4527,12 @@ def render_score(path: str, version: str = "1") -> tuple:
         f'<button onclick="window.searchMotif()" '
         f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
         f'border-radius:4px;background:#f5f5f5;cursor:pointer">Найти</button>'
+        f'<span style="font:12px monospace;color:#666;margin-left:8px">T:</span>'
+        f'<input id="transpose-input" type="text" placeholder="+0" value="{transpose_semitones if transpose_semitones else ""}" '
+        f'style="font:12px monospace;padding:4px 6px;border:1px solid #ccc;border-radius:4px;width:44px;text-align:center" '
+        f'onkeydown="if(event.key===\'Enter\'){{event.preventDefault();window.transposeScore();}}">'
+        f'<button onclick="window.transposeScore()" '
+        f'style="font:11px sans-serif;padding:3px 7px;border:1px solid #bbb;border-radius:4px;background:#f5f5f5;cursor:pointer">&#9654;</button>'
         + (f'<button id="tsd-btn" onclick="window.toggleTSD()" '
            f'style="font:12px sans-serif;padding:4px 10px;border:1px solid #bbb;'
            f'border-radius:4px;background:#f5f5f5;cursor:pointer">TSD</button>'
@@ -4735,6 +5137,18 @@ function _activateDictRow(match, st){{
     +' <b>M'+n+'</b>';
 }}
 
+window.transposeScore=function(){{
+  var inp=document.getElementById('transpose-input');
+  var raw=inp.value.trim()||'0';
+  var n=parseInt(raw,10);
+  if(isNaN(n)){{inp.style.borderColor='#c0392b';return;}}
+  inp.style.borderColor='#27ae60';
+  inp.value=(n===0?'':String(n));
+  fetch('/transpose',{{method:'POST',headers:{{'Content-Type':'text/plain'}},body:String(n)}})
+  .then(function(){{setTimeout(function(){{inp.style.borderColor='#ccc';}},600);}})
+  .catch(function(e){{inp.style.borderColor='#c0392b';console.error(e);}});
+}};
+
 window.searchMotif=function(){{
   var inp=document.getElementById('motif-search-input');
   var st=document.getElementById('motif-search-status');
@@ -4949,10 +5363,40 @@ window.toggleTSDGen8=function(){{
 
 # ── background render + update ────────────────────────────────────────────────
 
-def _render_worker(path: str, version: str, queue):
+def _bring_browser_to_front():
+    """Bring the browser window to the foreground after a score finishes loading."""
+    global _browser_pid
+    if _browser_pid is None:
+        return
+    try:
+        import ctypes, ctypes.wintypes
+        hwnds: list = []
+        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool,
+                                             ctypes.wintypes.HWND,
+                                             ctypes.wintypes.LPARAM)
+        def _cb(hwnd, _):
+            if not ctypes.windll.user32.IsWindowVisible(hwnd):
+                return True
+            if ctypes.windll.user32.GetParent(hwnd):
+                return True  # skip child windows
+            pid_out = ctypes.wintypes.DWORD()
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid_out))
+            if pid_out.value == _browser_pid:
+                hwnds.append(hwnd)
+            return True
+        ctypes.windll.user32.EnumWindows(EnumWindowsProc(_cb), 0)
+        if hwnds:
+            hw = hwnds[0]
+            ctypes.windll.user32.ShowWindow(hw, 9)        # SW_RESTORE (unminimize)
+            ctypes.windll.user32.SetForegroundWindow(hw)
+    except Exception:
+        pass
+
+
+def _render_worker(path: str, version: str, queue, transpose_semitones: int = 0):
     """Runs in a subprocess to isolate verovio segfaults from the main process."""
     try:
-        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of = render_score(path, version)
+        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of = render_score(path, version, transpose_semitones)
         queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of))
     except Exception as e:
         queue.put(('error', str(e)))
@@ -4961,11 +5405,13 @@ def _render_worker(path: str, version: str, queue):
 def load_file_bg(path: str, status_cb):
     with _state_lock:
         next_ver = str(int(_state["version"]) + 1)
-        _state["version"] = next_ver  # claim version immediately; prevents two concurrent renders getting same ver
+        _state["version"]      = next_ver  # claim version immediately; prevents two concurrent renders getting same ver
+        _state["current_path"] = path
+        _tr = _state.get("transpose_semitones", 0)
 
     ctx   = multiprocessing.get_context('spawn')
     queue = ctx.Queue()
-    proc  = ctx.Process(target=_render_worker, args=(path, next_ver, queue), daemon=True)
+    proc  = ctx.Process(target=_render_worker, args=(path, next_ver, queue, _tr), daemon=True)
     proc.start()
 
     # Read result BEFORE joining — large HTML payloads fill the pipe buffer
@@ -4999,6 +5445,7 @@ def load_file_bg(path: str, status_cb):
         _state["nid_to_note"]     = nid_to_note
         _state["beam_of"]         = beam_of
     _notify_sse(ver)
+    _bring_browser_to_front()
     status_cb(f"{n_pages} page{'s' if n_pages != 1 else ''} — {os.path.basename(path)}")
 
 # ── metadata ──────────────────────────────────────────────────────────────────
@@ -5374,6 +5821,7 @@ if __name__ == "__main__":
             _browser_proc = subprocess.Popen([_exe, "--new-window",
                               "--window-position=0,0",
                               f"--window-size={_bw},{_sh}", _url])
+            _browser_pid = _browser_proc.pid
             break
     if _browser_proc is None:
         webbrowser.open(_url)
