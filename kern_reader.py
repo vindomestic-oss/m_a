@@ -4036,6 +4036,14 @@ def _transpose_mei_pitches(mei_str: str, semitones: int) -> str:
                 oct_n   = int(note.get('oct', '4'))
                 acc_ges = note.get('accid.ges', '') or ''
                 acc_wr  = note.get('accid', '')     or ''
+                # Also check child <accid> element (verovio sometimes writes both attr and child)
+                if not acc_ges and not acc_wr:
+                    child_a = note.find(f'{{{MEI_NS}}}accid')
+                    if child_a is not None:
+                        child_acc_ges = child_a.get('accid.ges', '') or ''
+                        child_acc_wr  = child_a.get('accid', '')     or ''
+                        acc_ges = child_acc_ges
+                        acc_wr  = child_acc_wr
                 acc_val = _ACCID_SEMI.get(acc_ges, _ACCID_SEMI.get(acc_wr, 0))
                 midi    = (oct_n + 1) * 12 + _PNAME_SEMI[pname] + acc_val + semitones
                 new_oct = midi // 12 - 1
@@ -4048,10 +4056,12 @@ def _transpose_mei_pitches(mei_str: str, semitones: int) -> str:
 
                 note.set('pname', new_pname)
                 note.set('oct',   str(new_oct))
-                # clear both accidental attributes first
+                # Clear both accidental attributes AND any child <accid> elements
                 for attr in ('accid.ges', 'accid'):
                     if attr in note.attrib:
                         del note.attrib[attr]
+                for child_a in note.findall(f'{{{MEI_NS}}}accid'):
+                    note.remove(child_a)
 
                 # Determine accidental based on key sig context
                 new_accid_type = _IVAL_TO_ACCID.get(new_alter_val)  # 's','f','x','ff' or None
