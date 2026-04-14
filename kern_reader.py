@@ -2269,9 +2269,19 @@ def _voice_notes_from_mei(mei_str):
             _factor = {'1': 4, '2': 2, '4': 1}[_dur_tag]
             _raw    = int(_ppq)
             if _raw % _factor == 0:       # sanity: should divide evenly
-                _scan_base = _raw // _factor
-                if _base_ppq is None:
-                    _base_ppq = _scan_base
+                _new_base = _raw // _factor
+                # Verovio bug: whole notes sometimes get ppq = half_note_ppq (2×base)
+                # instead of the correct whole_note_ppq (4×base).  Detect by checking
+                # whether the implied new base is exactly half the current base — that
+                # can only happen for a whole note with the buggy ppq value.
+                if (_dur_tag == '1' and _scan_base is not None
+                        and _new_base == _scan_base // 2
+                        and _scan_base % 2 == 0):
+                    pass   # skip — verovio whole-note ppq bug
+                else:
+                    _scan_base = _new_base
+                    if _base_ppq is None:
+                        _base_ppq = _scan_base
         _elem_base[id(_el)] = _scan_base
 
     def _elem_dur_q(el, scale):
@@ -4554,14 +4564,23 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
     def _eff_count(m):
         return m.get('display_count', m['count'])
 
-    def _any_smooth(m):
+    def _smooth_counts(m):
         union  = _eff_count(m)
         n_both = m.get('n_both', 0)
         n_dir  = m.get('n_direct_only', union) + n_both
         n_inv  = m.get('n_inv_only', 0) + n_both
-        return any(_is_smooth(k) and k >= 8 for k in (union, n_dir, n_inv))
+        return [k for k in (union, n_dir, n_inv) if _is_smooth(k) and k >= 8]
 
-    motifs.sort(key=lambda m: (_any_smooth(m), _eff_count(m)), reverse=True)
+    def _any_smooth(m):
+        return bool(_smooth_counts(m))
+
+    def _sort_key(m):
+        sc = _smooth_counts(m)
+        if sc:
+            return (1, max(sc))
+        return (0, _eff_count(m))
+
+    motifs.sort(key=_sort_key, reverse=True)
 
     reload_js = _RELOAD_JS.format(version=version)
 
@@ -5858,6 +5877,17 @@ class FileBrowser(tk.Tk):
                 continue
             # Normal 2-level
             group_files = groups[(composer, cycle)]
+            # Sort by (BWV number, movement number) for BWV-ordered cycles
+            if cycle in ('Keyboard Partitas', 'English Suites', 'French Suites',
+                         'Cello Suites', 'Violin Sonatas & Partitas',
+                         'Violin Sonatas with Keyboard'):
+                def _bwv_mvt_key(pair, _r=_re2):
+                    fn = os.path.basename(pair[0])
+                    bm = _r.search(r'bwv_?0*(\d+)', fn, _r.I)
+                    nums = _r.findall(r'_(\d+)', fn.rsplit('.', 1)[0])
+                    return (int(bm.group(1)) if bm else 0,
+                            int(nums[-1]) if nums else 0)
+                group_files = sorted(group_files, key=_bwv_mvt_key)
             if use_headers:
                 label = cycle if cycle else (composer or 'Other')
                 header = f'{label}  ({len(group_files)})'
