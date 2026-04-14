@@ -1785,44 +1785,71 @@ def _fix_musicxml_voice_order(content: str) -> str:
 
 def _renumber_measures_from_one(content: str) -> str:
     """Shift measure numbers so bar 1 = first full bar (pickup bar gets 0).
+    Implicit non-first bars (section pickups marked by _fix_section_pickup_bars)
+    are assigned number 0 and do not consume a bar-number slot, so the bar
+    after an implicit section pickup continues the count without a gap.
     Fixes movements from suites where bar numbers continue from the previous
     movement (e.g. BWV 995 Allemande starts at bar 224)."""
     import re as _re, xml.etree.ElementTree as ET
-    nums = [int(m) for m in _re.findall(r'<measure\s[^>]*number="(\d+)"', content)]
-    if not nums:
-        return content
-    offset = min(nums) - 1   # so first bar → 1 (adjusted below if pickup)
-    if offset == 0:
-        # still check for pickup even when numbers start at 1
-        pass
-    # detect pickup: parse first measure, compare actual note content vs. full bar
-    _is_pickup = False
     try:
         root = ET.fromstring(content)
-        for part in root.iter('part'):
-            first_msr = next(iter(part.iter('measure')), None)
-            if first_msr is not None:
-                divs  = int(first_msr.findtext('.//divisions') or 0)
-                beats = int(first_msr.findtext('.//beats')     or 0)
-                bt    = int(first_msr.findtext('.//beat-type') or 0)
-                if divs > 0 and beats > 0 and bt > 0:
-                    full_bar = beats * (4.0 / bt) * divs
-                    # sum note durations, excluding chord-continuation notes
-                    actual = sum(int(n.findtext('duration') or 0)
-                                 for n in first_msr.iter('note')
-                                 if n.find('chord') is None)
-                    if actual < full_bar * 0.75:
-                        _is_pickup = True
-            break
-    except Exception:
-        pass
-    if _is_pickup:
-        offset += 1   # pickup → 0, first full bar → 1
-    if offset == 0:
+    except ET.ParseError:
         return content
-    return _re.sub(r'(<measure\s[^>]*number=")(\d+)(")',
-                   lambda m: m.group(1) + str(int(m.group(2)) - offset) + m.group(3),
-                   content)
+    parts = list(root.iter('part'))
+    if not parts:
+        return content
+    measures = list(parts[0].iter('measure'))
+    if not measures:
+        return content
+    nums = [int(m.get('number', '0')) for m in measures]
+    min_num = min(nums)
+
+    # Detect first-bar pickup
+    _is_pickup = False
+    first_msr = measures[0]
+    divs  = int(first_msr.findtext('.//divisions') or 0)
+    beats = int(first_msr.findtext('.//beats')     or 0)
+    bt    = int(first_msr.findtext('.//beat-type') or 0)
+    if divs > 0 and beats > 0 and bt > 0:
+        full_bar = beats * (4.0 / bt) * divs
+        actual = sum(int(n.findtext('duration') or 0)
+                     for n in first_msr.iter('note')
+                     if n.find('chord') is None)
+        if actual < full_bar * 0.75:
+            _is_pickup = True
+
+    base_offset = min_num - 1  # normalise so first original number → 1
+    if _is_pickup:
+        base_offset += 1       # first bar → 0, first full bar → 1
+
+    has_mid_implicit = any(
+        m.get('implicit') == 'yes' and i > 0
+        for i, m in enumerate(measures)
+    )
+
+    if base_offset == 0 and not has_mid_implicit:
+        return content  # nothing to do
+
+    # Build per-original-number mapping.
+    # Counter = bar number to assign; increments only for non-implicit bars.
+    new_numbers: dict = {}
+    counter = 0 if _is_pickup else 1
+    for i, msr in enumerate(measures):
+        orig = int(msr.get('number', '0'))
+        if i == 0:
+            new_numbers[orig] = counter   # 0 if pickup, 1 otherwise
+        elif msr.get('implicit') == 'yes':
+            new_numbers[orig] = 0         # implicit section pickup: don't count
+        else:
+            counter += 1
+            new_numbers[orig] = counter
+
+    # Apply: each match looks up its original number in the map
+    def _replace(m):
+        orig = int(m.group(2))
+        return m.group(1) + str(new_numbers.get(orig, orig - base_offset)) + m.group(3)
+
+    return _re.sub(r'(<measure\s[^>]*number=")(\d+)(")', _replace, content)
 
 
 def _strip_redundant_time_sigs(content: str) -> str:
@@ -1897,6 +1924,88 @@ def _fix_backward_repeat_on_left(content: str) -> str:
     if not changed:
         return content
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding='unicode')
+
+
+def _fix_section_pickup_bars(content: str) -> str:
+    """Mark short pickup bars that start a repeated section (left forward-repeat)
+    as implicit='yes' and remove any redundant explicit regular right barline.
+
+    Pattern: after part 1 ends with a backward-repeat, part 2 begins with |: and
+    a short anacrusis bar (e.g. a single 16th note) before the first full measure.
+    Without this fix verovio renders the pickup as a visually numbered bar and may
+    show the preceding section's final barline inside the wrong bar."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+
+    changed = False
+    for part in root.findall('.//part'):
+        measures = part.findall('measure')
+        divs = 480
+        full_bar_div = divs * 4  # default 4/4
+
+        for idx, msr in enumerate(measures):
+            if idx == 0:
+                continue  # first measure handled by its own implicit flag
+
+            # Track divisions/time-sig changes inside this measure BEFORE inspecting it
+            for attrs in msr.findall('attributes'):
+                d = attrs.findtext('divisions')
+                if d:
+                    divs = int(d)
+                    full_bar_div = divs * 4
+                ts = attrs.find('time')
+                if ts:
+                    beats = int(ts.findtext('beats') or '4')
+                    btype = int(ts.findtext('beat-type') or '4')
+                    full_bar_div = divs * beats * 4 // btype
+
+            # Must start with a left-side forward-repeat barline
+            left_bar = msr.find('.//barline[@location="left"]')
+            if left_bar is None:
+                continue
+            rep = left_bar.find('repeat')
+            if rep is None or rep.get('direction') != 'forward':
+                continue
+
+            # Compute max single-voice duration (excluding chord notes)
+            voice_dur: dict = {}
+            for n in msr.findall('note'):
+                if n.find('chord') is not None:
+                    continue
+                v = n.findtext('voice') or '1'
+                voice_dur[v] = voice_dur.get(v, 0) + int(n.findtext('duration') or 0)
+            if not voice_dur:
+                continue
+            max_dur = max(voice_dur.values())
+
+            # Short pickup: less than half a full bar
+            if max_dur >= full_bar_div // 2:
+                continue
+
+            # Mark implicit
+            if msr.get('implicit') != 'yes':
+                msr.set('implicit', 'yes')
+                changed = True
+
+            # Remove explicit regular right barline (redundant for a pickup)
+            for bl in list(msr.findall('barline')):
+                loc = bl.get('location', 'right')
+                if loc == 'right':
+                    bs = bl.find('bar-style')
+                    if bs is not None and bs.text == 'regular':
+                        msr.remove(bl)
+                        changed = True
+
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
 
 
 # ── TSD harmony labels ────────────────────────────────────────────────────────
@@ -2152,10 +2261,17 @@ def _voice_notes_from_mei(mei_str):
         _ppq = _el.get('dur.ppq')
         if _ppq is None:
             continue
-        if _el.get('dur') == '4' and not int(_el.get('dots', 0)):
-            _scan_base = int(_ppq)
-            if _base_ppq is None:
-                _base_ppq = _scan_base
+        _dur_tag = _el.get('dur')
+        _dots    = int(_el.get('dots', 0) or 0)
+        if not _dots and _dur_tag in ('1', '2', '4'):
+            # Non-dotted whole/half/quarter uniquely determine the PPQ base:
+            # whole=4x, half=2x, quarter=1x a quarter note.
+            _factor = {'1': 4, '2': 2, '4': 1}[_dur_tag]
+            _raw    = int(_ppq)
+            if _raw % _factor == 0:       # sanity: should divide evenly
+                _scan_base = _raw // _factor
+                if _base_ppq is None:
+                    _base_ppq = _scan_base
         _elem_base[id(_el)] = _scan_base
 
     def _elem_dur_q(el, scale):
@@ -4304,6 +4420,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             content = _fix_implicit_pickup_measures(content)
             content = _fix_musicxml_voice_order(content)
             content = _fix_backward_repeat_on_left(content)
+            content = _fix_section_pickup_bars(content)
             content = _strip_redundant_time_sigs(content)
             content = _renumber_measures_from_one(content)
             # For MusicXML, transpose before loading: <alter> gives exact pitch,
