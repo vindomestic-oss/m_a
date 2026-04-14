@@ -4436,7 +4436,15 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
 
     def _eff_count(m):
         return m.get('display_count', m['count'])
-    motifs.sort(key=lambda m: (_is_smooth(_eff_count(m)) and _eff_count(m) >= 8, _eff_count(m)), reverse=True)
+
+    def _any_smooth(m):
+        union  = _eff_count(m)
+        n_both = m.get('n_both', 0)
+        n_dir  = m.get('n_direct_only', union) + n_both
+        n_inv  = m.get('n_inv_only', 0) + n_both
+        return any(_is_smooth(k) and k >= 8 for k in (union, n_dir, n_inv))
+
+    motifs.sort(key=lambda m: (_any_smooth(m), _eff_count(m)), reverse=True)
 
     reload_js = _RELOAD_JS.format(version=version)
 
