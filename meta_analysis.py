@@ -199,45 +199,75 @@ def main():
         print("No counts collected. Exiting.")
         return
 
+    def _local_baseline(k, freq_full, ks_nonzero, W=2.0):
+        """Local log-linear regression baseline for count k.
+        Uses all neighbours in multiplicative window [k/W, k*W] except k itself.
+        Returns predicted freq(k) under the local trend, or None if < 3 neighbours."""
+        lo_w, hi_w = k / W, k * W
+        xs = [x for x in ks_nonzero if lo_w <= x <= hi_w and x != k]
+        if len(xs) < 3:
+            return None
+        lx = [math.log(x) for x in xs]
+        ly = [math.log(freq_full[x]) for x in xs]
+        n  = len(xs)
+        mlx = sum(lx) / n
+        mly = sum(ly) / n
+        cov = sum((lx[i] - mlx) * (ly[i] - mly) for i in range(n))
+        var = sum((lx[i] - mlx) ** 2               for i in range(n))
+        if var < 1e-9:
+            return math.exp(mly)
+        a = cov / var
+        b = mly - a * mlx
+        return math.exp(a * math.log(k) + b)
+
     def _write_report(counts_list, fcount_dict, report_path, title_suffix,
                       total, n_ok, n_err, n_results, lo):
         """Write one meta-analysis report for the given counts_list."""
-        counts_ge8  = [c for c in counts_list if c >= lo]
-        smooth_ge8  = [c for c in counts_ge8 if _is_smooth(c)]
+        import random as _rnd
+        counts_ge_lo = [c for c in counts_list if c >= lo]
 
         freq = defaultdict(int)
         for c in counts_list:
             freq[c] += 1
 
-        max_c = max(counts_ge8) if counts_ge8 else lo
-        smooth_in_range     = smooth_numbers_in_range(lo, max_c)
-        n_integers_in_range = max_c - lo + 1
-        n_smooth_in_range   = len(smooth_in_range)
-        density_uniform = n_smooth_in_range / n_integers_in_range if n_integers_in_range > 0 else 0
-        sum_inv_all    = sum(1.0 / k for k in range(lo, max_c + 1))
-        sum_inv_smooth = sum(1.0 / k for k in smooth_in_range)
-        density_log    = (sum_inv_smooth / sum_inv_all) if sum_inv_all > 0 else 0
-
-        n_obs_ge8    = len(counts_ge8)
-        n_obs_smooth = len(smooth_ge8)
-        freq_smooth  = defaultdict(int)
-        for c in smooth_ge8:
-            freq_smooth[c] += 1
-
-        expected_uniform = n_obs_ge8 * density_uniform
-        expected_log     = n_obs_ge8 * density_log
-        ratio_uniform    = n_obs_smooth / expected_uniform if expected_uniform > 0 else float('inf')
-        ratio_log        = n_obs_smooth / expected_log     if expected_log     > 0 else float('inf')
+        max_c = max(counts_ge_lo) if counts_ge_lo else lo
+        smooth_in_range = smooth_numbers_in_range(lo, max_c)
 
         files_with_smooth = {rel: [c for c in counts if c >= lo and _is_smooth(c)]
                              for rel, counts in fcount_dict.items()
                              if any(c >= lo and _is_smooth(c) for c in counts)}
 
+        # ── local-baseline z-scores ───────────────────────────────────────────
+        ks_all      = sorted(k for k in range(lo, max_c + 1) if freq.get(k, 0) > 0)
+        freq_full   = {k: freq.get(k, 0) for k in range(lo, max_c + 1)}
+        z_scores    = {}
+        for k in ks_all:
+            bl = _local_baseline(k, freq_full, ks_all)
+            if bl is not None and bl > 0:
+                z_scores[k] = (freq_full[k] - bl) / math.sqrt(bl)
+
+        valid_ks     = sorted(z_scores)
+        zs_smooth    = [z_scores[k] for k in valid_ks if _is_smooth(k)]
+        zs_nonsmooth = [z_scores[k] for k in valid_ks if not _is_smooth(k)]
+        mean_zs      = sum(zs_smooth)    / len(zs_smooth)    if zs_smooth    else 0.0
+        mean_zns     = sum(zs_nonsmooth) / len(zs_nonsmooth) if zs_nonsmooth else 0.0
+
+        # permutation test: is mean z(smooth) >= observed by chance?
+        _rnd.seed(42)
+        all_z  = zs_smooth + zs_nonsmooth
+        n_s    = len(zs_smooth)
+        N_PERM = 20000
+        count_ge = sum(
+            1 for _ in range(N_PERM)
+            if (lambda samp: sum(samp) / len(samp))(_rnd.sample(all_z, n_s)) >= mean_zs
+        )
+        p_val = count_ge / N_PERM
+
         lines = []
-        W = 72
+        W_rule = 72
 
         def rule(ch='='):
-            lines.append(ch * W)
+            lines.append(ch * W_rule)
 
         def h(title):
             rule()
@@ -263,123 +293,61 @@ def main():
         mean_c = sum(counts_list) / len(counts_list)
         med_c  = sorted(counts_list)[len(counts_list) // 2]
         lines.append(f"Mean / Median                     : {mean_c:.1f} / {med_c}")
-        lines.append(f"Counts >= {lo}                       : {n_obs_ge8}")
+        lines.append(f"Counts >= {lo}                       : {len(counts_ge_lo)}")
         lines.append("")
-
         lines.append("Frequency table of ALL occurrence counts (count : frequency):")
         for val in sorted(freq):
-            marker = "  <-- smooth (2^a·3^b)" if _is_smooth(val) and val >= 8 else ""
+            marker = "  <-- smooth (2^a·3^b)" if _is_smooth(val) and val >= lo else ""
             lines.append(f"  {val:4d} : {freq[val]}{marker}")
         lines.append("")
 
-        h("3. smooth numbers (2^a·3^b) observed as occurrence counts")
-        lines.append(f"Range analysed        : [{lo}, {max_c}]")
-        lines.append(f"Smooth numbers in range: {n_smooth_in_range}  "
-                     f"(out of {n_integers_in_range} integers)")
-        lines.append(f"  {smooth_in_range}")
+        h("3. local-baseline enrichment test")
+        lines.append("Method: for each distinct count k, fit a log-linear regression")
+        lines.append("  log(freq) ~ a·log(x) + b  on all neighbouring counts in the")
+        lines.append("  multiplicative window [k/2, 2k] (excluding k itself, ≥3 points).")
+        lines.append("  z(k) = (freq(k) − baseline(k)) / sqrt(baseline(k)).")
+        lines.append("  Tests whether smooth numbers sit systematically above their local")
+        lines.append("  trend, independent of the overall shape of the distribution.")
         lines.append("")
-        lines.append(f"Observed smooth counts (>= 8): {n_obs_smooth}")
-        if freq_smooth:
-            for val in sorted(freq_smooth):
-                lines.append(f"  {val} × {freq_smooth[val]}")
+        lines.append(f"  Counts in analysis : k ∈ [{lo}, {max_c}],  {len(valid_ks)} distinct values with z-score")
+        lines.append(f"  Smooth numbers     : {len(zs_smooth)}  pts  mean z = {mean_zs:+.3f}")
+        lines.append(f"  Non-smooth numbers : {len(zs_nonsmooth)}  pts  mean z = {mean_zns:+.3f}")
+        lines.append("")
+        lines.append(f"  Permutation test ({N_PERM} permutations): p = {p_val:.4f}  "
+                     f"{'*SIGNIFICANT (p<0.05)*' if p_val < 0.05 else '(not significant)'}")
+        lines.append("")
+        if p_val < 0.05:
+            lines.append("  >> Smooth numbers sit significantly above local trend (p<0.05).")
+            lines.append("     Genuine over-representation above the local decay curve.")
+        elif p_val < 0.15:
+            lines.append("  >> Marginal trend (p<0.15): smooth numbers slightly above local trend,")
+            lines.append("     but not significant at conventional threshold.")
         else:
-            lines.append("  (none)")
+            lines.append("  >> No significant enrichment above local trend.")
+            lines.append("     Earlier log-uniform enrichment was likely an artefact of the")
+            lines.append("     null model underestimating density at small counts.")
         lines.append("")
 
-        h("4. statistical test – are smooth counts over-represented?")
-        lines.append("Two null models compared:")
-        lines.append("")
-        lines.append("  A) UNIFORM prior: every integer in [8, max] equally likely")
-        lines.append(f"     Smooth density        : {n_smooth_in_range} / {n_integers_in_range}"
-                     f" = {density_uniform:.4f}  ({density_uniform*100:.2f}%)")
-        lines.append(f"     Expected smooth counts: {expected_uniform:.1f}")
-        lines.append(f"     Observed smooth counts: {n_obs_smooth}")
-        lines.append(f"     Enrichment ratio       : {ratio_uniform:.2f}x")
-        lines.append("")
-        lines.append("  B) LOG-UNIFORM prior: larger numbers are intrinsically rarer")
-        lines.append("     (weight 1/k, reflects that high occurrence counts are less")
-        lines.append("      common in musical analysis regardless of smoothness)")
-        lines.append(f"     Smooth log-density     : {density_log:.4f}  ({density_log*100:.2f}%)")
-        lines.append(f"     Expected smooth counts : {expected_log:.1f}")
-        lines.append(f"     Observed smooth counts : {n_obs_smooth}")
-        lines.append(f"     Enrichment ratio       : {ratio_log:.2f}x")
-        lines.append("")
-        if ratio_log > 2:
-            lines.append("  >> Smooth counts appear MORE than 2x as often as random expectation.")
-            lines.append("     This suggests a non-trivial alignment between motif repetition")
-            lines.append("     structure and binary/ternary metric organisation.")
-        elif ratio_log > 1.2:
-            lines.append("  >> Modest enrichment. Smooth counts slightly over-represented.")
-        else:
-            lines.append("  >> No notable enrichment. Smooth counts close to random expectation.")
-        lines.append("")
-        lines.append("  Note on independence: occurrence counts are partially decorrelated by")
-        lines.append("  construction — a sub-pattern B is retained only if count(B) > count(A)")
-        lines.append("  for every parent pattern A that subsumes B.  Counts fully explained by")
-        lines.append("  a longer containing pattern are suppressed.  The remaining dependency")
-        lines.append("  (multiple motifs per file) is addressed by the per-file breakdown in")
-        lines.append("  §6, which shows smooth counts distributed across independent files.")
+        lines.append("  Z-scores at smooth numbers:")
+        lines.append(f"  {'k':>5}  {'freq':>6}  {'baseline':>9}  {'z':>7}")
+        lines.append(f"  {'─'*5}  {'─'*6}  {'─'*9}  {'─'*7}")
+        for k in sorted(k for k in valid_ks if _is_smooth(k)):
+            bl = _local_baseline(k, freq_full, ks_all)
+            z  = z_scores[k]
+            bar = ('+' if z >= 0 else '-') * min(15, int(abs(z)))
+            lines.append(f"  {k:5d}  {freq_full[k]:6d}  {bl:9.1f}  {z:+7.2f}  {bar}")
         lines.append("")
 
-        lo_shift = max(lo, 14)
-        counts_shift = [c for c in counts_list if c >= lo_shift]
-        n_shift = len(counts_shift)
-
-        def _smooth_density(values):
-            return sum(1 for v in values if _is_smooth(v)) / len(values) if values else 0
-
-        dens_real   = _smooth_density(counts_shift)
-        dens_plus1  = _smooth_density([c + 1 for c in counts_shift])
-        dens_minus1 = _smooth_density([c - 1 for c in counts_shift])
-        n_real   = sum(1 for c in counts_shift if _is_smooth(c))
-        n_plus1  = sum(1 for c in counts_shift if _is_smooth(c + 1))
-        n_minus1 = sum(1 for c in counts_shift if _is_smooth(c - 1))
-
-        h(f"5. shift test – smooth density vs ±1 shifted counts (threshold {lo_shift})")
-        lines.append(f"Counts >= {lo_shift}: {n_shift} observations")
-        lines.append("")
-        lines.append(f"  {'':20s}  {'n_smooth':>8s}  {'density':>8s}  {'ratio vs real':>13s}")
-        lines.append(f"  {'-'*20}  {'-'*8}  {'-'*8}  {'-'*13}")
-        lines.append(f"  {'Real counts':20s}  {n_real:8d}  {dens_real:8.4f}  {'(baseline)':>13s}")
-        r_p1 = dens_real / dens_plus1  if dens_plus1  > 0 else float('inf')
-        r_m1 = dens_real / dens_minus1 if dens_minus1 > 0 else float('inf')
-        lines.append(f"  {'Shifted +1 (c+1)':20s}  {n_plus1:8d}  {dens_plus1:8.4f}  {r_p1:>12.2f}x")
-        lines.append(f"  {'Shifted -1 (c-1)':20s}  {n_minus1:8d}  {dens_minus1:8.4f}  {r_m1:>12.2f}x")
+        lines.append("  Z-scores at smooth+1 and smooth−1 (excluding smooth):")
+        sp1 = {n + 1 for n in smooth_numbers_in_range(lo - 1, max_c - 1)} - set(smooth_numbers_in_range(lo, max_c))
+        sm1 = {n - 1 for n in smooth_numbers_in_range(lo + 1, max_c + 1)} - set(smooth_numbers_in_range(lo, max_c))
+        for label, S in [("smooth+1", sp1), ("smooth−1", sm1)]:
+            zs = [z_scores[k] for k in S if k in z_scores]
+            mz = sum(zs) / len(zs) if zs else float('nan')
+            lines.append(f"  {label}: {len(zs)} pts  mean z = {mz:+.3f}")
         lines.append("")
 
-        lines.append("  Breakdown by threshold (real density / +1 density / -1 density):")
-        for thr in [14, 16, 18, 24, 32, 36, 48, 64, 96]:
-            cc = [c for c in counts_list if c >= thr]
-            if len(cc) < 5:
-                break
-            dr = _smooth_density(cc)
-            dp = _smooth_density([c + 1 for c in cc])
-            dm = _smooth_density([c - 1 for c in cc])
-            rp = dr / dp if dp > 0 else float('inf')
-            rm = dr / dm if dm > 0 else float('inf')
-            lines.append(f"  >= {thr:3d}  n={len(cc):5d}  real={dr:.4f}  +1={dp:.4f}({rp:.2f}x)  -1={dm:.4f}({rm:.2f}x)")
-        lines.append("")
-
-        higher_thrs = [t for t in [16, 24, 32, 48] if len([c for c in counts_list if c >= t]) >= 5]
-        wins_p1 = sum(1 for t in higher_thrs
-                      for cc in [[c for c in counts_list if c >= t]]
-                      if _smooth_density(cc) > _smooth_density([c+1 for c in cc]))
-        wins_m1 = sum(1 for t in higher_thrs
-                      for cc in [[c for c in counts_list if c >= t]]
-                      if _smooth_density(cc) > _smooth_density([c-1 for c in cc]))
-        if dens_real > dens_plus1 and dens_real > dens_minus1:
-            lines.append(f"  >> Real counts have HIGHER smooth density than both shifted versions.")
-            lines.append(f"     Confirmed at {wins_p1}/{len(higher_thrs)} higher thresholds vs +1, "
-                         f"{wins_m1}/{len(higher_thrs)} vs -1.")
-            lines.append("     This supports genuine over-representation of smooth numbers.")
-        elif wins_p1 >= len(higher_thrs) * 0.75:
-            lines.append(f"  >> Real > shifted+1 at {wins_p1}/{len(higher_thrs)} higher thresholds.")
-            lines.append("     Effect vs +1 shift is consistent at larger counts.")
-        else:
-            lines.append("  >> No clear enrichment vs shifted counts.")
-        lines.append("")
-
-        h(f"6. per-file breakdown (files where any motif count is smooth >= {lo})")
+        h(f"4. per-file breakdown (files where any motif count is smooth >= {lo})")
         if files_with_smooth:
             for rel in sorted(files_with_smooth):
                 vals = sorted(files_with_smooth[rel])
@@ -389,7 +357,7 @@ def main():
             lines.append("  (none found)")
         lines.append("")
 
-        h("7. reference: all smooth numbers 2^a·3^b in [1, 256]")
+        h("5. reference: all smooth numbers 2^a·3^b in [1, 256]")
         ref = smooth_numbers_in_range(1, 256)
         for i in range(0, len(ref), 12):
             lines.append("  " + "  ".join(f"{v:4d}" for v in ref[i:i+12]))
@@ -402,8 +370,9 @@ def main():
         with open(report_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
 
-        print(f"  [{title_suffix}] written to: {report_path}  (enrichment log-uniform: {ratio_log:.2f}x)")
-        return freq, ratio_log
+        print(f"  [{title_suffix}] written to: {report_path}  "
+              f"(local-baseline: mean_z_smooth={mean_zs:+.3f}, p={p_val:.4f})")
+        return freq, p_val
 
     # ── write two reports ─────────────────────────────────────────────────────
     base      = os.path.dirname(os.path.abspath(__file__))
@@ -412,7 +381,7 @@ def main():
                              os.path.basename(path_all).replace('.txt', '_direct.txt'))
 
     print("\nWriting reports…")
-    freq_all, ratio_all = _write_report(
+    freq_all, _p_all = _write_report(
         all_counts, file_counts,
         path_all, "with inversions",
         total, n_ok, n_err, len(results), lo,
