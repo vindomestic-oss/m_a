@@ -1032,6 +1032,13 @@ def _tobis_movements(path):
     mnum_to_idx = {mn: i for i, mn in enumerate(all_mnums)}
 
     # Collect movement markers across all parts; key = (mnum, seq) to avoid dups
+    # seq for numbered titles (e.g. "3. Courante" → seq=3); for unnumbered bold
+    # dance names (e.g. "Menuett II.") seq is assigned as 0 (sorted by mnum pos)
+    _DANCE_RE = _re.compile(
+        r'^(Pral?ude?(?:ium)?|Allemande?|Courante?|Corrente|Sarabande?|'
+        r'Menuett?|Minuett?|Gigue|Giga|Bourr[e\xe9]e?|Gavotte?|'
+        r'Passepied|Loure|Rondeau|Aria|Polonaise|Echo|Capriccio|'
+        r'Fantasia|Toccata|Ouvert)\b', _re.I)
     seen: dict = {}  # (mnum, seq) → title
     for part in root.findall('part'):
         for msr in part.findall('measure'):
@@ -1039,9 +1046,13 @@ def _tobis_movements(path):
             for words_el in msr.findall('.//direction-type/words'):
                 text = (words_el.text or '').strip()
                 m = _re.match(r'^(\d+)\.\s+(\S)', text)
-                if not m:
+                if m:
+                    seq = int(m.group(1))
+                elif (words_el.get('font-weight') == 'bold'
+                      and _DANCE_RE.match(text)):
+                    seq = 0  # unnumbered dance title (e.g. "Menuett II.")
+                else:
                     continue
-                seq = int(m.group(1))
                 key = (mnum, seq)
                 if key not in seen:
                     title = _re.sub(r'\s+', ' ', text.rstrip('. '))
@@ -1305,7 +1316,7 @@ def _regen_tobis_splits(subdir='engl-suites'):
 
     base = os.path.join(os.path.dirname(__file__), 'tobis-notenarchiv.de')
     src_dir = os.path.join(base, subdir)
-    out_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
+    out_dir = os.path.join(base, 'split', subdir)
     os.makedirs(out_dir, exist_ok=True)
 
     for src_fname in sorted(os.listdir(src_dir)):
@@ -2129,18 +2140,31 @@ def _voice_notes_from_mei(mei_str):
     # (e.g. dur='8' for a triplet eighth) but dur.ppq correctly reflects the real duration.
     # kern-sourced MEI has no dur.ppq at all; _base_ppq stays None and the existing
     # _to_quarters(dur, dots)*scale path is used unchanged.
-    _base_ppq = None
-    for _n in tree.iter(tag_pfx + 'note'):
-        _ppq = _n.get('dur.ppq')
-        if _ppq and _n.get('dur') == '4' and not int(_n.get('dots', 0)):
-            _base_ppq = int(_ppq)
-            break
+    #
+    # MusicXML files can have mid-piece <divisions> changes, which cause verovio to reset
+    # its PPQ tick scale.  Pre-scan in document order: whenever a plain quarter note is
+    # seen, record the new base; store a per-element base in _elem_base so that
+    # _elem_dur_q always uses the correct local scale.
+    _base_ppq  = None   # first base seen (for fallback)
+    _elem_base = {}     # id(el) -> base_ppq effective at that element
+    _scan_base = None
+    for _el in tree.iter():
+        _ppq = _el.get('dur.ppq')
+        if _ppq is None:
+            continue
+        if _el.get('dur') == '4' and not int(_el.get('dots', 0)):
+            _scan_base = int(_ppq)
+            if _base_ppq is None:
+                _base_ppq = _scan_base
+        _elem_base[id(_el)] = _scan_base
 
     def _elem_dur_q(el, scale):
-        """Duration in quarters: prefer dur.ppq/base_ppq, fall back to dur+dots+scale."""
+        """Duration in quarters: prefer dur.ppq/local_base, fall back to dur+dots+scale."""
         ppq = el.get('dur.ppq')
-        if ppq and _base_ppq:
-            return int(ppq) / _base_ppq
+        if ppq:
+            local_base = _elem_base.get(id(el)) or _base_ppq
+            if local_base:
+                return int(ppq) / local_base
         return _to_quarters(el.get('dur', '4'), int(el.get('dots', 0))) * scale
 
     voices           = defaultdict(list)
@@ -5542,7 +5566,7 @@ class FileBrowser(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
 
-        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_music21_files()
+        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_tobis_files() + find_music21_files()
         self._current_path = None
 
         self._build_ui()
