@@ -2278,6 +2278,17 @@ def _voice_notes_from_mei(mei_str):
                         and _new_base == _scan_base // 2
                         and _scan_base % 2 == 0):
                     pass   # skip — verovio whole-note ppq bug
+                elif _scan_base is not None and _new_base != _scan_base:
+                    # Only accept if ratio to current base is a power of 2.
+                    # Tuplet notes (e.g. triplet quarter: dur="4" dur.ppq=2/3·base)
+                    # would give a non-power-of-2 ratio and must NOT update the base.
+                    import math as _math
+                    _ratio = _new_base / _scan_base
+                    _log2  = _math.log2(_ratio) if _ratio > 0 else float('nan')
+                    if abs(_log2 - round(_log2)) < 0.01:   # power-of-2 ratio → legit change
+                        _scan_base = _new_base
+                        if _base_ppq is None:
+                            _base_ppq = _scan_base
                 else:
                     _scan_base = _new_base
                     if _base_ppq is None:
@@ -4533,9 +4544,52 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                     _cum += _sh_r
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _uf.items() if len(notes) >= 4]
+            _src_v = _uf
         else:
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _voices_s.items() if len(notes) >= 4]
+            _src_v = _voices_s
+        # add merged-staff sequences so /search finds cross-layer handoff intervals
+        _sn_to_notes = {}; _sn_to_nlayers = {}
+        _sn_to_vmap = {}
+        for (sn, ln), _ns in _src_v.items():
+            _sn_to_notes.setdefault(sn, []).extend(_ns)
+            _sn_to_nlayers[sn] = _sn_to_nlayers.get(sn, 0) + 1
+            _sn_to_vmap.setdefault(sn, {})[ln] = sorted(_ns, key=lambda _n: _n[5])
+        for sn, _ns in _sn_to_notes.items():
+            if _sn_to_nlayers[sn] > 1 and len(_ns) >= 4:
+                all_seqs.append((
+                    ('merged_staff', sn),
+                    _interval_seq(sorted(_ns, key=lambda n: n[5]), _beat_dur_q_s, _pickup_dur_q_s)
+                ))
+        # Soprano-beat sequences: for each beat, pick the highest-pitched note starting
+        # on that beat (across all voices of the staff); effective dur = beat_dur_q.
+        # Catches cross-voice melodic handoffs at beat boundaries (e.g. melody passes from
+        # voice A on beat k to voice B on beat k+1 with no direct adjacency in merged seq).
+        _EPS_b = _beat_dur_q_s * 0.05
+        for _sn, _vmap in _sn_to_vmap.items():
+            if len(_vmap) <= 1:
+                continue
+            _all_sn = [_n for _vns in _vmap.values() for _n in _vns]
+            if not _all_sn:
+                continue
+            _min_on = min(_n[5] for _n in _all_sn)
+            _max_on = max(_n[5] for _n in _all_sn)
+            _bd = _beat_dur_q_s
+            _T0 = _min_on - (_min_on % _bd) if _bd > 0 else _min_on
+            _sop = []
+            _T = round(_T0, 9)
+            while _T <= _max_on + _EPS_b:
+                _cands = [_n for _n in _all_sn if abs(_n[5] - _T) <= _EPS_b]
+                if _cands:
+                    _best = max(_cands, key=lambda _n: _n[4])  # highest midi
+                    _sop.append((_best[0], _best[1], _best[2], _bd, _best[4], _T))
+                _T = round(_T + _bd, 9)
+            if len(_sop) >= 4:
+                all_seqs.append((
+                    ('soprano_beat', _sn),
+                    _interval_seq(_sop, _beat_dur_q_s, _pickup_dur_q_s)
+                ))
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
         nid_labels = {}
         for _notes in _voices_s.values():
