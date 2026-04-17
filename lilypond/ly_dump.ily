@@ -218,6 +218,16 @@
                         (loop (cdr as) (+ n 1) a-end
                               (if (ly:moment<? max-end a-end) a-end max-end)))))))))
 
+       ;; ── Unfolded repeat: \repeat unfold N { body }
+       ;; Generic fallback only traverses body once; must loop N times explicitly.
+       ((eq? name 'UnfoldedRepeatedMusic)
+        (let* ((body (ly:music-property m 'element #f))
+               (n    (ly:music-property m 'repeat-count 1)))
+          (let loop ((i n) (t onset))
+            (if (= i 0) t
+                (loop (- i 1)
+                      (if body (dump-traverse body t staff voice) t))))))
+
        ;; ── Multi-measure rest (R1*3/4) — advance onset by total music length
        ;; ly:music-length handles multiplied durations correctly
        ((memq name '(MultiMeasureRestMusic MultiMeasureRestEvent))
