@@ -938,7 +938,25 @@ def find_lilypond_files():
     xml_dir = os.path.join(os.path.dirname(__file__), 'lilypond', 'musicxml')
     if not os.path.isdir(xml_dir):
         return []
-    _EXCLUDED = {'bwv1013.xml', 'bwv1017.xml', 'BWV_827_BWV_827.xml'}
+    _EXCLUDED = {
+        'bwv1013.xml', 'bwv1017.xml', 'BWV_827_BWV_827.xml',
+        # combined files superseded by their _N.xml splits:
+        'bwv895_bwv895.xml',
+        'bach_bwv543.xml',    # Prelude+Fugue combined; bach_bwv543_1.xml + _2.xml are the splits
+        'BWV541-lilypond.xml',  # Praeludium only; BWV541-lilypond_1.xml + _2.xml are the splits
+        'Prelude_et_fugue_en_la_majeur.xml',
+        'anna_magdalena_114_115_116.xml',
+        'bwv769_a4.xml',
+        'bwv769_let.xml',
+        'bwv544.xml',
+        'SonataIV_SonataIV.xml',
+        'mv14_canons_bwv_1087_14_canons_bwv_1087.xml',
+        'mv14_canons_bwv_1087_14_canons_bwv_1087_alto.xml',
+        'mv14_canons_bwv_1087_14_canons_bwv_1087_quartet.xml',
+        # junk / failed conversions:
+        'bwv542.xml',    # LY uses 2.20-era syntax that fails with 2.24.4; 1-measure output
+        'BWV533.xml',    # Prelude only (31 measures); musedata_organ_BWV_533_1/2 cover both movements
+    }
     _EXCL_BWV = {1024}   # BWV numbers excluded entirely (all movements)
 
     all_fnames = sorted(f for f in os.listdir(xml_dir)
@@ -2549,6 +2567,96 @@ def _merge_ornamental_slurs(notes, slur_ends):
     return merged
 
 
+def _remove_unison_voices(voices_dict):
+    """
+    Detect voices that double each other in unison (same MIDI pitch at same onset).
+    Removes notes from the duplicate voice for each unison segment so it does not
+    produce artifact motifs with a small time shift.
+
+    A pair of voices is considered "unison" in a segment when:
+      - They share ≥4 consecutive notes with identical MIDI pitch at identical onset
+        (quantised to 1/16), with no gap > 4 sixteenths between consecutive shared notes
+      - Alternatively the pair is globally unison: ≥80 % of the shorter voice's notes
+        match the other voice — then all matching notes are suppressed
+
+    The voice with the higher staff number loses its notes in those segments.
+    Unison detection runs on the original (pre-repeat-unfolding) voice dict.
+    """
+    vkeys = list(voices_dict.keys())
+    if len(vkeys) < 2:
+        return voices_dict
+
+    def _q16(onset):
+        return round(onset * 16)
+
+    voice_idx = {}   # vk -> {q16_onset: note}
+    for vk, notes in voices_dict.items():
+        voice_idx[vk] = {_q16(n[5]): n for n in notes}
+
+    suppress = {vk: set() for vk in vkeys}  # vk -> set of note-ids to drop
+
+    for i in range(len(vkeys)):
+        for j in range(i + 1, len(vkeys)):
+            vk_a, vk_b = vkeys[i], vkeys[j]
+            idx_a = voice_idx[vk_a]
+            idx_b = voice_idx[vk_b]
+
+            shared_q16 = sorted(
+                q for q in idx_a
+                if q in idx_b and idx_a[q][4] == idx_b[q][4]
+            )
+            if len(shared_q16) < 4:
+                continue
+
+            shorter = min(len(idx_a), len(idx_b))
+
+            # Case A: globally unison (≥80 % of shorter voice matches)
+            if len(shared_q16) >= 0.8 * shorter:
+                sn_a, sn_b = vk_a[0], vk_b[0]
+                vk_drop  = vk_b if sn_a <= sn_b else vk_a
+                idx_drop = voice_idx[vk_drop]
+                for q in shared_q16:
+                    n = idx_drop.get(q)
+                    if n:
+                        suppress[vk_drop].add(n[0])
+                continue
+
+            # Case B: local unison runs — gap ≤ 4 sixteenths between consecutive shared notes
+            runs = []
+            run = [shared_q16[0]]
+            for k in range(1, len(shared_q16)):
+                prev, cur = shared_q16[k - 1], shared_q16[k]
+                if cur - prev <= 4:
+                    run.append(cur)
+                else:
+                    if len(run) >= 4:
+                        runs.append(run)
+                    run = [cur]
+            if len(run) >= 4:
+                runs.append(run)
+
+            if not runs:
+                continue
+
+            sn_a, sn_b = vk_a[0], vk_b[0]
+            vk_drop  = vk_b if sn_a <= sn_b else vk_a
+            idx_drop = voice_idx[vk_drop]
+            for run in runs:
+                for q in run:
+                    n = idx_drop.get(q)
+                    if n:
+                        suppress[vk_drop].add(n[0])
+
+    if not any(suppress.values()):
+        return voices_dict
+
+    result = {}
+    for vk, notes in voices_dict.items():
+        drop = suppress[vk]
+        result[vk] = [n for n in notes if n[0] not in drop]
+    return result
+
+
 def _interval_seq(notes, beat_dur_q=1.0, pickup_dur_q=0.0):
     """
     notes: [(nid, pname, oct, dur, midi, onset), ...]
@@ -2677,18 +2785,74 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
     if not candidates:
         return []
 
-    candidates.sort(key=lambda x: (len(x[1]), len(x[0][0])), reverse=True)
+    # Sort: count desc, length desc, phase asc (prefer earlier metric position), body for stability
+    candidates.sort(key=lambda x: (len(x[1]), len(x[0][0]), -x[0][1], x[0][0]), reverse=True)
 
     def _is_window_shift(p, q):
+        """Cyclic rotation: p shifted by k (wrapping) becomes q."""
         if len(p) != len(q):
             return False
         return any(p[k:] + p[:k] == q for k in range(1, len(p)))
 
+    def _linear_window_dominated(long_body, long_oqs16, short_body, short_oqs16):
+        """Return True if short is a sliding-window fragment of long (or same length shifted).
+        long must have count >= count of short (longer or equal pattern chosen as representative).
+        Checks both directions: long starts before short (k>0) and short starts before long (k<0).
+        Overlap must be >= max(2, min(Llong, Lshort)//2) intervals.
+        Onset confirmation: short_oqs16 mostly aligns with long_oqs16 shifted by k notes.
+        """
+        Ll, Ls = len(long_body), len(short_body)
+        min_overlap = max(2, min(Ll, Ls) // 2)
+        occ_match = max(2, len(short_oqs16) * 2 // 3)
+        # Direction 1: long starts k notes before short
+        for k in range(1, Ll - min_overlap + 1):
+            overlap = min(Ll - k, Ls)
+            if overlap < min_overlap:
+                break
+            if long_body[k:k + overlap] == short_body[:overlap]:
+                shift16 = round(sum(long_body[i][1] for i in range(k)) * 16)
+                if len(short_oqs16 & {oq + shift16 for oq in long_oqs16}) >= occ_match:
+                    return True
+        # Direction 2: short starts k notes before long (only equal-length, or short longer —
+        # but we only call with Ll >= Ls so this handles equal-length reverse shifts)
+        if Ll == Ls:
+            for k in range(1, Ls - min_overlap + 1):
+                if short_body[k:] == long_body[:Ls - k]:
+                    shift16 = round(sum(short_body[i][1] for i in range(k)) * 16)
+                    if len(long_oqs16 & {oq + shift16 for oq in short_oqs16}) >= occ_match:
+                        return True
+        return False
+
+    # Pre-pass: mark linear-window-shift duplicates suppressed by their longest same-count parent.
+    # For each candidate with count C, check if a longer candidate with count C' >= C is its
+    # sliding-window parent. The longer pattern is the representative; shorter ones are suppressed.
+    cand_oqs16 = [{oq for *_, oq in occs} for _, occs in candidates]
+    window_suppressed = [False] * len(candidates)
+    for i, ((body_i, phase_i), occs_i) in enumerate(candidates):
+        if window_suppressed[i]:
+            continue
+        cnt_i = len(occs_i)
+        for j in range(i + 1, len(candidates)):
+            if window_suppressed[j]:
+                continue
+            (body_j, _phase_j), occs_j = candidates[j]
+            cnt_j = len(occs_j)
+            if cnt_j > cnt_i:
+                continue  # j appears more often — can't be suppressed by i
+            Li, Lj = len(body_i), len(body_j)
+            if Li < Lj:
+                continue  # i is shorter than j; can't be j's parent
+            if _linear_window_dominated(body_i, cand_oqs16[i], body_j, cand_oqs16[j]):
+                window_suppressed[j] = True
+
     selected        = []
     selected_bodies = []
-    for (body, phase), occs in candidates:
+    for ci, ((body, phase), occs) in enumerate(candidates):
         if len(selected) >= max_motifs:
             break
+        if window_suppressed[ci]:
+            continue
+        body_oqs16 = cand_oqs16[ci]
         dominated = any(
             (len(sb) > len(body) and
              any(sb[i:i + len(body)] == body for i in range(len(sb) - len(body) + 1)))
@@ -3318,6 +3482,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         else:
             seq_voices = voices
 
+        seq_voices = _remove_unison_voices(seq_voices)
         all_seqs = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
                     for vk, notes in seq_voices.items()
                     if len(notes) >= 4]
@@ -4456,6 +4621,20 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
 
     n_pages = _vtk.getPageCount()
 
+    # Verovio 6.1.0 bug: MusicXML notes with both <tie type="stop"/> and
+    # <tie type="start"/> (middle of a 3-note tie chain) produce a self-referential
+    # MEI <tie startid="#X" endid="#X"/> which can cause a segfault during rendering.
+    # Fix: strip self-ties from MEI and reload.
+    if ext in ('xml', 'musicxml', 'mxl'):
+        _mei_raw = _vtk.getMEI()
+        _n_self = len(re.findall(
+            r'<tie\s[^>]*startid="(#?[^"]+)"[^>]*endid="\1"[^>]*/>', _mei_raw))
+        if _n_self:
+            _mei_fixed = re.sub(
+                r'<tie\s[^>]*startid="(#?[^"]+)"[^>]*endid="\1"[^>]*/>', '', _mei_raw)
+            _vtk.loadData(_mei_fixed)
+            n_pages = _vtk.getPageCount()
+
     # apply chromatic transposition for kern files via MEI post-processing
     # (verovio explicitly sets accid.ges for key-sig notes in kern→MEI)
     if transpose_semitones and ext == 'krn':
@@ -4542,10 +4721,12 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                     _search_rpt_info.append({'rpt_start': _rs_u, 'rpt_end': _re_u,
                                              'shift': _sh_r, 'play2_end': _re_u + _sh_r})
                     _cum += _sh_r
+            _uf = _remove_unison_voices(_uf)
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _uf.items() if len(notes) >= 4]
             _src_v = _uf
         else:
+            _voices_s = _remove_unison_voices(_voices_s)
             all_seqs = [(vk, _interval_seq(notes, _beat_dur_q_s, _pickup_dur_q_s))
                         for vk, notes in _voices_s.items() if len(notes) >= 4]
             _src_v = _voices_s
