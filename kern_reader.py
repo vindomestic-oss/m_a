@@ -5187,13 +5187,15 @@ function drawBoxes(m){{
         }}
         if(!sys||sys===svg)sys=null;
         // Search from end: add to the most-recent group for this sys,
-        // unless there's a backward x-jump (cross-boundary motif) — then start a new sub-group.
+        // unless there's a backward x-jump or vertical gap (new row) — then start a new sub-group.
         var found=false;
         for(var gi=svgSysGroups[si].length-1;gi>=0;gi--){{
           if(svgSysGroups[si][gi].sys===sys){{
             var grp=svgSysGroups[si][gi];
             var lastR=grp.rects[grp.rects.length-1];
-            if(cr.right < lastR.left - 10)break; // backward jump → fall through to new group
+            var vertGap=cr.top - lastR.bottom;
+            if(cr.right < lastR.left - 10)break; // backward x-jump → new group
+            if(vertGap > lastR.height * 1.5)break; // large vertical gap → new row
             grp.rects.push(cr); found=true; break;
           }}
         }}
