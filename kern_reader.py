@@ -2679,9 +2679,10 @@ def _interval_seq(notes, beat_dur_q=1.0, pickup_dur_q=0.0):
 
 
 def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=None,
-                 beat_dur_q=1.0, pickup_dur_q=0.0):
+                 beat_dur_q=1.0, pickup_dur_q=0.0, all_seqs_full=None):
     """
-    all_seqs: [(voice_key, interval_seq), ...]
+    all_seqs: [(voice_key, interval_seq), ...]  — used for pattern discovery (may be capped)
+    all_seqs_full: if given, re-count occurrences on full sequences after discovery
     Returns list of {'pattern': tuple, 'occurrences': [[nid, ...], ...]}
 
     Pattern key = (body, start_phase) where:
@@ -2893,6 +2894,81 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
                 'n_both':         n_both,
             })
             selected_bodies.append(body)
+
+    # Re-count on full sequences if provided (discovery ran on capped seqs).
+    # Targeted linear scan — O(n×L) per pattern, not O(n²).
+    if all_seqs_full is not None and selected:
+        needed_bodies = set()
+        for m in selected:
+            needed_bodies.add(m['pattern'])
+            if m['n_inv_only'] > 0 or m['n_both'] > 0:
+                needed_bodies.add(tuple((-iv, dur) for iv, dur in m['pattern']))
+        bodies_by_len = defaultdict(set)
+        for b in needed_bodies:
+            bodies_by_len[len(b)].add(b)
+        full_raw = defaultdict(lambda: defaultdict(list))
+        for vi, (_vk, seq) in enumerate(all_seqs_full):
+            n = len(seq)
+            for start in range(n):
+                onset0    = seq[start][4]
+                dp0_first = seq[start][7]
+                for L, bodies_L in bodies_by_len.items():
+                    if start + L > n:
+                        continue
+                    if not all(seq[start + k][6] for k in range(L)):
+                        continue
+                    b = tuple((s[0], s[1]) for s in seq[start:start + L])
+                    if b not in bodies_L:
+                        continue
+                    min_body_dur = min(s[1] for s in seq[start:start + L])
+                    sp = _metric_phase(onset0 - pickup_dur_q, min_body_dur, beat_dur_q)
+                    nids = [seq[start][2]] + [seq[start + k][3] for k in range(L)]
+                    full_raw[(b, sp)][vi].append((start, nids, onset0, dp0_first))
+
+        for m in selected:
+            body = m['pattern']; phase = m['phase']
+            key = (body, phase)
+            inv_body = tuple((-iv, dur) for iv, dur in body)
+            inv_key  = (inv_body, phase)
+            has_inv  = inv_key in full_raw
+            ln = len(body)
+            all_voices = set(full_raw[key].keys()) | (set(full_raw[inv_key].keys()) if has_inv else set())
+            all_cands = []
+            for vi in all_voices:
+                for start, nids, onset, dp0_first in full_raw[key].get(vi, []):
+                    all_cands.append((round(onset * 16), start, vi, nids, dp0_first, False))
+                if has_inv:
+                    for start, nids, onset, dp0_first in full_raw[inv_key].get(vi, []):
+                        all_cands.append((round(onset * 16), start, vi, nids, dp0_first, True))
+            all_cands.sort(key=lambda x: (x[0], x[5], x[2]))
+            last_end_v = {}; seen_oq = set(); merged = []
+            for onset_q, start, vi, nids, dp0_first, is_inv in all_cands:
+                if start < last_end_v.get(vi, -1):
+                    continue
+                if onset_q in seen_oq:
+                    continue
+                merged.append((nids, dp0_first, is_inv, onset_q))
+                seen_oq.add(onset_q)
+                last_end_v[vi] = start + ln + 1
+            if not merged:
+                continue
+            direct_oqs = {oq for _n, _d, inv, oq in merged if not inv}
+            inv_oqs    = {oq for _n, _d, inv, oq in merged if inv}
+            m['n_direct_only'] = len(direct_oqs - inv_oqs)
+            m['n_inv_only']    = len(inv_oqs - direct_oqs)
+            m['n_both']        = len(direct_oqs & inv_oqs)
+            occs_sorted = sorted(merged, key=lambda x: (x[3], x[2]))
+            ref_pitch = next((dp for _n, dp, inv, _oq in occs_sorted if not inv), None)
+            if ref_pitch is None:
+                ref_pitch = occs_sorted[0][1]
+            seen_oq = set(); dedup_occs = []; transforms = []
+            for nids, dp, inv, oq in occs_sorted:
+                if oq not in seen_oq:
+                    dedup_occs.append(nids)
+                    transforms.append({'transposition': dp - ref_pitch, 'inversion': inv, 'onset_q': oq})
+                    seen_oq.add(oq)
+            m['occurrences'] = dedup_occs
+            m['transforms']  = transforms
 
     return selected
 
@@ -3483,10 +3559,19 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             seq_voices = voices
 
         seq_voices = _remove_unison_voices(seq_voices)
-        all_seqs = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
+        # Budget ~2.8e-6 × V × n² seconds; cap n per voice so total < 3s.
+        # cap = sqrt(3 / (2.8e-6 × V)), min 100.
+        _n_v = max(1, len(seq_voices))
+        _cap = max(100, int(math.sqrt(3.0 / (2.8e-6 * _n_v))))
+        all_seqs = [(vk, _interval_seq(notes[:_cap], beat_dur_q, pickup_dur_q))
                     for vk, notes in seq_voices.items()
                     if len(notes) >= 4]
-        motifs = _find_motifs(all_seqs, beat_dur_q=beat_dur_q, pickup_dur_q=pickup_dur_q)
+        _max_voice_len = max((len(n) for n in seq_voices.values()), default=0)
+        all_seqs_full = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
+                         for vk, notes in seq_voices.items()
+                         if len(notes) >= 4] if _cap < _max_voice_len else None
+        motifs = _find_motifs(all_seqs, beat_dur_q=beat_dur_q, pickup_dur_q=pickup_dur_q,
+                              all_seqs_full=all_seqs_full)
         # Repeat-unfolding flag: True for both simple repeat and volta unfolding.
         _is_spl_rpt      = shift > 0
         _is_volta_unfold = bool(volta_groups) and shift > 0
@@ -4879,7 +4964,12 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
         )
 
     auto_rows = "".join(_row(i, m) for i, m in enumerate(motifs))
+    def _strip_p2_nid(nid):
+        return nid[:-4] if nid.endswith('__p2') else nid
     motif_data = [{"color": m["color"],
+                   "occs": [[_strip_p2_nid(nid) for nid in occ] for occ in m.get("occs", [])],
+                   "repeat_pairs": m.get("repeat_pairs", []),
+                   "is_inv": [bool(t.get("inversion")) for t in m.get("transforms", [])],
                    "transforms": m.get("transforms", []),
                    "queryStr": m.get("queryStr", ""),
                    "profile": m.get("profile", []),
@@ -5355,14 +5445,14 @@ function highlight(){{
           else if(filter==='inv')badge2='<span style="background:#c05a00;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">\u21c5inv</span> ';
           st2.innerHTML=badge2+'<b>M'+(idx+1)+'</b>';
         }}
-        fetchMotifOccs(motifs[idx].queryStr,function(data){{
-          if(activeKey!==key||activeFilter!==filter)return;
+        (function(){{
+          var data=motifs[idx];
           if(!data||!data.occs)return;
           colorMotifOccs(data.occs,motifs[idx].color);
           var fr=filteredByInv(data,filter);
           drawBoxes({{occs:fr.occs,color:motifs[idx].color,repeat_pairs:fr.repeat_pairs,is_volta:motifs[idx].is_volta}});
           scrollToFirst({{occs:fr.occs}});
-        }});
+        }})();
       }}
     }});
   }});
@@ -5390,13 +5480,13 @@ function highlight(){{
           var inp=document.getElementById('motif-search-input');
           if(inp){{inp.value=qs;}}
         }}
-        fetchMotifOccs(qs,function(data){{
-          if(activeKey!==key)return;
+        (function(){{
+          var data=motifs[idx];
           if(!data||!data.occs)return;
           colorMotifOccs(data.occs,motifs[idx].color);
           drawBoxes({{occs:data.occs,color:motifs[idx].color,repeat_pairs:data.repeat_pairs,is_volta:motifs[idx].is_volta}});
           scrollToFirst({{occs:data.occs}});
-        }});
+        }})();
         /* DISABLED: transposition profile detail row
         var prof=motifs[idx].profile;
         if(prof && prof.length>0){{
@@ -5582,13 +5672,14 @@ function _activateDictRow(match, st){{
   row.setAttribute('data-active','1');
   row.scrollIntoView({{behavior:'smooth',block:'nearest'}});
   _highlightFilter(idx,filter);
-  fetchMotifOccs(motifs[idx].queryStr,function(data){{
+  (function(){{
+    var data=motifs[idx];
     if(!data||!data.occs)return;
     colorMotifOccs(data.occs,motifs[idx].color);
     var fr2=filteredByInv(data,filter);
     drawBoxes({{occs:fr2.occs,color:motifs[idx].color,repeat_pairs:fr2.repeat_pairs,is_volta:motifs[idx].is_volta}});
     scrollToFirst({{occs:fr2.occs}});
-  }});
+  }})();
   // Status badge
   var label=motifs[idx].queryStr;
   var n=idx+1;
@@ -5882,13 +5973,13 @@ def load_file_bg(path: str, status_cb):
     try:
         result = queue.get(timeout=60)
     except Exception:
+        _was_alive = proc.is_alive()
         proc.terminate()
-        # Check if it crashed vs timed out
         proc.join(timeout=3)
-        if proc.exitcode not in (None, 0):
-            status_cb(f"ERROR: verovio crashed (exit {proc.exitcode})", error=True)
-        else:
+        if _was_alive:
             status_cb("ERROR: render timed out", error=True)
+        else:
+            status_cb(f"ERROR: verovio crashed (exit {proc.exitcode})", error=True)
         return
 
     proc.join(timeout=5)   # child should exit quickly now
