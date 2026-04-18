@@ -1511,6 +1511,81 @@ _BEAT_DUR_OVERRIDES: dict[str, float] = {
 # ── MusicXML voice-order fix ──────────────────────────────────────────────────
 _STEP_MIDI = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 
+def _fix_beam_groups(content: str) -> str:
+    """Fix broken beam groups in MusicXML: each voice's beam groups must be
+    self-contained (begin → ... → end) within a sequence of notes without backup
+    interruption.  When a backup separates voices, leftover 'begin' beams from
+    the previous voice corrupt the next voice's beam state in verovio, producing
+    long horizontal lines connecting notes across systems or staves.
+
+    For each voice in each measure, scan notes in document order (separated by
+    <backup>/<forward> boundaries).  If a beam group is open at a boundary, close
+    it (change last tag to 'end').  If a group opens with 'continue' or 'end',
+    change it to 'begin'.
+    """
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+
+    ns = root.tag.split('}')[0].lstrip('{') if '}' in root.tag else ''
+    pfx = '{' + ns + '}' if ns else ''
+
+    changed = False
+    for measure in root.iter(f'{pfx}measure'):
+        # Group notes by voice, preserving document order within each backup segment.
+        # A <backup> resets the current segment index — notes after it are a new segment.
+        # beam groups must be consistent within each segment.
+        segment_notes = {}  # voice -> list of segments; each segment = list of note elements
+        current_segment = {}  # voice -> current segment list
+        for child in measure:
+            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+            if tag in ('backup', 'forward'):
+                # flush current segments
+                for v, seg in current_segment.items():
+                    if seg:
+                        segment_notes.setdefault(v, []).append(seg)
+                current_segment = {}
+            elif tag == 'note':
+                voice_el = child.find(f'{pfx}voice')
+                v = voice_el.text.strip() if voice_el is not None else '__'
+                current_segment.setdefault(v, []).append(child)
+        for v, seg in current_segment.items():
+            if seg:
+                segment_notes.setdefault(v, []).append(seg)
+
+        for v, segments in segment_notes.items():
+            for seg in segments:
+                # Per beam number, track open state within this segment
+                open_beam = {}  # beam_num -> last beam element that opened
+                for note in seg:
+                    for beam_el in note.findall(f'{pfx}beam'):
+                        bnum = beam_el.get('number', '1')
+                        val = beam_el.text or ''
+                        if val == 'begin':
+                            open_beam[bnum] = beam_el
+                        elif val in ('continue',):
+                            if bnum not in open_beam:
+                                # orphaned continue — treat as begin
+                                beam_el.text = 'begin'
+                                open_beam[bnum] = beam_el
+                                changed = True
+                            else:
+                                open_beam[bnum] = beam_el
+                        elif val == 'end':
+                            open_beam.pop(bnum, None)
+                # close any open beams
+                for bnum, beam_el in open_beam.items():
+                    if beam_el.text in ('begin', 'continue'):
+                        beam_el.text = 'end'
+                        changed = True
+
+    if not changed:
+        return content
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding='unicode')
+
+
 def _fix_missing_divisions(content: str) -> str:
     """Inject <divisions> into the first <attributes> block when absent.
     MusicXML requires divisions for unambiguous duration parsing; without it
@@ -4686,6 +4761,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             content = add_beam_markers(content)
         elif ext in ('xml', 'musicxml', 'mxl'):
             content = _fix_missing_divisions(content)
+            content = _fix_beam_groups(content)
             content = _fix_missing_tuplet_markers(content)
             content = _strip_new_system_hints(content)
             content = _fix_implicit_pickup_measures(content)
