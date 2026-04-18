@@ -141,6 +141,16 @@ def main():
                         help='Output report file path (default: meta_report.txt)')
     parser.add_argument('--lo', type=int, default=8,
                         help='Lower bound for smooth-count analysis (default: 8)')
+    parser.add_argument('--rank', type=int, default=30,
+                        help='Top-N per-file enrichment ranking appended to union report '
+                             '(0 = skip, default: 30)')
+    parser.add_argument('--cache', default=None,
+                        help='Path to JSON cache file for saving/loading per-file results. '
+                             'On a normal run: results are saved here after analysis. '
+                             'With --append: existing cache is loaded and merged.')
+    parser.add_argument('--append', action='store_true',
+                        help='Load --cache, analyse only files NOT already in the cache '
+                             '(or matched by --filter/--composer), merge, regenerate report.')
     args = parser.parse_args()
 
     _xml_files = kr.find_lilypond_files()
@@ -160,19 +170,34 @@ def main():
     report_path_override = args.output
     lo = args.lo
 
+    # ── load cache (for --append mode) ───────────────────────────────────────
+    cached_results = {}
+    if args.cache and os.path.isfile(args.cache):
+        with open(args.cache, encoding='utf-8') as _f:
+            cached_results = json.load(_f)
+        print(f"Loaded cache: {len(cached_results)} files from {args.cache}")
+
+    if args.append:
+        # Only analyse files not already in cache
+        files_to_run = [(r, f) for r, f in files if r not in cached_results]
+        print(f"Append mode: {len(cached_results)} cached + "
+              f"{len(files_to_run)} new → total {len(files)} files")
+    else:
+        files_to_run = files
+
     total = len(files)
     label = f' for composer {args.composer!r}' if args.composer else \
             f' matching {args.filter!r}' if args.filter else ''
-    print(f"Found {total} files{label}. Starting analysis…")
+    print(f"Found {total} files{label}. Analysing {len(files_to_run)}…")
 
-    results = {}          # path → list of motif dicts (or None)
+    results = dict(cached_results)   # start from cache; new results will be merged in
     n_ok = 0
     n_err = 0
 
     ctx = multiprocessing.get_context('spawn')
-    for idx, (rel, full) in enumerate(files):
+    for idx, (rel, full) in enumerate(files_to_run):
         if (idx + 1) % 10 == 0 or idx == 0:
-            print(f"  {idx+1}/{total}  {rel}", flush=True)
+            print(f"  {idx+1}/{len(files_to_run)}  {rel}", flush=True)
         motifs = analyze_file(ctx, full)
         if motifs is None:
             n_err += 1
@@ -181,6 +206,17 @@ def main():
             results[rel] = motifs
 
     print(f"Done. OK={n_ok}, errors/empty={n_err}")
+
+    # ── save cache ────────────────────────────────────────────────────────────
+    if args.cache:
+        with open(args.cache, 'w', encoding='utf-8') as _f:
+            json.dump(results, _f)
+        print(f"Cache saved: {len(results)} files → {args.cache}")
+
+    # Recount totals from merged results for the report header
+    total    = len(files)          # all files in scope (filter/composer)
+    n_ok     = len(results)        # successfully analysed (cached + new)
+    n_err    = total - n_ok        # remainder treated as errors/empty
 
     # ── collect counts — both with-inversion and direct-only ──────────────────
     all_counts        = []   # with inversion (current default)
@@ -372,7 +408,7 @@ def main():
 
         print(f"  [{title_suffix}] written to: {report_path}  "
               f"(local-baseline: mean_z_smooth={mean_zs:+.3f}, p={p_val:.4f})")
-        return freq, p_val
+        return freq, p_val, z_scores, files_with_smooth
 
     # ── write two reports ─────────────────────────────────────────────────────
     base      = os.path.dirname(os.path.abspath(__file__))
@@ -381,12 +417,12 @@ def main():
                              os.path.basename(path_all).replace('.txt', '_direct.txt'))
 
     print("\nWriting reports…")
-    freq_all, _p_all = _write_report(
+    freq_all, _p_all, z_union, files_union = _write_report(
         all_counts, file_counts,
         path_all, "with inversions",
         total, n_ok, n_err, len(results), lo,
     )
-    _write_report(
+    _freq_dir, _p_dir, z_direct, files_direct = _write_report(
         all_counts_direct, file_counts_direct,
         path_dir, "direct only",
         total, n_ok, n_err, len(results), lo,
@@ -397,6 +433,45 @@ def main():
     with open(freq_path, "w", encoding="utf-8") as f:
         json.dump({str(k): v for k, v in freq_all.items()}, f, sort_keys=True)
     print(f"Frequency table written to: {freq_path}")
+
+    # ── per-file enrichment ranking (union only) ─────────────────────────────
+    if args.rank > 0:
+        rows = []
+        for rel, sc_u in files_union.items():
+            sz_u  = sum(z_union.get(c, 0.0) for c in sc_u)
+            max_c = max(sc_u)
+            rows.append((sz_u, max_c, len(sc_u), rel))
+        rows.sort(reverse=True)
+
+        rank_lines = ["", "=" * 72,
+                      f"6. PER-FILE ENRICHMENT RANKING  (ALL {len(rows)} FILES, BY Z-SCORE)",
+                      "=" * 72,
+                      "  z_sum = Σ z(c) over all smooth counts c≥8 (union/inversion report).",
+                      "  z(c)  = local-baseline z-score for count c (same as §3).",
+                      "  max_c = largest smooth count in the file.",
+                      "  n_sm  = number of smooth motifs ≥8.",
+                      "",
+                      f"  {'Rk':>4}  {'z_sum':>8}  {'max_c':>6}  {'n_sm':>5}  file"]
+        rank_lines.append("  " + "-" * 65)
+        for i, (zu, mc, ns, rel) in enumerate(rows, 1):
+            rank_lines.append(f"  {i:4d}  {zu:+8.2f}  {mc:6d}  {ns:5d}  {rel}")
+        rank_lines += ["", "=" * 72, "END OF REPORT", "=" * 72]
+
+        # Append ranking to the union report (replace its END OF REPORT footer)
+        with open(path_all, "r", encoding="utf-8") as f:
+            text = f.read()
+        # Remove existing end-of-report footer (last 3 lines)
+        lines_existing = text.rstrip("\n").split("\n")
+        # Strip trailing separator + END OF REPORT + separator
+        while lines_existing and lines_existing[-1].startswith("="):
+            lines_existing.pop()
+        while lines_existing and lines_existing[-1].strip() in ("END OF REPORT", ""):
+            lines_existing.pop()
+        while lines_existing and lines_existing[-1].startswith("="):
+            lines_existing.pop()
+        with open(path_all, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines_existing) + "\n" + "\n".join(rank_lines) + "\n")
+        print(f"  Ranking (top {args.rank}) appended to: {path_all}")
 
 
 if __name__ == "__main__":
