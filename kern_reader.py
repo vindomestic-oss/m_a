@@ -957,7 +957,7 @@ def find_lilypond_files():
         'bwv542.xml',    # LY uses 2.20-era syntax that fails with 2.24.4; 1-measure output
         'BWV533.xml',    # Prelude only (31 measures); musedata_organ_BWV_533_1/2 cover both movements
     }
-    _EXCL_BWV = {1024}   # BWV numbers excluded entirely (all movements)
+    _EXCL_BWV = {1024, 806, 807, 808, 809}   # BWV numbers excluded entirely (covered by tobis engl-suites)
 
     all_fnames = sorted(f for f in os.listdir(xml_dir)
                         if f.endswith('.xml') and f not in _EXCLUDED)
