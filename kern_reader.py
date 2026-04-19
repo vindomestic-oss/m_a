@@ -3738,6 +3738,28 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
         all_seqs_full = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
                          for vk, notes in seq_voices.items()
                          if len(notes) >= 4] if _cap < _max_voice_len else None
+        # soprano_global: highest note at each 1/16-grid position across ALL staves/voices.
+        # Catches cross-staff melodic handoffs (e.g. scale descending from RH into LH).
+        _all_notes_g = [n for notes in seq_voices.values() for n in notes]
+        if _all_notes_g:
+            _min_dur_g = min(n[3] for n in _all_notes_g)
+            _step_g = max(_min_dur_g, 0.25)  # at most 1/16 grid
+            _EPS_g = _step_g * 0.05
+            _min_on_g = min(n[5] for n in _all_notes_g)
+            _max_on_g = max(n[5] for n in _all_notes_g)
+            _T0_g = _min_on_g - (_min_on_g % _step_g) if _step_g > 0 else _min_on_g
+            _glob_sop = []
+            _T_g = round(_T0_g, 9)
+            while _T_g <= _max_on_g + _EPS_g:
+                _cands_g = [n for n in _all_notes_g if abs(n[5] - _T_g) <= _EPS_g]
+                if _cands_g:
+                    _best_g = max(_cands_g, key=lambda n: n[4])
+                    _glob_sop.append((_best_g[0], _best_g[1], _best_g[2], _step_g, _best_g[4], _T_g))
+                _T_g = round(_T_g + _step_g, 9)
+            if len(_glob_sop) >= 4:
+                all_seqs.append((('soprano_global', 0), _interval_seq(_glob_sop[:_cap], beat_dur_q, pickup_dur_q)))
+                if all_seqs_full is not None:
+                    all_seqs_full.append((('soprano_global', 0), _interval_seq(_glob_sop, beat_dur_q, pickup_dur_q)))
         motifs = _find_motifs(all_seqs, beat_dur_q=beat_dur_q, pickup_dur_q=pickup_dur_q,
                               all_seqs_full=all_seqs_full)
         # Repeat-unfolding flag: True for both simple repeat and volta unfolding.
@@ -4190,7 +4212,16 @@ def prepare_grand_staff(content: str) -> str:
         result.append(lines[idx])
 
     # Copy everything from after the last split to end of file unchanged.
+    # Exception: G-clef overrides on the bass spine (column 1) must stay *clefF4.
+    bass_is_col1 = ('F' not in (orig_clef or ''))  # True for standard piano grand-staff
     for i in range(split_idxs[-1] + 1, len(lines)):
+        raw = lines[i].rstrip("\n\r")
+        if bass_is_col1 and raw.startswith("*") and not raw.startswith("**") and "\t" in raw:
+            toks = raw.split("\t")
+            if len(toks) == 2 and toks[1].startswith("*clef") and 'G' in toks[1]:
+                toks[1] = "*clefF4"
+                result.append("\t".join(toks) + "\n")
+                continue
         result.append(lines[i])
 
     return "".join(result)
@@ -4826,7 +4857,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
     _basename_pre = os.path.basename(path)
     _has_tsd = _basename_pre in _TSD_DATA or _basename_pre in _TSD_GEN_4 or _basename_pre in _TSD_GEN_8
     _vtk.setOptions({
-        "pageWidth":        2200,
+        "pageWidth":        2800,
         "adjustPageHeight": True,
         "scale":            35,
         "font":             "Leipzig",
@@ -5026,6 +5057,25 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                     ('soprano_beat', _sn),
                     _interval_seq(_sop, _beat_dur_q_s, _pickup_dur_q_s)
                 ))
+        # soprano_global: highest note at each 1/16-grid position across ALL staves/voices.
+        _all_notes_g = [n for notes in _src_v.values() for n in notes]
+        if _all_notes_g:
+            _min_dur_g = min(n[3] for n in _all_notes_g)
+            _step_g = max(_min_dur_g, 0.25)
+            _EPS_g = _step_g * 0.05
+            _min_on_g = min(n[5] for n in _all_notes_g)
+            _max_on_g = max(n[5] for n in _all_notes_g)
+            _T0_g = _min_on_g - (_min_on_g % _step_g) if _step_g > 0 else _min_on_g
+            _glob_sop = []
+            _T_g = round(_T0_g, 9)
+            while _T_g <= _max_on_g + _EPS_g:
+                _cands_g = [n for n in _all_notes_g if abs(n[5] - _T_g) <= _EPS_g]
+                if _cands_g:
+                    _best_g = max(_cands_g, key=lambda n: n[4])
+                    _glob_sop.append((_best_g[0], _best_g[1], _best_g[2], _step_g, _best_g[4], _T_g))
+                _T_g = round(_T_g + _step_g, 9)
+            if len(_glob_sop) >= 4:
+                all_seqs.append((('soprano_global', 0), _interval_seq(_glob_sop, _beat_dur_q_s, _pickup_dur_q_s)))
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
         nid_labels = {}
         for _notes in _voices_s.values():
