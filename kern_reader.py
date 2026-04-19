@@ -2350,43 +2350,63 @@ def _voice_notes_from_mei(mei_str):
     _base_ppq  = None   # first base seen (for fallback)
     _elem_base = {}     # id(el) -> base_ppq effective at that element
     _scan_base = None
+    import math as _math
+    # Detect PPQ base (= quarter-note duration in verovio's tick unit).
+    # Strategy: collect implied bases from all non-dotted notes, weighted by
+    # reliability: dur=4/8/16/32 are always exact multiples of base; dur=1/2 in
+    # compound meters get ppq = odd multiple of base (3×, 6×, …) so they are
+    # unreliable.  Pick the most-frequent implied base from reliable notes; fall
+    # back to whole/half only if no reliable notes exist.
+    _base_candidates = {}  # implied_base -> count
     for _el in tree.iter():
         _ppq = _el.get('dur.ppq')
         if _ppq is None:
             continue
         _dur_tag = _el.get('dur')
         _dots    = int(_el.get('dots', 0) or 0)
-        if not _dots and _dur_tag in ('1', '2', '4'):
-            # Non-dotted whole/half/quarter uniquely determine the PPQ base:
-            # whole=4x, half=2x, quarter=1x a quarter note.
-            _factor = {'1': 4, '2': 2, '4': 1}[_dur_tag]
-            _raw    = int(_ppq)
-            if _raw % _factor == 0:       # sanity: should divide evenly
-                _new_base = _raw // _factor
-                # Verovio bug: whole notes sometimes get ppq = half_note_ppq (2×base)
-                # instead of the correct whole_note_ppq (4×base).  Detect by checking
-                # whether the implied new base is exactly half the current base — that
-                # can only happen for a whole note with the buggy ppq value.
-                if (_dur_tag == '1' and _scan_base is not None
-                        and _new_base == _scan_base // 2
-                        and _scan_base % 2 == 0):
-                    pass   # skip — verovio whole-note ppq bug
-                elif _scan_base is not None and _new_base != _scan_base:
-                    # Only accept if ratio to current base is a power of 2.
-                    # Tuplet notes (e.g. triplet quarter: dur="4" dur.ppq=2/3·base)
-                    # would give a non-power-of-2 ratio and must NOT update the base.
-                    import math as _math
-                    _ratio = _new_base / _scan_base
+        if _dots:
+            continue
+        _raw = int(_ppq)
+        if _dur_tag == '4' and _raw > 0:
+            _base_candidates[_raw] = _base_candidates.get(_raw, 0) + 4  # high weight
+        elif _dur_tag == '8' and _raw > 0:
+            _base_candidates[_raw * 2] = _base_candidates.get(_raw * 2, 0) + 2
+        elif _dur_tag == '16' and _raw > 0:
+            _base_candidates[_raw * 4] = _base_candidates.get(_raw * 4, 0) + 1
+        elif _dur_tag == '32' and _raw > 0:
+            _base_candidates[_raw * 8] = _base_candidates.get(_raw * 8, 0) + 1
+    if _base_candidates:
+        _scan_base = max(_base_candidates, key=_base_candidates.get)
+    else:
+        # Last resort: whole or half.
+        for _el in tree.iter():
+            _ppq = _el.get('dur.ppq')
+            if _ppq is None:
+                continue
+            _dur_tag = _el.get('dur')
+            _dots    = int(_el.get('dots', 0) or 0)
+            if not _dots and _dur_tag in ('1', '2'):
+                _factor = {'1': 4, '2': 2}[_dur_tag]
+                _raw    = int(_ppq)
+                if _raw > 0 and _raw % _factor == 0:
+                    _scan_base = _raw // _factor
+                    break
+    _base_ppq = _scan_base
+    # Full pass to assign per-element bases and track mid-piece divisions changes.
+    _scan_base2 = _scan_base
+    for _el in tree.iter():
+        _ppq = _el.get('dur.ppq')
+        if _ppq is not None:
+            _dur_tag = _el.get('dur')
+            _dots    = int(_el.get('dots', 0) or 0)
+            if not _dots and _dur_tag == '4' and _scan_base2 is not None:
+                _new = int(_ppq)
+                if _new != _scan_base2 and _new > 0:
+                    _ratio = _new / _scan_base2
                     _log2  = _math.log2(_ratio) if _ratio > 0 else float('nan')
-                    if abs(_log2 - round(_log2)) < 0.01:   # power-of-2 ratio → legit change
-                        _scan_base = _new_base
-                        if _base_ppq is None:
-                            _base_ppq = _scan_base
-                else:
-                    _scan_base = _new_base
-                    if _base_ppq is None:
-                        _base_ppq = _scan_base
-        _elem_base[id(_el)] = _scan_base
+                    if abs(_log2 - round(_log2)) < 0.01:  # power-of-2 → legit change
+                        _scan_base2 = _new
+        _elem_base[id(_el)] = _scan_base2
 
     def _elem_dur_q(el, scale):
         """Duration in quarters: prefer dur.ppq/local_base, fall back to dur+dots+scale."""
