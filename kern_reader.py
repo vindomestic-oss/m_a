@@ -2907,7 +2907,6 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
             continue
         inv_key = (body_inv, phase)
         if inv_key in pat_occs and inv_key not in absorbed:
-            absorbed.add(inv_key)
             ln = len(body)
             all_voices = set(pat_voice_raw[key].keys()) | set(pat_voice_raw[inv_key].keys())
             all_cands = []
@@ -2916,6 +2915,16 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
                     all_cands.append((round(onset * 16), start, vi, nids, dp0_first, False))
                 for start, nids, onset, dp0_first in pat_voice_raw[inv_key].get(vi, []):
                     all_cands.append((round(onset * 16), start, vi, nids, dp0_first, True))
+            # Whichever form appears first in the piece is "direct".
+            min_oq_d = min((c[0] for c in all_cands if not c[5]), default=float('inf'))
+            min_oq_i = min((c[0] for c in all_cands if c[5]),     default=float('inf'))
+            if min_oq_i < min_oq_d:
+                all_cands = [(oq, st, vi, nids, dp0, not inv) for oq, st, vi, nids, dp0, inv in all_cands]
+                result_key = inv_key
+                absorbed.add(key)
+            else:
+                result_key = key
+                absorbed.add(inv_key)
             # Sort: onset_q, then direct before inverted, then voice
             all_cands.sort(key=lambda x: (x[0], x[5], x[2]))
             last_end_v = {}
@@ -2929,7 +2938,7 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
                 merged.append((nids, dp0_first, is_inv, onset_q))
                 seen_oq.add(onset_q)
                 last_end_v[vi] = start + ln + 1
-            pat_occs[key] = merged
+            pat_occs[result_key] = merged
 
     # Normalize non-merged entries to 4-tuples
     for key in pat_occs:
