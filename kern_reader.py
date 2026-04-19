@@ -3567,6 +3567,7 @@ def _search_motif(query):
     _all_cands.sort(key=lambda x: (x[0], x[1], x[2]))
     _last_end_v = {}
     seen_onsets = set()
+    used_nids   = set()   # NIDs already claimed; prevents cross-voice note sharing
     occs_with_onset = []
     is_inv_flags    = []
     for _oq, _inv, _vi, _i, _of, _ns, _nsi in _all_cands:
@@ -3574,9 +3575,14 @@ def _search_motif(query):
             continue
         if _oq in seen_onsets:
             continue  # cross-onset dedup — don't advance last_end_v
+        # strip __p2 suffix before NID collision check so repeat copies don't block each other
+        _ns_base = [_n[:-4] if _n.endswith('__p2') else _n for _n in _ns]
+        if used_nids.intersection(_ns_base):
+            continue  # shares notes with an already-accepted occurrence — don't advance last_end_v
         occs_with_onset.append((_of, _ns))
         is_inv_flags.append(_inv)
         seen_onsets.add(_oq)
+        used_nids.update(_ns_base)
         _last_end_v[_vi] = _nsi
 
     def _strip_p2(nid):
@@ -5023,57 +5029,70 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             _sn_to_notes.setdefault(sn, []).extend(_ns)
             _sn_to_nlayers[sn] = _sn_to_nlayers.get(sn, 0) + 1
             _sn_to_vmap.setdefault(sn, {})[ln] = sorted(_ns, key=lambda _n: _n[5])
+
+        def _voice_tracking_seq(all_notes, step_q):
+            """Build a melody sequence that follows the highest note but only switches
+            voice when the current voice is silent (its note has ended).  Voice switch
+            is allowed at time T when last_onset + last_dur <= T + eps."""
+            if not all_notes:
+                return []
+            _eps = step_q * 0.05
+            sorted_notes = sorted(all_notes, key=lambda n: n[5])
+            _min_on = sorted_notes[0][5]
+            _max_on = sorted_notes[-1][5]
+            _T0 = _min_on - (_min_on % step_q) if step_q > 0 else _min_on
+            result = []
+            _last_end = -1.0   # onset + dur of the last accepted note
+            _last_nid = None
+            _T = round(_T0, 9)
+            while _T <= _max_on + _eps:
+                _cands = [n for n in all_notes if abs(n[5] - _T) <= _eps]
+                if _cands:
+                    _active_end = _last_end - _eps
+                    if _T < _active_end:
+                        # current voice still sounding — only continue with same nid
+                        _same = [n for n in _cands if n[0] == _last_nid]
+                        _pick = _same[0] if _same else None
+                    else:
+                        # voice silent — free to pick highest
+                        _pick = max(_cands, key=lambda n: n[4])
+                    if _pick is not None:
+                        result.append((_pick[0], _pick[1], _pick[2], step_q, _pick[4], _T))
+                        _last_end = _pick[5] + _pick[3]
+                        _last_nid = _pick[0]
+                _T = round(_T + step_q, 9)
+            return result
+
         for sn, _ns in _sn_to_notes.items():
             if _sn_to_nlayers[sn] > 1 and len(_ns) >= 4:
-                all_seqs.append((
-                    ('merged_staff', sn),
-                    _interval_seq(sorted(_ns, key=lambda n: n[5]), _beat_dur_q_s, _pickup_dur_q_s)
-                ))
-        # Soprano-beat sequences: for each beat, pick the highest-pitched note starting
-        # on that beat (across all voices of the staff); effective dur = beat_dur_q.
-        # Catches cross-voice melodic handoffs at beat boundaries (e.g. melody passes from
-        # voice A on beat k to voice B on beat k+1 with no direct adjacency in merged seq).
-        _EPS_b = _beat_dur_q_s * 0.05
+                _step_m = 0.25  # 1/16 grid for merged_staff
+                _merged = _voice_tracking_seq(_ns, _step_m)
+                if len(_merged) >= 4:
+                    all_seqs.append((
+                        ('merged_staff', sn),
+                        _interval_seq(_merged, _beat_dur_q_s, _pickup_dur_q_s)
+                    ))
+        # Soprano-beat sequences: for each beat, pick highest note that starts when
+        # the previous voice is silent; effective dur = beat_dur_q.
         for _sn, _vmap in _sn_to_vmap.items():
             if len(_vmap) <= 1:
                 continue
             _all_sn = [_n for _vns in _vmap.values() for _n in _vns]
             if not _all_sn:
                 continue
-            _min_on = min(_n[5] for _n in _all_sn)
-            _max_on = max(_n[5] for _n in _all_sn)
             _bd = _beat_dur_q_s
-            _T0 = _min_on - (_min_on % _bd) if _bd > 0 else _min_on
-            _sop = []
-            _T = round(_T0, 9)
-            while _T <= _max_on + _EPS_b:
-                _cands = [_n for _n in _all_sn if abs(_n[5] - _T) <= _EPS_b]
-                if _cands:
-                    _best = max(_cands, key=lambda _n: _n[4])  # highest midi
-                    _sop.append((_best[0], _best[1], _best[2], _bd, _best[4], _T))
-                _T = round(_T + _bd, 9)
+            _sop = _voice_tracking_seq(_all_sn, _bd)
             if len(_sop) >= 4:
                 all_seqs.append((
                     ('soprano_beat', _sn),
                     _interval_seq(_sop, _beat_dur_q_s, _pickup_dur_q_s)
                 ))
-        # soprano_global: highest note at each 1/16-grid position across ALL staves/voices.
+        # soprano_global: voice-tracking sequence across ALL staves/voices at 1/16 grid.
         _all_notes_g = [n for notes in _src_v.values() for n in notes]
         if _all_notes_g:
             _min_dur_g = min(n[3] for n in _all_notes_g)
             _step_g = max(_min_dur_g, 0.25)
-            _EPS_g = _step_g * 0.05
-            _min_on_g = min(n[5] for n in _all_notes_g)
-            _max_on_g = max(n[5] for n in _all_notes_g)
-            _T0_g = _min_on_g - (_min_on_g % _step_g) if _step_g > 0 else _min_on_g
-            _glob_sop = []
-            _T_g = round(_T0_g, 9)
-            while _T_g <= _max_on_g + _EPS_g:
-                _cands_g = [n for n in _all_notes_g if abs(n[5] - _T_g) <= _EPS_g]
-                if _cands_g:
-                    _best_g = max(_cands_g, key=lambda n: n[4])
-                    _glob_sop.append((_best_g[0], _best_g[1], _best_g[2], _step_g, _best_g[4], _T_g))
-                _T_g = round(_T_g + _step_g, 9)
+            _glob_sop = _voice_tracking_seq(_all_notes_g, _step_g)
             if len(_glob_sop) >= 4:
                 all_seqs.append((('soprano_global', 0), _interval_seq(_glob_sop, _beat_dur_q_s, _pickup_dur_q_s)))
         _ACC_SFX = {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}
