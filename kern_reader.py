@@ -1980,6 +1980,70 @@ def _strip_redundant_time_sigs(content: str) -> str:
     return result
 
 
+def _fix_missing_initial_clefs(content: str) -> str:
+    """Inject missing initial <clef> elements for staves that have no clef in
+    the first <attributes> block of their part.  Affects CapToMusic-sourced XML
+    files (English suites, violin sonatas, etc.) where staff 2 has no initial
+    clef and verovio defaults to treble.  Uses pure string insertion to avoid
+    ET.tostring reformatting which causes verovio segfaults in spawn subprocesses.
+    Clef choice: avg MIDI < 58 → bass (F/4), otherwise treble (G/2)."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content.encode('utf-8'))
+    except ET.ParseError:
+        return content
+
+    injections = []  # list of (search_str, clef_xml) to insert before </clef> of last clef
+    for part in root.findall('.//part'):
+        first_m = part.find('measure')
+        if first_m is None:
+            continue
+        attrs = first_m.find('attributes')
+        if attrs is None:
+            continue
+        staves_el = attrs.find('staves')
+        if staves_el is None:
+            continue
+        try:
+            n_staves = int(staves_el.text)
+        except (ValueError, TypeError):
+            continue
+        for st_num in range(2, n_staves + 1):
+            if any(c.get('number') == str(st_num) for c in attrs.findall('clef')):
+                continue
+            # Compute avg MIDI for this staff
+            midis = []
+            for note in part.iter('note'):
+                st = note.find('staff')
+                if st is not None and st.text == str(st_num):
+                    pitch = note.find('pitch')
+                    if pitch is not None:
+                        step = pitch.find('step')
+                        octave = pitch.find('octave')
+                        if step is not None and octave is not None:
+                            midi = {'C':0,'D':2,'E':4,'F':5,'G':7,'A':9,'B':11}.get(step.text, 0) + (int(octave.text)+1)*12
+                            midis.append(midi)
+            if not midis:
+                continue
+            avg = sum(midis) / len(midis)
+            if avg < 58:
+                clef_xml = f'\n\t\t\t\t<clef number="{st_num}">\n\t\t\t\t\t<sign>F</sign>\n\t\t\t\t\t<line>4</line>\n\t\t\t\t</clef>'
+            else:
+                clef_xml = f'\n\t\t\t\t<clef number="{st_num}">\n\t\t\t\t\t<sign>G</sign>\n\t\t\t\t\t<line>2</line>\n\t\t\t\t</clef>'
+            injections.append((st_num, clef_xml))
+
+    if not injections:
+        return content
+
+    # Insert all clefs before </attributes> of the first attributes block.
+    # Find the first </attributes> close tag.
+    insert_pos = content.find('</attributes>')
+    if insert_pos == -1:
+        return content
+    insertion = ''.join(xml for _, xml in injections)
+    return content[:insert_pos] + insertion + content[insert_pos:]
+
+
 def _fix_backward_repeat_on_left(content: str) -> str:
     """Move non-standard <barline location="left"><repeat direction="backward"/>
     to a <barline location="right"> on the previous measure.
@@ -4790,6 +4854,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             content = _fix_section_pickup_bars(content)
             content = _strip_redundant_time_sigs(content)
             content = _renumber_measures_from_one(content)
+            content = _fix_missing_initial_clefs(content)
             # For MusicXML, transpose before loading: <alter> gives exact pitch,
             # unlike MEI where key-sig notes have no accid.ges.
             if transpose_semitones:
