@@ -383,7 +383,63 @@ def main():
             lines.append(f"  {label}: {len(zs)} pts  mean z = {mz:+.3f}")
         lines.append("")
 
-        h(f"4. per-file breakdown (files where any motif count is smooth >= {lo})")
+        # ── top-K smooth fraction test ────────────────────────────────────────
+        import random as _rnd2
+        _rnd2 = _rnd2.Random(43)
+        _K_vals = [1, 2, 3, 4, 6, 8]
+        _topk_results = []
+        for _K in _K_vals:
+            _obs_sm = 0; _obs_tot = 0
+            _piece_topk = []   # (counts_ge_lo, K_actual, n_smooth_in_topK) per piece
+            for _rel, _counts in fcount_dict.items():
+                _cge = sorted([_c for _c in _counts if _c >= lo], reverse=True)
+                if not _cge:
+                    continue
+                _top = _cge[:_K]
+                _k_a = len(_top)
+                _s   = sum(1 for _c in _top if _is_smooth(_c))
+                _obs_sm  += _s
+                _obs_tot += _k_a
+                _piece_topk.append((_cge, _k_a, _s))
+            _obs_rate = _obs_sm / _obs_tot if _obs_tot else 0.0
+            # null: per piece, shuffle counts≥lo, take top-K, count smooth
+            N_PERM_K = 20000
+            _cnt_ge_k = 0
+            for _ in range(N_PERM_K):
+                _sim = 0
+                for (_cge, _k_a, _s) in _piece_topk:
+                    _sh = list(_cge)
+                    _rnd2.shuffle(_sh)
+                    _sim += sum(1 for _c in _sh[:_k_a] if _is_smooth(_c))
+                if _sim >= _obs_sm:
+                    _cnt_ge_k += 1
+            _p_k = _cnt_ge_k / N_PERM_K
+            # baseline: smooth fraction among ALL counts ≥ lo
+            _all_c = [_c for _cge, _, _ in _piece_topk for _c in _cge]
+            _base_rate = sum(1 for _c in _all_c if _is_smooth(_c)) / len(_all_c) if _all_c else 0.0
+            _topk_results.append((_K, _obs_sm, _obs_tot, _obs_rate, _base_rate, _p_k))
+
+        h("4. top-K smooth fraction test")
+        lines.append("Method: for each piece take the K largest motif counts; count how")
+        lines.append("  many are smooth (2^a·3^b).  Compare to baseline smooth fraction")
+        lines.append("  across all counts in the corpus.  Permutation null: within each")
+        lines.append("  piece, shuffle all counts and take top-K  (preserves per-piece")
+        lines.append("  count distribution; only randomises which counts land in top-K).")
+        lines.append("")
+        lines.append(f"  {'K':>3}  {'sm_in_top':>10}  {'top_total':>9}  "
+                     f"{'rate_top':>9}  {'rate_all':>9}  {'lift':>6}  {'p':>7}")
+        lines.append("  " + "-" * 62)
+        for _K, _sm, _tot, _rt, _rb, _p in _topk_results:
+            _lift = _rt / _rb if _rb > 0 else float('nan')
+            _sig  = ' *' if _p < 0.05 else ('~' if _p < 0.15 else '')
+            lines.append(f"  {_K:>3}  {_sm:>10}  {_tot:>9}  "
+                         f"  {_rt:>7.3f}    {_rb:>7.3f}  {_lift:>6.2f}  {_p:>7.4f}{_sig}")
+        lines.append("")
+        lines.append("  lift = rate_top / rate_all  (>1 means smooth over-represented in top-K)")
+        lines.append("  * p<0.05   ~ p<0.15   (permutation, one-sided)")
+        lines.append("")
+
+        h(f"6. per-file breakdown (files where any motif count is smooth >= {lo})")
         if files_with_smooth:
             for rel in sorted(files_with_smooth):
                 vals = sorted(files_with_smooth[rel])
@@ -393,7 +449,7 @@ def main():
             lines.append("  (none found)")
         lines.append("")
 
-        h("5. reference: all smooth numbers 2^a·3^b in [1, 256]")
+        h("7. reference: all smooth numbers 2^a·3^b in [1, 256]")
         ref = smooth_numbers_in_range(1, 256)
         for i in range(0, len(ref), 12):
             lines.append("  " + "  ".join(f"{v:4d}" for v in ref[i:i+12]))
