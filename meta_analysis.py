@@ -62,11 +62,21 @@ def _worker_func(path, q):
             return
         mei_str = _kr._vtk.getMEI()
         motifs = _kr.analyze_motifs(_kr._vtk, mei_str=mei_str)
-        q.put([{
-            'count':        m.get('display_count', m['count']),
-            'count_direct': m['n_direct_only'] + m['n_both'],
-            'length':       m['length'],
-        } for m in motifs])
+        from reader.motif_analysis import count_pattern as _cp
+        _QUERIES = [
+            '1/16;0;-1+1',
+            '1/16;2;-1+1',
+            '1/8;0;-1+1',
+        ]
+        pattern_counts = {q_: _cp(mei_str, q_) for q_ in _QUERIES}
+        q.put({
+            'motifs': [{
+                'count':        m.get('display_count', m['count']),
+                'count_direct': m['n_direct_only'] + m['n_both'],
+                'length':       m['length'],
+            } for m in motifs],
+            'patterns': pattern_counts,
+        })
     except Exception:
         q.put(None)
 
@@ -155,7 +165,7 @@ def main():
 
     _xml_files = kr.find_lilypond_files()
 
-    all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files() + _xml_files
+    all_files = kr.find_kern_files(kr.KERN_DIR) + kr.find_music21_files() + _xml_files + kr.find_tobis_files()
     if args.composer:
         target = args.composer.strip()
         files = [(r, f) for r, f in all_files
@@ -223,11 +233,16 @@ def main():
     all_counts_direct = []   # direct occurrences only
     file_counts        = {}
     file_counts_direct = {}
-    for rel, motifs in results.items():
+    file_patterns      = {}  # rel → {query: count}
+    for rel, res in results.items():
+        # support both old (list) and new (dict) cache format
+        motifs   = res['motifs']   if isinstance(res, dict) else res
+        patterns = res.get('patterns', {}) if isinstance(res, dict) else {}
         counts        = [m['count']        for m in motifs]
         counts_direct = [m['count_direct'] for m in motifs]
         file_counts[rel]        = counts
         file_counts_direct[rel] = counts_direct
+        file_patterns[rel]      = patterns
         all_counts.extend(counts)
         all_counts_direct.extend(counts_direct)
 
@@ -257,7 +272,7 @@ def main():
         return math.exp(a * math.log(k) + b)
 
     def _write_report(counts_list, fcount_dict, report_path, title_suffix,
-                      total, n_ok, n_err, n_results, lo):
+                      total, n_ok, n_err, n_results, lo, fpat_dict=None):
         """Write one meta-analysis report for the given counts_list."""
         import random as _rnd
         counts_ge_lo = [c for c in counts_list if c >= lo]
@@ -439,6 +454,36 @@ def main():
         lines.append("  * p<0.05   ~ p<0.15   (permutation, one-sided)")
         lines.append("")
 
+        if fpat_dict:
+            _QUERIES_LABELS = [
+                ('1/16;0;-1+1', 'neighbor 1/16 phase-0'),
+                ('1/16;2;-1+1', 'neighbor 1/16 phase-2'),
+                ('1/8;0;-1+1',  'neighbor 1/8  phase-0'),
+            ]
+            h("5. predefined pattern counts")
+            lines.append("  Counts of non-overlapping occurrences of specific search patterns")
+            lines.append("  across all analysed files (raw per-voice greedy, no repeat unfolding).")
+            lines.append("")
+            lines.append(f"  {'query':<22}  {'description':<28}  {'total':>7}  {'files':>6}  {'mean/file':>10}")
+            lines.append("  " + "-" * 80)
+            for _q, _lbl in _QUERIES_LABELS:
+                _tot = sum(v.get(_q, 0) for v in fpat_dict.values())
+                _n_f = sum(1 for v in fpat_dict.values() if v.get(_q, 0) > 0)
+                _mean = _tot / len(fpat_dict) if fpat_dict else 0.0
+                lines.append(f"  {_q:<22}  {_lbl:<28}  {_tot:>7}  {_n_f:>6}  {_mean:>10.2f}")
+            lines.append("")
+            lines.append("  Per-file breakdown (files with ≥1 occurrence):")
+            _all_qs = [q for q, _ in _QUERIES_LABELS]
+            _files_any = sorted(r for r, v in fpat_dict.items() if any(v.get(q, 0) for q in _all_qs))
+            _col_w = 7
+            lines.append("  " + f"{'file':<55}" + "".join(f"  {q:>{_col_w}}" for q in _all_qs))
+            lines.append("  " + "-" * (55 + (_col_w + 2) * len(_all_qs)))
+            for _r in _files_any:
+                _v = fpat_dict[_r]
+                _row = f"  {_r:<55}" + "".join(f"  {_v.get(q,0):>{_col_w}}" for q in _all_qs)
+                lines.append(_row)
+            lines.append("")
+
         h(f"6. per-file breakdown (files where any motif count is smooth >= {lo})")
         if files_with_smooth:
             for rel in sorted(files_with_smooth):
@@ -477,6 +522,7 @@ def main():
         all_counts, file_counts,
         path_all, "with inversions",
         total, n_ok, n_err, len(results), lo,
+        fpat_dict=file_patterns,
     )
     _freq_dir, _p_dir, z_direct, files_direct = _write_report(
         all_counts_direct, file_counts_direct,
