@@ -32,6 +32,7 @@ from motif_analysis import (
 from app import (
     KERN_DIR, find_kern_files, find_lilypond_files, find_xml_files,
     _mini_staff_svg, _beam_groups_from_mei, check_file,
+    _composer_from_rel, _cycle_from_rel, _BACH_CYCLE_IDX,
 )
 
 VEROVIO_DATA = os.path.join(os.path.dirname(verovio.__file__), "data")
@@ -583,10 +584,12 @@ def _compute_inertia(melody):
 
     # ── A: Repetition ──────────────────────────────────────────────────────────
     for ep in range(1, n):
-        dp_val = _dp(melody[ep][1], melody[ep][2])
+        dp_val  = _dp(melody[ep][1], melody[ep][2])
+        dur_val = round(melody[ep][3] * 16)
         run = 1
         for i in range(ep - 1, -1, -1):
-            if _dp(melody[i][1], melody[i][2]) == dp_val:
+            if (_dp(melody[i][1], melody[i][2]) == dp_val
+                    and round(melody[i][3] * 16) == dur_val):
                 run += 1
             else:
                 break
@@ -596,15 +599,16 @@ def _compute_inertia(melody):
 
     # ── B: Scale ───────────────────────────────────────────────────────────────
     for ep in range(2, n):
-        last_d = (_dp(melody[ep][1], melody[ep][2])
-                  - _dp(melody[ep - 1][1], melody[ep - 1][2]))
+        last_d   = (_dp(melody[ep][1], melody[ep][2])
+                    - _dp(melody[ep - 1][1], melody[ep - 1][2]))
+        last_dur = round(melody[ep][3] * 16)
         if last_d == 0:
             continue
         scale_run = 1
         for i in range(ep - 1, 0, -1):
             d = (_dp(melody[i][1], melody[i][2])
                  - _dp(melody[i - 1][1], melody[i - 1][2]))
-            if d == last_d:
+            if d == last_d and round(melody[i][3] * 16) == last_dur:
                 scale_run += 1
             else:
                 break
@@ -916,31 +920,41 @@ class FileBrowser:
         sw = root_win.winfo_screenwidth()
         root_win.geometry(f'480x800+{sw - 480}+0')
 
+        s = ttk.Style(root_win)
+        s.theme_use('clam')
+        s.configure('Treeview', font=('Segoe UI', 9), rowheight=20)
+        s.configure('Treeview.Heading', font=('Segoe UI', 9, 'bold'))
+        s.map('Treeview', background=[('selected', '#3498db')],
+              foreground=[('selected', 'white')])
+
         frm_top = tk.Frame(root_win)
         frm_top.pack(fill='x', padx=6, pady=4)
-        self.search_var = tk.StringVar()
-        self.search_var.trace_add('write', lambda *_: self._filter())
-        tk.Entry(frm_top, textvariable=self.search_var,
-                 font=('sans-serif', 12)).pack(fill='x')
+        self._search_var = tk.StringVar()
+        self._search_var.trace_add('write', lambda *_: self._apply_filter())
+        search = tk.Entry(frm_top, textvariable=self._search_var,
+                          font=('Segoe UI', 11))
+        search.pack(fill='x')
+        search.bind('<Tab>', self._focus_tree)
+        root_win.after(200, search.focus_set)
 
         frm = tk.Frame(root_win)
         frm.pack(fill='both', expand=True, padx=6)
-        self.lb = tk.Listbox(frm, font=('sans-serif', 11), activestyle='dotbox',
-                             selectbackground='#3498db', selectforeground='white')
-        sb = ttk.Scrollbar(frm, orient='vertical', command=self.lb.yview)
-        self.lb.configure(yscrollcommand=sb.set)
+        self._tree = ttk.Treeview(frm, show='tree', selectmode='browse')
+        self._tree.tag_configure('group', font=('Segoe UI', 9, 'bold'),
+                                 foreground='#1a5276')
+        sb = ttk.Scrollbar(frm, orient='vertical', command=self._tree.yview)
+        self._tree.configure(yscrollcommand=sb.set)
         sb.pack(side='right', fill='y')
-        self.lb.pack(fill='both', expand=True)
-        self.lb.bind('<<ListboxSelect>>', self._on_select)
+        self._tree.pack(fill='both', expand=True)
+        self._tree.bind('<<TreeviewSelect>>', self._on_select)
+        self._tree.bind('<Key>', self._on_tree_key)
 
-        self.status_var = tk.StringVar(value='Ready')
-        tk.Label(root_win, textvariable=self.status_var, font=('sans-serif', 10),
+        self._status_var = tk.StringVar(value='')
+        tk.Label(root_win, textvariable=self._status_var, font=('Segoe UI', 9),
                  anchor='w', fg='#555').pack(fill='x', padx=6, pady=2)
 
         self._all_files: list = []
-        self._filtered:  list = []
         self._load_files()
-        root_win.after(200, lambda: (root_win.focus_force(), self.search_var.set('')))
 
     def _load_files(self):
         files = find_kern_files(KERN_DIR)
@@ -948,23 +962,164 @@ class FileBrowser:
         xml_d = os.path.join(_HERE, 'musicxml')
         xf    = find_xml_files(xml_d)
         self._all_files = files + lp + xf
-        self._filter()
+        self._populate(self._all_files)
 
-    def _filter(self):
-        q = self.search_var.get().lower()
-        self._filtered = [(r, f) for r, f in self._all_files if q in r.lower()]
-        self.lb.delete(0, 'end')
-        for rel, _ in self._filtered:
-            self.lb.insert('end', os.path.basename(rel))
+    def _populate(self, file_list):
+        import re as _re
+        self._tree.delete(*self._tree.get_children())
 
-    def _on_select(self, _):
-        sel = self.lb.curselection()
+        groups: dict = {}
+        order: list  = []
+        for rel, full in file_list:
+            composer = _composer_from_rel(rel)
+            cycle    = _cycle_from_rel(rel, composer)
+            key = (composer, cycle)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append((rel, full))
+
+        def _sort_key(key):
+            composer, cycle = key
+            if composer == 'Bach':
+                mc = _re.match(r'Cantata BWV (\d+)$', cycle or '')
+                if mc:
+                    return (0, _BACH_CYCLE_IDX.get('Cantatas', 99), int(mc.group(1)), '')
+                return (0, _BACH_CYCLE_IDX.get(cycle or '', 99), 0, cycle or '')
+            return (1, 0, 0, composer or '', cycle or '')
+
+        sorted_order = sorted(order, key=_sort_key)
+        use_headers  = len(sorted_order) > 1 or (
+            sorted_order and sorted_order[0][1] is not None)
+
+        i = 0
+        while i < len(sorted_order):
+            composer, cycle = sorted_order[i]
+
+            # Non-Bach with cycles → 3-level: Composer → Cycle → files
+            if use_headers and composer != 'Bach' and cycle is not None:
+                comp_keys = []
+                while (i < len(sorted_order)
+                       and sorted_order[i][0] == composer
+                       and sorted_order[i][1] is not None):
+                    comp_keys.append(sorted_order[i])
+                    i += 1
+                comp_total = sum(len(groups[k]) for k in comp_keys)
+                comp_node = self._tree.insert('', tk.END,
+                                              text=f'{composer}  ({comp_total})',
+                                              values=(), tags=('group',))
+                for k in comp_keys:
+                    _, cy = k
+                    gfiles = groups[k]
+                    child = self._tree.insert(comp_node, tk.END,
+                                              text=f'{cy}  ({len(gfiles)})',
+                                              values=(), tags=('group',))
+                    for rel, full in gfiles:
+                        self._tree.insert(child, tk.END,
+                                          text=os.path.basename(rel), values=(full,))
+                continue
+
+            # Cantatas → 3-level: Cantatas → Cantata BWV N → files
+            if use_headers and _re.match(r'Cantata BWV \d+$', cycle or ''):
+                cant_keys = []
+                while (i < len(sorted_order)
+                       and _re.match(r'Cantata BWV \d+$', sorted_order[i][1] or '')):
+                    cant_keys.append(sorted_order[i])
+                    i += 1
+                cant_total = sum(len(groups[k]) for k in cant_keys)
+                cant_node = self._tree.insert('', tk.END,
+                                              text=f'Cantatas  ({cant_total})',
+                                              values=(), tags=('group',))
+                for k in cant_keys:
+                    _, cy = k
+                    gfiles = groups[k]
+                    child = self._tree.insert(cant_node, tk.END,
+                                              text=f'{cy}  ({len(gfiles)})',
+                                              values=(), tags=('group',))
+                    for rel, full in gfiles:
+                        self._tree.insert(child, tk.END,
+                                          text=os.path.basename(rel), values=(full,))
+                continue
+
+            # Normal 2-level: Group header → files
+            gfiles = groups[(composer, cycle)]
+            if use_headers:
+                label  = cycle if cycle else (composer or 'Other')
+                parent = self._tree.insert('', tk.END,
+                                           text=f'{label}  ({len(gfiles)})',
+                                           values=(), tags=('group',))
+            else:
+                parent = ''
+            for rel, full in gfiles:
+                self._tree.insert(parent, tk.END,
+                                  text=os.path.basename(rel), values=(full,))
+            i += 1
+
+    def _apply_filter(self):
+        q = self._search_var.get().lower()
+        if q:
+            result = [(r, f) for r, f in self._all_files if q in r.lower()]
+        else:
+            result = self._all_files
+        self._populate(result)
+
+    def _all_groups(self):
+        result = []
+        def _walk(parent=''):
+            for iid in self._tree.get_children(parent):
+                if 'group' in self._tree.item(iid, 'tags'):
+                    result.append(iid)
+                    _walk(iid)
+        _walk()
+        return result
+
+    def _on_tree_key(self, event):
+        ch = event.char
+        if not ch or not ch.isprintable() or len(ch) != 1:
+            return
+        ch = ch.lower()
+        groups = self._all_groups()
+        matching = [iid for iid in groups
+                    if self._tree.item(iid, 'text').lower().startswith(ch)]
+        if not matching:
+            return 'break'
+        sel = self._tree.selection()
+        cur = sel[0] if sel else None
+        target = (matching[(matching.index(cur) + 1) % len(matching)]
+                  if cur in matching else matching[0])
+        parent = self._tree.parent(target)
+        while parent:
+            self._tree.item(parent, open=True)
+            parent = self._tree.parent(parent)
+        self._tree.selection_set(target)
+        self._tree.focus(target)
+        self._tree.see(target)
+        return 'break'
+
+    def _focus_tree(self, _=None):
+        self._tree.focus_set()
+        for item in self._tree.get_children():
+            sub = self._tree.get_children(item)
+            if sub:
+                self._tree.selection_set(sub[0])
+                self._tree.focus(sub[0])
+            else:
+                self._tree.selection_set(item)
+                self._tree.focus(item)
+            break
+        return 'break'
+
+    def _on_select(self, _=None):
+        sel = self._tree.selection()
         if not sel:
             return
-        _, full = self._filtered[sel[0]]
-        self.status_var.set('Загрузка…')
+        vals = self._tree.item(sel[0], 'values')
+        if not vals:
+            return  # group header
+        full = vals[0]
+        self._status_var.set('Загрузка…')
         load_file_bg(full,
-                     lambda s: self.root.after(0, self.status_var.set, s))
+                     lambda s: self.root.after(0, self._status_var.set, s))
 
 
 # ── browser launch ─────────────────────────────────────────────────────────────
