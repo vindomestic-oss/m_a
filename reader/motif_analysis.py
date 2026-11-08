@@ -1759,7 +1759,9 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             _cand_ex = sorted(_b_extras.get(i, []), key=lambda e: (e[2], e[1]))
             if _cand_ex:
                 _used = {_strip_p2(x) for o in occs_out for x in o}
-                _seen_oq = set()
+                # same beat in another voice counts once (same rule as regular occurrences):
+                # skip extras whose onset coincides with an already-counted occurrence
+                _seen_oq = {_t['onset_q'] for _t in transforms_out}
                 _ex = []
                 for _nids, _inv, _oq, _vk in _cand_ex:
                     _sn = [_strip_p2(x) for x in _nids]
