@@ -1784,6 +1784,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                     _bx = {
                         'b_n_direct_only': _bd, 'b_n_inv_only': _bi, 'b_n_both': _bb,
                         'b_occs': [e[0] for e in _ex], 'b_inv': [e[1] for e in _ex],
+                        'b_oq': [e[2] for e in _ex],
                     }
             result.append({
                 **_bx,

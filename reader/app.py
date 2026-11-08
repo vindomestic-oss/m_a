@@ -3551,6 +3551,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                    "is_inv": [bool(t.get("inversion")) for t in m.get("transforms", [])],
                    "b_occs": m.get("b_occs", []),
                    "b_inv": m.get("b_inv", []),
+                   "b_oq": m.get("b_oq", []),
                    "transforms": m.get("transforms", []),
                    "queryStr": m.get("queryStr", ""),
                    "profile": m.get("profile", []),
@@ -3967,14 +3968,24 @@ function filteredByInv(data,filter){{
   var wantInv=(base==='inv');
   var oldToNew={{}};
   var occs=[];
+  var ent=[];
   data.occs.forEach(function(occ,i){{
-    if(base==='all'||!data.is_inv||data.is_inv[i]===wantInv){{oldToNew[i]=occs.length;occs.push(occ);}}
+    if(base==='all'||!data.is_inv||data.is_inv[i]===wantInv){{
+      var t=(data.transforms&&data.transforms[i])?data.transforms[i].onset_q:0;
+      ent.push({{occ:occ,oq:t,old:i}});
+    }}
   }});
   if(isB&&data.b_occs){{
     data.b_occs.forEach(function(occ,i){{
-      if(base==='all'||data.b_inv[i]===wantInv)occs.push(occ);
+      if(base==='all'||data.b_inv[i]===wantInv)ent.push({{occ:occ,oq:data.b_oq[i],old:-1}});
     }});
+    // merge regular + bounded in score (onset) order so numbering follows the music
+    ent.sort(function(a,b){{return a.oq-b.oq;}});
   }}
+  ent.forEach(function(e){{
+    if(e.old>=0)oldToNew[e.old]=occs.length;
+    occs.push(e.occ);
+  }});
   var rp=(data.repeat_pairs||[]).filter(function(p){{return p[0] in oldToNew&&p[1] in oldToNew;}})
     .map(function(p){{return[oldToNew[p[0]],oldToNew[p[1]],p[2]];}});
   return{{occs:occs,repeat_pairs:rp}};
