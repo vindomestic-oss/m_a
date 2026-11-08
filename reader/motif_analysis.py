@@ -153,8 +153,11 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
 
 
 
-def _voice_notes_from_mei(mei_str):
+def _voice_notes_from_mei(mei_str, tie_tails_out=None):
     """
+    tie_tails_out: optional dict; if given, filled with
+      {voice_key: {head_nid: (last_tail_note_tuple, tail_onset - head_onset)}}
+      for every merged tie chain (MusicXML-sourced ties only). Used for "bounded" motif counts.
     Parse MEI and return per-voice note lists.
     voice_key = (staff_n, layer_n)
     Returns {voice_key: [(xml_id, pname, oct_int, dur_quarters, midi, onset_quarters), ...]}
@@ -437,6 +440,7 @@ def _voice_notes_from_mei(mei_str):
                 if nid in tie_start_to_end:
                     extra_dur = 0.0
                     cur = nid
+                    _last_j = None
                     _visited = {cur}
                     while cur in tie_start_to_end:
                         eid = tie_start_to_end[cur]
@@ -448,9 +452,13 @@ def _voice_notes_from_mei(mei_str):
                             extra_dur += notes[j][3]
                             to_remove.add(j)
                             cur = eid
+                            _last_j = j
                         else:
                             break
                     if extra_dur > 0:
+                        if tie_tails_out is not None and _last_j is not None:
+                            tie_tails_out.setdefault(key, {})[nid] = (
+                                notes[_last_j], notes[_last_j][5] - note[5])
                         n = new_notes[i]
                         new_notes[i] = (n[0], n[1], n[2], n[3] + extra_dur, n[4], n[5])
             voices[key] = [n for i, n in enumerate(new_notes) if i not in to_remove]
@@ -1471,6 +1479,67 @@ def _mdl_score(n, L, transforms):
     return round(n * (L - 1) - L - transp_cost)
 
 
+def _bounded_extras(motifs, seq_voices, tails, beat_dur_q, pickup_dur_q):
+    """
+    "Bounded" occurrences: motif starts on the TAIL of a tie whose head lies in an earlier beat.
+    Tie merging gives the head a long duration, so such occurrences are missed by _find_motifs.
+    Here every merged head that crosses a beat boundary is split back into head' + tail
+    (head'->tail is a contiguous unison step) and only occurrences STARTING at a tail are kept.
+    (An occurrence *ending* on a tie head needs no special handling: the last note's duration
+    is not part of the pattern body.)
+    Returns {motif_index: [(nids, is_inv, onset_q16, voice_key), ...]}
+    """
+    extras = defaultdict(list)
+    if not tails:
+        return extras
+    inv_pats = [tuple((-iv, d) for iv, d in m['pattern']) for m in motifs]
+    for vk, notes in seq_voices.items():
+        tmap = tails.get(vk)
+        if not tmap:
+            continue
+        split = []
+        tail_idx = []
+        for n in notes:
+            base = n[0][:-4] if n[0].endswith('__p2') else n[0]
+            suf  = n[0][len(base):]
+            ent  = tmap.get(base)
+            if ent is None:
+                split.append(n)
+                continue
+            tnote, delta = ent
+            t_on, tdur = n[5] + delta, tnote[3]
+            b0 = math.floor((n[5] - pickup_dur_q) / beat_dur_q + 1e-9)
+            b1 = math.floor((t_on - pickup_dur_q) / beat_dur_q + 1e-9)
+            if b1 <= b0 or n[3] - tdur <= 1e-9:
+                split.append(n)
+                continue
+            split.append((n[0], n[1], n[2], n[3] - tdur, n[4], n[5]))
+            tail_idx.append(len(split))
+            split.append((tnote[0] + suf, tnote[1], tnote[2], tdur, tnote[4], t_on))
+        if not tail_idx:
+            continue
+        seq = _interval_seq(split, beat_dur_q, pickup_dur_q)
+        for i in tail_idx:
+            if i >= len(seq):
+                continue
+            for mi, m in enumerate(motifs):
+                pat = m['pattern']
+                L = len(pat)
+                if i + L > len(seq) or not all(seq[i + k][6] for k in range(L)):
+                    continue
+                body = tuple((s[0], s[1]) for s in seq[i:i + L])
+                is_dir = body == pat
+                is_inv = (not is_dir) and body == inv_pats[mi]
+                if not (is_dir or is_inv):
+                    continue
+                min_d = min(s[1] for s in seq[i:i + L])
+                if _metric_phase(seq[i][4] - pickup_dur_q, min_d, beat_dur_q) != m.get('phase', 0):
+                    continue
+                nids = [seq[i][2]] + [seq[i + k][3] for k in range(L)]
+                extras[mi].append((nids, is_inv, round(seq[i][4] * 16), vk))
+    return extras
+
+
 def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     """
     Run motif analysis on the currently-loaded verovio score.
@@ -1481,7 +1550,9 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     try:
         if mei_str is None:
             mei_str = vtk.getMEI()
-        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(mei_str)
+        _tie_tails = {}
+        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(
+            mei_str, tie_tails_out=_tie_tails)
         if beat_dur_q_override is not None:
             beat_dur_q = beat_dur_q_override
 
@@ -1573,6 +1644,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                          if len(notes) >= 4] if _cap < _max_voice_len else None
         motifs = _find_motifs(all_seqs, beat_dur_q=beat_dur_q, pickup_dur_q=pickup_dur_q,
                               all_seqs_full=all_seqs_full)
+        _b_extras = _bounded_extras(motifs, seq_voices, _tie_tails, beat_dur_q, pickup_dur_q)
         # Repeat-unfolding flag: True for both simple repeat and volta unfolding.
         _is_spl_rpt      = shift > 0
         _is_volta_unfold = bool(volta_groups) and shift > 0
@@ -1682,7 +1754,39 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 _disp = n_occ
             else:
                 _disp = _dc
+            # ── Bounded counts: add occurrences starting on a tie tail from an earlier beat ──
+            _bx = {}
+            _cand_ex = sorted(_b_extras.get(i, []), key=lambda e: (e[2], e[1]))
+            if _cand_ex:
+                _used = {_strip_p2(x) for o in occs_out for x in o}
+                _seen_oq = set()
+                _ex = []
+                for _nids, _inv, _oq, _vk in _cand_ex:
+                    _sn = [_strip_p2(x) for x in _nids]
+                    if _oq in _seen_oq or _used & set(_sn):
+                        continue
+                    _ex.append((_sn, _inv, _oq))
+                    _seen_oq.add(_oq)
+                    _used.update(_sn)
+                if _ex:
+                    _pi = {}
+                    for _t in transforms_out:
+                        _pi.setdefault(_t['onset_q'], set()).add(_t.get('inversion', False))
+                    for _sn, _inv, _oq in _ex:
+                        _pi.setdefault(_oq, set()).add(_inv)
+                    _bd = sum(1 for f in _pi.values() if f == {False})
+                    _bi = sum(1 for f in _pi.values() if f == {True})
+                    _bb = sum(1 for f in _pi.values() if len(f) == 2)
+                    if _is_volta_unfold:
+                        _bd = _bd // 2 if _bd % 2 == 0 else _bd
+                        _bi = _bi // 2 if _bi % 2 == 0 else _bi
+                        _bb = _bb // 2 if _bb % 2 == 0 else _bb
+                    _bx = {
+                        'b_n_direct_only': _bd, 'b_n_inv_only': _bi, 'b_n_both': _bb,
+                        'b_occs': [e[0] for e in _ex], 'b_inv': [e[1] for e in _ex],
+                    }
             result.append({
+                **_bx,
                 'color':             _MOTIF_COLORS[i % len(_MOTIF_COLORS)],
                 'occs':              occs_out,
                 'count':             n_occ,
@@ -1705,4 +1809,75 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
     except Exception as e:
         print(f"[motif] {e}")
         return []
+
+
+def count_pattern(mei_str, query):
+    """
+    Count non-overlapping occurrences of a search query across all voices.
+    query format: "dur;phase;+iv-iv..." (same as /search endpoint).
+    Returns int count, or 0 on parse/match error.
+    Does not require _state or a live verovio instance.
+    """
+    try:
+        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(mei_str)
+        # build flat per-voice sequences (no repeat unfolding — raw counts)
+        seqs = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
+                for vk, notes in voices.items() if len(notes) >= 2]
+
+        # parse query
+        parts = query.split(';')
+        invert = parts[-1].strip().lower() == 'inv'
+        if invert:
+            parts = parts[:-1]
+        if len(parts) == 3:
+            dur_str, phase_str, ivs_str = parts
+            start_phase = int(phase_str.strip()) if phase_str.strip() else 0
+        elif len(parts) == 2:
+            dur_str, ivs_str = parts
+            start_phase = 0
+        else:
+            return 0
+
+        iv_parts = re.findall(r'[+-]\d+', ivs_str)
+        if not iv_parts:
+            return 0
+        intervals = [[int(p)] for p in iv_parts]
+        n = len(intervals)
+
+        _dur_tokens = dur_str.split(',')
+        durs = [_parse_dur(s) for s in _dur_tokens]
+        if len(durs) == 1:
+            durs = durs * n
+        elif len(durs) != n:
+            return 0
+
+        pattern = list(zip(intervals, durs))
+        if invert:
+            pattern_inv = [([-x for x in ivl], d) for ivl, d in pattern]
+        else:
+            pattern_inv = None
+
+        min_dur_q = min(d[1] for d in durs)
+
+        total = 0
+        for _vk, seq in seqs:
+            last_end = -1
+            for i in range(len(seq) - n + 1):
+                if i < last_end:
+                    continue
+                ph = _metric_phase(seq[i][4] - pickup_dur_q, min_dur_q, beat_dur_q)
+                if ph != start_phase:
+                    continue
+                if not all(seq[i + k][6] for k in range(n)):
+                    continue
+                def _match(pat):
+                    return all(seq[i + k][0] in pat[k][0] and
+                               _dur_matches(seq[i + k][1], pat[k][1])
+                               for k in range(n))
+                if _match(pattern) or (pattern_inv is not None and _match(pattern_inv)):
+                    total += 1
+                    last_end = i + n + 1
+        return total
+    except Exception:
+        return 0
 

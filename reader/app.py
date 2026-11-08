@@ -461,6 +461,11 @@ def _bach_cycle(rel: str) -> str:
     if mb_src:
         return _bwv_to_cycle(int(mb_src.group(1)))
 
+    # Generic downloaded names containing 'bwv-542' / 'bwv_542' / 'bwv 542'
+    mg = _re.search(r'bwv[-_ ]?(\d+)', stem)
+    if mg and fname.endswith('.mxl'):
+        return _bwv_to_cycle(int(mg.group(1)))
+
     # Named non-BWV files
     if 'contrapunctus' in stem or stem.startswith('f9') or 'duetto' in stem:
         return 'Art of Fugue'
@@ -540,7 +545,7 @@ def _bwv_to_cycle(n: int) -> str:
     if n == 1080:        return 'Art of Fugue'
     if 1001 <= n <= 1006: return 'Violin Sonatas & Partitas'
     if 1007 <= n <= 1012: return 'Cello Suites'
-    if n == 1013:        return 'Flute Sonatas'
+    if n == 1013 or 1030 <= n <= 1035: return 'Flute Sonatas'
     if 1014 <= n <= 1019: return 'Violin Sonatas with Keyboard'
     if 1041 <= n <= 1045: return 'Concertos'
     if 1046 <= n <= 1051: return 'Brandenburg Concertos'
@@ -556,6 +561,7 @@ def _bwv_to_cycle(n: int) -> str:
     if 250 <= n <= 438:  return 'Chorale Harmonizations'
     # Small keyboard works
     if 772 <= n <= 805:  return 'Small Keyboard Works'   # already covered above
+    if 910 <= n <= 916:  return 'Toccatas & Preludes'
     if 894 <= n <= 987:  return 'Small Keyboard Works'
     if 989 <= n <= 1000: return 'Small Keyboard Works'
     # Keyboard arrangements sharing BWV numbers with cantatas
@@ -1030,9 +1036,66 @@ def find_lilypond_files():
     return files
 
 
+# Hand-specified movement boundaries for files without usable markers
+_TOBIS_MANUAL_SPLITS = {
+    'BWV_0913.musicxml': [
+        ('Toccata', '1', '32'),
+        ('Fuga I', '33', '120'),
+        ('Adagio', '121', '146'),
+        ('Fuga II', '147', '297'),
+    ],
+    'BWV_0910.xml': [
+        ('Toccata', '0', '17'),
+        ('Allegro', '18', '47'),
+        ('Presto e staccato', '48', '134'),
+        ('Un poco allegretto', '135', '200'),
+    ],
+    # 911: boundaries from fermatas / Adagio markers (OCR text is noisy) -- tentative
+    'BWV_0911.xml': [
+        ('Toccata', '1', '29'),
+        ('Fuga', '30', '83'),
+        ('Adagio', '84', '175'),
+    ],
+    'BWV_0912.xml': [
+        ('Presto', '1', '10'),
+        ('Allegro', '11A', '68'),
+        ('Adagio', '69', '116'),
+        ('Con discrezione', '117', '132'),
+        ('Fuga', '133', '284'),
+    ],
+    'BWV_0912a.xml': [
+        ('Presto', '1', '10'),
+        ('Allegro', '11', '68'),
+        ('Adagio', '69', '116'),
+        ('Con discrezione', '117', '132'),
+        ('Fuga', '133', '284'),
+    ],
+    'BWV_0914.xml': [
+        ('Toccata', '1', '14'),
+        ('Un poco allegro', '15', '42'),
+        ('Adagio', '43', '71'),
+        ('Fuga', '72', '143'),
+    ],
+    'BWV_0915.xml': [
+        ('Toccata', '1', '18'),
+        ('Allegro', '19', '69'),
+        ('Adagio', '70', '81'),
+        ('Fuga', '82', '198'),
+    ],
+    'BWV_0916.xml': [
+        ('Toccata', '1', '56'),
+        ('Adagio', '57', '80'),
+        ('Allegro e presto', '81', '178'),
+    ],
+}
+
+
 def _tobis_movements(path):
     """Return [(title, start_mnum, end_mnum), ...] for a tobis MusicXML file.
     Returns [] if no movement markers found (treat as single piece)."""
+    _man = _TOBIS_MANUAL_SPLITS.get(os.path.basename(path))
+    if _man:
+        return list(_man)
     import xml.etree.ElementTree as ET
     import re as _re
     try:
@@ -1290,33 +1353,50 @@ def _extract_movement(xml_str: str, start_mnum: str, end_mnum: str,
 
 
 def find_tobis_files():
-    """Return [(rel, full), ...] for pre-split XML files under tobis-notenarchiv.de/split/."""
-    split_base = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tobis-notenarchiv.de', 'split')
-    if not os.path.isdir(split_base):
-        return []
-    files = []
-    for subdir in sorted(os.listdir(split_base)):
-        subpath = os.path.join(split_base, subdir)
-        if not os.path.isdir(subpath):
-            continue
-        def _mvt_key(fn):
-            import re as _r
-            m = _r.match(r'(BWV_\d+[a-z]?)_(\d+)', fn, _r.I)
-            return (m.group(1).upper() if m else fn, int(m.group(2)) if m else 0)
-        _TOBIS_EXCL_BWV = {'BWV_1024'}
+    """Return [(rel, full), ...] for pre-split XML files under tobis-notenarchiv.de/split/
+    and direct per-movement XML files under tobis-notenarchiv.de/cantatas/."""
+    import re as _re
+    tobis_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tobis-notenarchiv.de')
+    _TOBIS_EXCL_BWV = {'BWV_1024'}
+
+    def _mvt_key(fn):
+        m = _re.match(r'(BWV_\d+[a-z]?)_(\d+)', fn, _re.I)
+        return (m.group(1).upper() if m else fn, int(m.group(2)) if m else 0)
+
+    def _collect(subpath, label):
+        out = []
         for fname in sorted(os.listdir(subpath), key=_mvt_key):
-            if not fname.lower().endswith('.xml'):
+            if not fname.lower().endswith(('.xml', '.musicxml')):
                 continue
-            import re as _re2
-            _bm = _re2.match(r'(BWV_\d+[a-z]?)', fname, _re2.I)
-            if _bm and _bm.group(1).upper() in _TOBIS_EXCL_BWV:
+            bm = _re.match(r'(BWV_\d+[a-z]?)', fname, _re.I)
+            if bm and bm.group(1).upper() in _TOBIS_EXCL_BWV:
                 continue
-            full = os.path.join(subpath, fname)
-            files.append((f'tobis/{subdir}/{fname}', full))
+            out.append((f'tobis/{label}/{fname}', os.path.join(subpath, fname)))
+        return out
+
+    files = []
+    split_base = os.path.join(tobis_root, 'split')
+    if os.path.isdir(split_base):
+        for subdir in sorted(os.listdir(split_base)):
+            subpath = os.path.join(split_base, subdir)
+            if os.path.isdir(subpath):
+                files.extend(_collect(subpath, subdir))
+
+    cantatas_dir = os.path.join(tobis_root, 'cantatas')
+    if os.path.isdir(cantatas_dir):
+        files.extend(_collect(cantatas_dir, 'cantatas'))
+
+    toccatas_dir = os.path.join(tobis_root, 'toccatas')
+    if os.path.isdir(toccatas_dir):
+        # files listed in _TOBIS_MANUAL_SPLITS are shipped pre-split (split/toccatas/)
+        _split_names = {k.rsplit('.', 1)[0] for k in _TOBIS_MANUAL_SPLITS}
+        files.extend(x for x in _collect(toccatas_dir, 'toccatas')
+                     if os.path.basename(x[0]).rsplit('.', 1)[0] not in _split_names)
+
     return files
 
 
-def _regen_tobis_splits(subdir='engl-suites'):
+def _regen_tobis_splits(subdir='engl-suites', only=None):
     """Regenerate pre-split XML files for one tobis source subdirectory.
     Reads from tobis-notenarchiv.de/<subdir>/*.xml, writes to
     tobis-notenarchiv.de/split/<subdir>/.
@@ -1338,6 +1418,8 @@ def _regen_tobis_splits(subdir='engl-suites'):
 
     for src_fname in sorted(os.listdir(src_dir)):
         if not src_fname.lower().endswith(('.xml', '.musicxml')):
+            continue
+        if only and src_fname not in only:
             continue
         src_path = os.path.join(src_dir, src_fname)
         with open(src_path, encoding='utf-8') as f:
@@ -1368,6 +1450,15 @@ def _regen_tobis_splits(subdir='engl-suites'):
             print(f'  {out_fname}')
 
     print(f'Done: {subdir}')
+
+
+def find_musedata_mxl_files():
+    """Return [(rel, full), ...] for .mxl/.xml files in musicxml/musedata/."""
+    d = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'musicxml', 'musedata')
+    if not os.path.isdir(d):
+        return []
+    return [(f'musicxml/musedata/{f}', os.path.join(d, f))
+            for f in sorted(os.listdir(d)) if f.lower().endswith(('.mxl', '.xml'))]
 
 
 def find_imslp_files():
@@ -1817,8 +1908,16 @@ def _fix_musicxml_voice_order(content: str) -> str:
             continue
 
         voice_avg  = {v: sum(ms) / len(ms) for v, ms in voice_midis.items() if ms}
-        sorted_vox = sorted(voice_avg, key=lambda v: -voice_avg[v])  # highest first
+        # Only "main" voices (>= 20% of the busiest voice's notes) are ranked by pitch;
+        # sparse voices (a few stray notes, e.g. BWV 678) must not steal voice 1/2.
+        max_n = max(len(ms) for ms in voice_midis.values())
+        main_vox  = sorted((v for v in voice_avg if len(voice_midis[v]) >= 0.2 * max_n),
+                           key=lambda v: -voice_avg[v])
+        minor_vox = sorted((v for v in voice_avg if v not in main_vox),
+                           key=lambda v: -voice_avg[v])
+        sorted_vox = main_vox + minor_vox
         voice_remap = {v: str(i + 1) for i, v in enumerate(sorted_vox)}
+        main_top_avg = voice_avg[main_vox[0]]
 
         if all(voice_remap[v] == v for v in voice_remap):
             # Add stem elements even if order is already correct
@@ -1831,7 +1930,10 @@ def _fix_musicxml_voice_order(content: str) -> str:
             old_v       = v_el.text
             new_v       = voice_remap.get(old_v, old_v)
             v_el.text   = new_v
-            stem_dir    = 'up' if new_v == '1' else 'down'
+            if old_v in minor_vox:
+                stem_dir = 'up' if voice_avg.get(old_v, 0) >= main_top_avg else 'down'
+            else:
+                stem_dir = 'up' if new_v == '1' else 'down'
             stem_el     = note.find('stem')
             if stem_el is None:
                 dur_el = note.find('duration')
@@ -3393,6 +3495,24 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             )
         else:
             cnt_html = _bold(cnt)
+        # Bounded counts (occurrences starting on a tie tail from an earlier beat):
+        # shown only where they differ from the regular numbers above.
+        if 'b_n_direct_only' in m:
+            b_both = m['b_n_both']
+            b_parts = []
+            for sym, ff, bv, rv in (
+                    ('&times;',  'bdirect', m['b_n_direct_only'] + b_both, n_dir + n_both),
+                    ('&#x21C5;', 'binv',    m['b_n_inv_only'] + b_both,    n_inv + n_both),
+                    ('&#x2295;', 'ball',    m['b_n_direct_only'] + m['b_n_inv_only'] + b_both, cnt)):
+                if bv != rv:
+                    b_parts.append(
+                        f'<span class="cnt-f" data-fi="{i}" data-ff="{ff}" style="cursor:pointer" '
+                        f'title="с учётом мотивов, начинающихся с залигованной ноты из предыдущей доли">'
+                        f'{sym}{_bold(bv)}</span>')
+            if b_parts:
+                cnt_html += (
+                    '<br><span style="font-size:10px;color:#3a7">'
+                    '&#x27E8;' + '&nbsp;'.join(b_parts) + '&#x27E9;</span>')
         mdl = m.get('mdl', 0)
         mdl_html = f'<b>{mdl}</b>' if mdl > 0 else f'<span style="color:#bbb">{mdl}</span>'
         first_nids = m.get('occs', [[]])[0] if m.get('occs') else []
@@ -3429,6 +3549,8 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                    "occs": [[_strip_p2_nid(nid) for nid in occ] for occ in m.get("occs", [])],
                    "repeat_pairs": m.get("repeat_pairs", []),
                    "is_inv": [bool(t.get("inversion")) for t in m.get("transforms", [])],
+                   "b_occs": m.get("b_occs", []),
+                   "b_inv": m.get("b_inv", []),
                    "transforms": m.get("transforms", []),
                    "queryStr": m.get("queryStr", ""),
                    "profile": m.get("profile", []),
@@ -3836,13 +3958,23 @@ function colorMotifOccs(occs,color){{
 }}
 function filteredByInv(data,filter){{
   // Returns {{occs, repeat_pairs}} with indices remapped to the filtered subset.
-  if(filter==='all'||!data.is_inv)return{{occs:data.occs,repeat_pairs:data.repeat_pairs||[]}};
-  var wantInv=(filter==='inv');
+  // Filters: all | direct | inv  and bounded variants ball | bdirect | binv
+  // (bounded = regular occurrences + those starting on a tie tail from an earlier beat).
+  var isB=(filter.charAt(0)==='b');
+  var base=isB?filter.slice(1):filter;
+  if(base==='all'&&!isB)return{{occs:data.occs,repeat_pairs:data.repeat_pairs||[]}};
+  if(!isB&&!data.is_inv)return{{occs:data.occs,repeat_pairs:data.repeat_pairs||[]}};
+  var wantInv=(base==='inv');
   var oldToNew={{}};
   var occs=[];
   data.occs.forEach(function(occ,i){{
-    if(data.is_inv[i]===wantInv){{oldToNew[i]=occs.length;occs.push(occ);}}
+    if(base==='all'||!data.is_inv||data.is_inv[i]===wantInv){{oldToNew[i]=occs.length;occs.push(occ);}}
   }});
+  if(isB&&data.b_occs){{
+    data.b_occs.forEach(function(occ,i){{
+      if(base==='all'||data.b_inv[i]===wantInv)occs.push(occ);
+    }});
+  }}
   var rp=(data.repeat_pairs||[]).filter(function(p){{return p[0] in oldToNew&&p[1] in oldToNew;}})
     .map(function(p){{return[oldToNew[p[0]],oldToNew[p[1]],p[2]];}});
   return{{occs:occs,repeat_pairs:rp}};
@@ -3904,6 +4036,7 @@ function highlight(){{
           var badge2='';
           if(filter==='direct')badge2='<span style="background:#1a7f37;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">\u00d7direct</span> ';
           else if(filter==='inv')badge2='<span style="background:#c05a00;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">\u21c5inv</span> ';
+          if(filter.charAt(0)==='b')badge2='<span style="background:#3a7;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">⟨bounded '+filter.slice(1)+'⟩</span> ';
           st2.innerHTML=badge2+'<b>M'+(idx+1)+'</b>';
         }}
         (function(){{
@@ -3911,6 +4044,7 @@ function highlight(){{
           if(!data||!data.occs)return;
           colorMotifOccs(data.occs,motifs[idx].color);
           var fr=filteredByInv(data,filter);
+          colorMotifOccs(fr.occs,motifs[idx].color);
           drawBoxes({{occs:fr.occs,color:motifs[idx].color,repeat_pairs:fr.repeat_pairs,is_volta:motifs[idx].is_volta}});
           scrollToFirst({{occs:fr.occs}});
         }})();
@@ -4498,7 +4632,7 @@ class FileBrowser(tk.Tk):
         self.resizable(True, True)
         self.configure(bg="#1e1e2e")
 
-        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_tobis_files()
+        self._files        = find_generated_files() + find_lilypond_files() + find_kern_files(KERN_DIR) + find_tobis_files() + find_musedata_mxl_files()
         self._current_path = None
 
         self._build_ui()
