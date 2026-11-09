@@ -35,7 +35,7 @@ VOCAB_QUERIES: list[str] = [
 # Per-file beat_dur_q overrides (filename substring → beat_dur_q in quarter notes).
 # Use to force a specific metric feel when the time signature is ambiguous.
 _BEAT_DUR_OVERRIDES: dict[str, float] = {
-    'bwv_988_v27': 1.0,   # 6/8 felt as 2+2+2 (3 quarter beats), not 3+3
+    # 'bwv_988_v27': 1.0 removed: auto-cell now gives 3/8 (1.5 q) for this 6/8 variation
 }
 
 
@@ -61,6 +61,27 @@ def _dur_q_label(d):
     from fractions import Fraction
     f = Fraction(d).limit_denominator(100)
     return f"{f.numerator}/{f.denominator}"
+
+
+def _query_scale(cell_q, min_dur_q):
+    """
+    Explicit "(scale)" for a search query that reproduces _metric_phase(): the phase period is
+    n_eff * min_dur where n_eff = n_per_beat after the same capping/collapsing rules.
+    E.g. cell 2.0 + 1/8 body -> 2.0 (= 1/2); cell 2.0 + 1/16 body -> 1.0 (= 1/4, binary cap 4).
+    """
+    if min_dur_q <= 0 or cell_q <= 0:
+        return cell_q
+    n0 = max(1, round(cell_q / min_dur_q))
+    if n0 <= 1:
+        return cell_q
+    compound = (round(cell_q * 4) % 3 == 0)
+    if n0 % 3 == 0:
+        n_eff = min(n0, 6) if (compound and n0 >= 6) else 3
+    elif n0 > 4:
+        n_eff = 4
+    else:
+        n_eff = n0
+    return n_eff * min_dur_q
 
 
 def _pattern_to_query(pattern, phase):
@@ -153,8 +174,47 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
 
 
 
-def _voice_notes_from_mei(mei_str, tie_tails_out=None):
+def _movement_unit(voices, min_share=0.12, floor_q=0.25):
     """
+    "Unit of motion" u (quarter notes): the shortest note duration that carries at least
+    `min_share` of all notes of the piece. Rarer shorter notes are treated as ornaments.
+    u is never smaller than floor_q (a 16th).
+    """
+    cnt = defaultdict(int)
+    total = 0
+    for notes in voices.values():
+        for n in notes:
+            cnt[round(n[3] * 48)] += 1
+            total += 1
+    if not total:
+        return floor_q
+    for k in sorted(cnt):
+        if cnt[k] / total >= min_share:
+            return max(k / 48.0, floor_q)
+    return floor_q
+
+
+def _auto_cell(u, beat_dur_q, bar_q):
+    """
+    Metric cell (quarter notes) for phase counting: 4 units of motion, clipped to the bar.
+      u=1/16 -> 1/4 (as before), u=1/8 -> 1/2, u=1/4 -> whole note (4/4);
+      triple meters: when 4u does not divide the bar, the cell is the whole bar.
+    Compound meters (beat is a dotted note) keep their beat.
+    """
+    if round(beat_dur_q * 4) % 3 == 0:
+        return beat_dur_q
+    cell = beat_dur_q
+    while cell < 4 * u - 1e-9:
+        cell *= 2
+    if cell > bar_q + 1e-9 or abs(bar_q / cell - round(bar_q / cell)) > 1e-6:
+        cell = bar_q
+    return max(cell, beat_dur_q)
+
+
+def _voice_notes_from_mei(mei_str, tie_tails_out=None, auto_cell=False, info_out=None):
+    """
+    auto_cell: if True the returned beat_dur_q is the auto-detected metric cell (see _auto_cell)
+      instead of the notated beat; info_out (dict) receives 'u', 'cell', 'bar_q', 'beat_q'.
     tie_tails_out: optional dict; if given, filled with
       {voice_key: {head_nid: (last_tail_note_tuple, tail_onset - head_onset)}}
       for every merged tie chain (MusicXML-sourced ties only). Used for "bounded" motif counts.
@@ -531,6 +591,13 @@ def _voice_notes_from_mei(mei_str, tie_tails_out=None):
     except Exception:
         pass
 
+    if auto_cell or info_out is not None:
+        _u = _movement_unit(result)
+        _cell = _auto_cell(_u, beat_dur_q, beats_per_measure)
+        if info_out is not None:
+            info_out.update(u=_u, cell=_cell, bar_q=beats_per_measure, beat_q=beat_dur_q)
+        if auto_cell:
+            beat_dur_q = _cell
     return result, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups
 
 
@@ -1552,7 +1619,7 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
             mei_str = vtk.getMEI()
         _tie_tails = {}
         voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(
-            mei_str, tie_tails_out=_tie_tails)
+            mei_str, tie_tails_out=_tie_tails, auto_cell=True)
         if beat_dur_q_override is not None:
             beat_dur_q = beat_dur_q_override
 
@@ -1802,7 +1869,8 @@ def analyze_motifs(vtk, mei_str=None, beat_dur_q_override=None):
                 'n_direct_only':     _nd,
                 'n_inv_only':        _ni,
                 'n_both':            _nb,
-                'queryStr':          _pattern_to_query(m['pattern'], phase) + (';inv' if (_ni + _nb) > 0 else ''),
+                'queryStr':          '(' + _dur_q_to_str(_query_scale(beat_dur_q, min_dur_q)) + ')'
+                                     + _pattern_to_query(m['pattern'], phase) + (';inv' if (_ni + _nb) > 0 else ''),
                 'profile':           profile,
                 'repeat_pairs':      repeat_pairs,
                 'is_volta':          _is_spl_rpt,
@@ -1822,7 +1890,7 @@ def count_pattern(mei_str, query):
     Does not require _state or a live verovio instance.
     """
     try:
-        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(mei_str)
+        voices, beat_dur_q, pickup_dur_q, repeat_ranges, volta_groups = _voice_notes_from_mei(mei_str, auto_cell=True)
         # build flat per-voice sequences (no repeat unfolding — raw counts)
         seqs = [(vk, _interval_seq(notes, beat_dur_q, pickup_dur_q))
                 for vk, notes in voices.items() if len(notes) >= 2]

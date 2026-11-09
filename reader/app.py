@@ -1032,8 +1032,47 @@ def find_lilypond_files():
             continue
 
         full = os.path.join(xml_dir, fname)
+        # Skip exact copies of files that find_tobis_files() already lists
+        # (same file name under tobis-notenarchiv.de/{split/*,cantatas,toccatas}, same content
+        # apart from the XML declaration line). Differing versions are kept.
+        _tp = _tobis_same_name_files().get(fname)
+        if _tp and _same_body(full, _tp):
+            continue
         files.append((f'lilypond/{fname}', full))
     return files
+
+
+_TOBIS_NAME_MAP = None
+
+
+def _tobis_same_name_files():
+    """{file name: full path} for XML files under tobis-notenarchiv.de/{split/*,cantatas,toccatas}."""
+    global _TOBIS_NAME_MAP
+    if _TOBIS_NAME_MAP is None:
+        root = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tobis-notenarchiv.de')
+        m = {}
+        dirs = [os.path.join(root, 'cantatas'), os.path.join(root, 'toccatas')]
+        split = os.path.join(root, 'split')
+        if os.path.isdir(split):
+            dirs += [os.path.join(split, d) for d in sorted(os.listdir(split))]
+        for d in dirs:
+            if os.path.isdir(d):
+                for f in os.listdir(d):
+                    if f.lower().endswith('.xml'):
+                        m.setdefault(f, os.path.join(d, f))
+        _TOBIS_NAME_MAP = m
+    return _TOBIS_NAME_MAP
+
+
+def _same_body(p1, p2):
+    """True if two XML files are identical after the first (declaration) line."""
+    try:
+        if abs(os.path.getsize(p1) - os.path.getsize(p2)) > 64:
+            return False
+        with open(p1, 'rb') as f1, open(p2, 'rb') as f2:
+            return f1.read().split(b'\n', 1)[-1] == f2.read().split(b'\n', 1)[-1]
+    except OSError:
+        return False
 
 
 # Hand-specified movement boundaries for files without usable markers
@@ -3343,7 +3382,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
 
     # parse voices — separate try so _voices_s survives later errors
     try:
-        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _vg_s = _voice_notes_from_mei(mei_str)
+        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _vg_s = _voice_notes_from_mei(mei_str, auto_cell=True)
         if _beat_override is not None:
             _beat_dur_q_s = _beat_override
     except Exception:
@@ -4248,12 +4287,18 @@ function _findDictMatch(query){{
   // filter: 'direct' | 'inv' | 'all'
   var hasInv=/;inv\\s*$/.test(query);
   var base=query.replace(/;inv\\s*$/,'').trim();
+  // optional explicit "(scale)" prefix: if typed, it must equal the motif's; if absent, ignored
+  var _pm=base.match(/^\\([^)]*\\)/); var typedPfx=_pm?_pm[0]:'';
+  base=base.slice(typedPfx.length);
   var invBase=_invertQueryStr(base);
   for(var i=0;i<motifs.length;i++){{
     var mq=motifs[i].queryStr;
     if(!mq)continue;
     // Strip ;inv from dict queryStr before comparing — it may differ from user input
-    var mqBase=mq.replace(/;inv\\s*$/,'').trim();
+    var mqFull=mq.replace(/;inv\\s*$/,'').trim();
+    var _mm=mqFull.match(/^\\([^)]*\\)/); var mPfx=_mm?_mm[0]:'';
+    if(typedPfx&&typedPfx!==mPfx)continue;
+    var mqBase=mqFull.slice(mPfx.length);
     if(base===mqBase){{
       // Direct match: user typed the motif's own query (with or without ;inv suffix)
       var filter=hasInv?'all':'direct';
