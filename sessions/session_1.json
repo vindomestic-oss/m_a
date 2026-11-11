@@ -1,0 +1,858 @@
+{
+ "seed": 1,
+ "pieces": [
+  {
+   "piece": "musedata/bach/keyboard/wtc-2/wtc2p08.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p08.krn",
+     "query": "(1/4)1/16;3;-2+2;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "musedata/bach/keyboard/wtc-2/wtc2p08.krn|(1/4)1/16;3;-2+2;inv"
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p08.krn",
+     "query": "(1/4)1/16;0;+2-4",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 14,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p08.krn",
+     "query": "(1/4)1/16;3;-2+2;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "musedata/bach/keyboard/wtc-2/wtc2p08.krn|(1/4)1/16;3;-2+2;inv"
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p08.krn",
+     "query": "(1/4)1/16;3;+1+2;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 22,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p08.krn",
+     "query": "(1/4)1/16;2;-1+1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 23,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p08.krn",
+     "query": "(1/8)1/32;0;-1-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "tobis/lautenwerke/BWV_0995_5_Gavotte_I.xml",
+   "shared": true,
+   "items": [
+    {
+     "piece": "tobis/lautenwerke/BWV_0995_5_Gavotte_I.xml",
+     "query": "(1/2)1/8;1;-1-1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 12,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0995_5_Gavotte_I.xml",
+     "query": "(1/2)1/8;2;-2+1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0995_5_Gavotte_I.xml",
+     "query": "(1/2)1/8,1/4;3;+1+1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0995_5_Gavotte_I.xml",
+     "query": "(1/2)1/8;0;-1-1-1",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 11,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0995_5_Gavotte_I.xml",
+     "query": "(1/2)1/4,1/8,1/8;0;+1-2+1",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+     "query": "(3/8)1/16;2;+1+1+1+1;inv",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+     "query": "(3/8)1/16;2;+1+1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 13,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+     "query": "(3/8)1/16;5;+1-2;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+     "query": "(3/8)1/16;0;+2+3;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+     "query": "(3/8)1/16;0;-1+1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+     "query": "(3/8)1/16;3;-2+2;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita3-7.krn",
+     "query": "(3/8)1/16;2;+1+1+1;inv",
+     "length": 4,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/wtc-1/wtc1f08.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f08.krn",
+     "query": "(1/2)1/4,3/8,1/8;0;+3+1-1;inv",
+     "length": 4,
+     "variant": "ball",
+     "variant_label": "normal + inverted, incl. bounded",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f08.krn",
+     "query": "(1/2)1/8,1/4;3;+1-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f08.krn",
+     "query": "(1/4)1/8,1/16;0;-1-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 14,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "osu/classical/bach/wtc-1/wtc1f08.krn|(1/4)1/8,1/16;0;-1-1;inv"
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f08.krn",
+     "query": "(1/4)1/8,1/16;0;-1-1;inv",
+     "length": 3,
+     "variant": "bdirect",
+     "variant_label": "normal only, incl. bounded",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "osu/classical/bach/wtc-1/wtc1f08.krn|(1/4)1/8,1/16;0;-1-1;inv"
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f08.krn",
+     "query": "(1/2)3/8,1/8;2;-1-1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f08.krn",
+     "query": "(1/2)3/8,1/8;0;+1+1;inv",
+     "length": 3,
+     "variant": "binv",
+     "variant_label": "inverted only, incl. bounded",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "users/craig/classical/bach/violin/partita1-3.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "users/craig/classical/bach/violin/partita1-3.krn",
+     "query": "(3/4)1/8;5;-1+2+2;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita1-3.krn",
+     "query": "(3/4)1/8;0;+2+3",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita1-3.krn",
+     "query": "(3/4)1/8;2;-2+1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "users/craig/classical/bach/violin/partita1-3.krn|(3/4)1/8;2;-2+1;inv"
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita1-3.krn",
+     "query": "(3/4)1/8;3;-1-1-1",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 14,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita1-3.krn",
+     "query": "(3/4)1/8;4;+2+1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/violin/partita1-3.krn",
+     "query": "(3/4)1/8;2;-2+1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "users/craig/classical/bach/violin/partita1-3.krn|(3/4)1/8;2;-2+1;inv"
+    }
+   ]
+  },
+  {
+   "piece": "tobis/lautenwerke/BWV_0996_2_Presto.xml",
+   "shared": false,
+   "items": [
+    {
+     "piece": "tobis/lautenwerke/BWV_0996_2_Presto.xml",
+     "query": "(1/4)1/8,1/8,1/8,1/16,1/16;0;-1-1+0-1+1",
+     "length": 6,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0996_2_Presto.xml",
+     "query": "(1/4)1/8;0;+0-1-1;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0996_2_Presto.xml",
+     "query": "(1/4)1/8;1;+0-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 12,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0996_2_Presto.xml",
+     "query": "(1/4)1/8,1/8,1/16;2;-1+0-1;inv",
+     "length": 4,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/lautenwerke/BWV_0996_2_Presto.xml",
+     "query": "(1/4)1/8;0;-1-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "tobis/violine_cembalo/BWV_1015_3_Andante_un_poco.xml",
+   "shared": false,
+   "items": [
+    {
+     "piece": "tobis/violine_cembalo/BWV_1015_3_Andante_un_poco.xml",
+     "query": "(1/4)1/8,1/16,1/16;0;-1-1+1;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1015_3_Andante_un_poco.xml",
+     "query": "(1/4)1/16;2;-2+3+2",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 11,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1015_3_Andante_un_poco.xml",
+     "query": "(1/4)1/16,1/16,1/8,1/8;2;-1+1-2-2",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1015_3_Andante_un_poco.xml",
+     "query": "(1/4)3/16,1/16;0;+1+0;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1015_3_Andante_un_poco.xml",
+     "query": "(1/4)1/8;0;+1+1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 11,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/wtc-1/wtc1f09.krn",
+   "shared": true,
+   "items": [
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f09.krn",
+     "query": "(1/4)1/16;1;+1+1;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 80,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f09.krn",
+     "query": "(1/4)1/16;3;-2-1+1+1-1-1+1+1-2",
+     "length": 10,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f09.krn",
+     "query": "(1/4)1/16;2;+1+1-1+1",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 12,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f09.krn",
+     "query": "(1/4)1/16;0;-1+1+1;inv",
+     "length": 4,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 70,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f09.krn",
+     "query": "(1/4)1/8;0;-1-1;inv",
+     "length": 3,
+     "variant": "bdirect",
+     "variant_label": "normal only, incl. bounded",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f09.krn",
+     "query": "(1/4)1/16;0;-1+1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 72,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "tobis/engl-suites/BWV_0808_7_Gigue.xml",
+   "shared": false,
+   "items": [
+    {
+     "piece": "tobis/engl-suites/BWV_0808_7_Gigue.xml",
+     "query": "(3/8)1/8;2;+1+2+3-6;inv",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/engl-suites/BWV_0808_7_Gigue.xml",
+     "query": "(3/8)1/8;0;-5+1+1",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/engl-suites/BWV_0808_7_Gigue.xml",
+     "query": "(3/8)1/8;0;-1-1+1-1-1;inv",
+     "length": 6,
+     "variant": "ball",
+     "variant_label": "normal + inverted, incl. bounded",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/engl-suites/BWV_0808_7_Gigue.xml",
+     "query": "(3/8)1/8;0;+2-1;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/engl-suites/BWV_0808_7_Gigue.xml",
+     "query": "(3/8)1/8;0;+2-1+1+2-1+1",
+     "length": 7,
+     "variant": "ball",
+     "variant_label": "normal, incl. bounded",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/inventions/inven08.krn",
+   "shared": true,
+   "items": [
+    {
+     "piece": "osu/classical/bach/inventions/inven08.krn",
+     "query": "(1/4)1/16;2;+1-2+2",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven08.krn",
+     "query": "(1/4)1/16;2;-1-1+1-1-1",
+     "length": 6,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven08.krn",
+     "query": "(1/4)1/8;1;+2-2;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 11,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven08.krn",
+     "query": "(1/4)1/16;0;+1-1-1-1",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 21,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven08.krn",
+     "query": "(1/4)1/16;2;+1-4;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven08.krn",
+     "query": "(1/4)1/8;0;-2+4;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 14,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven08.krn",
+     "query": "(1/4)1/8;1;+2-2+4;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 11,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "musedata/bach/keyboard/wtc-1/wtc1p11.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p11.krn",
+     "query": "(3/8)1/16;1;-2-1+1+2-4+2+2+2-1-1+1",
+     "length": 12,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p11.krn",
+     "query": "(3/8)1/8,1/8,1/8,1/8,1/8,1/8,1/8,1/8,1/8,1/8,1/8,1/8,1/16,1/16,1/16,1/16,1/16,1/16,1/16,1/16,1/16,1/16,1/16;0;+2-2-2-2+2+1+2-2-2-2+2+1-3-2-1+1+2-4+2+2+2-1-1",
+     "length": 24,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 3,
+     "smooth": true,
+     "kind": "anchor",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p11.krn",
+     "query": "(3/8)1/8;2;-2-2+2",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p11.krn",
+     "query": "(3/8)1/8;2;-2-2+2+1",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p11.krn",
+     "query": "(3/8)1/16;1;-2-1+1+2-4+2+2+2-1-1",
+     "length": 11,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 25,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p11.krn",
+     "query": "(3/8)1/16;4;-1+3",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 9,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+   "shared": true,
+   "items": [
+    {
+     "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+     "query": "(1/4)1/16;2;+1+1-2;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+     "query": "(1/4)1/16;3;+1+1+1;inv",
+     "length": 4,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 11,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+     "query": "(1/4)1/16;2;-1+1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+     "query": "(1/4)1/16;1;-1-1+1;inv",
+     "length": 4,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 10,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "users/craig/classical/bach/cello/bwv1007-02.krn|(1/4)1/16;1;-1-1+1;inv"
+    },
+    {
+     "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+     "query": "(1/4)1/16;1;-1-1+1;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 12,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "users/craig/classical/bach/cello/bwv1007-02.krn|(1/4)1/16;1;-1-1+1;inv"
+    },
+    {
+     "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+     "query": "(1/4)1/16;1;-1-1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "users/craig/classical/bach/cello/bwv1007-02.krn",
+     "query": "(1/4)1/16;1;-2-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 8,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  }
+ ]
+}

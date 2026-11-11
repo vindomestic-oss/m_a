@@ -3865,7 +3865,7 @@ function drawBoxes(m){{
         path.setAttribute('pointer-events','none');
         svg.appendChild(path);
         drawnRects.push(path);
-        if(isVeryFirst||isOnly){{
+        if((isVeryFirst||isOnly)&&!m.noNumbers){{
           var numSz=ypad*1.5;
           var txt=document.createElementNS('http://www.w3.org/2000/svg','text');
           if(m.is_volta){{
@@ -4434,6 +4434,7 @@ function _buildTsdOverlay(){{
     if(!sys||sys===svg)sys=null;
     var noteBB=el.getBBox();
     var _sr=svg.getBoundingClientRect(),_vb=svg.viewBox.baseVal;
+window.__motifApi={{motifs:motifs,filteredByInv:filteredByInv,drawBoxes:drawBoxes,clearRects:clearRects,colorMotifOccs:colorMotifOccs}};
     var _px=(_sr.width&&_vb&&_vb.width)?_vb.width/_sr.width:0;
     var x=noteBB.x+15*_px;
     var sysBB=sys?sys.getBBox():null;

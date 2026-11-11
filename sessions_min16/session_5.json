@@ -1,0 +1,937 @@
+{
+ "seed": 5,
+ "tag": "min16",
+ "min_count": 16,
+ "pieces": [
+  {
+   "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+   "shared": false,
+   "items": [
+    {
+     "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+     "query": "(1/4)1/16;3;+4-4+5",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 22,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+     "query": "(1/4)1/8;0;-1-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+     "query": "(1/4)1/16;2;-5+4",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+     "query": "(1/4)1/16;2;-3+1-2",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+     "query": "(1/4)1/16;1;-2-2",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 32,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+     "query": "(1/4)1/16;2;-3+4-4+5-5+4-4",
+     "length": 8,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/toccatas/BWV_0916_1_Toccata.xml",
+     "query": "(1/4)1/16;1;+3-3",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 28,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+   "shared": false,
+   "items": [
+    {
+     "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+     "query": "(1/4)1/16;1;-1+1-2",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+     "query": "(1/4)1/16;0;+7-1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+     "query": "(1/4)1/16;1;+1-2",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+     "query": "(1/4)1/16;1;-1-1+0;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+     "query": "(1/4)1/16;2;+1-4;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+     "query": "(1/4)1/16;1;-1+1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1025_7_Allegro.xml",
+     "query": "(1/4)1/16;0;+7-1+1",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "tobis/violine_cembalo/BWV_1026_1.xml",
+   "shared": false,
+   "items": [
+    {
+     "piece": "tobis/violine_cembalo/BWV_1026_1.xml",
+     "query": "(1/2)1/8;1;-1+1-2+2-4",
+     "length": 6,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 36,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1026_1.xml",
+     "query": "(1/2)1/8,1/4;3;+1+0;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 24,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1026_1.xml",
+     "query": "(1/2)1/8;1;-1+1-2+2-4+2",
+     "length": 7,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 36,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1026_1.xml",
+     "query": "(1/2)1/8;2;-1-1+2;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 24,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1026_1.xml",
+     "query": "(1/2)1/8;2;+1+1;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1026_1.xml",
+     "query": "(1/2)1/4;0;+0-1",
+     "length": 3,
+     "variant": "ball",
+     "variant_label": "normal, incl. bounded",
+     "count": 24,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "musedata/bach/keyboard/wtc-2/wtc2p20.krn",
+   "shared": true,
+   "items": [
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p20.krn",
+     "query": "(1/8)1/32;1;+1+1+1;inv",
+     "length": 4,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p20.krn",
+     "query": "(1/4)1/8;1;-1-1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p20.krn",
+     "query": "(1/4)1/8;0;+0-1+0;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p20.krn",
+     "query": "(1/8)1/32,1/32,1/32,1/16,1/16;1;+1+1+1-3-1;inv",
+     "length": 6,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p20.krn",
+     "query": "(1/4)1/8;0;+0-1+0-1-1;inv",
+     "length": 6,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-2/wtc2p20.krn",
+     "query": "(1/4)1/8;1;+1+1+1;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+   "shared": true,
+   "items": [
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+     "query": "(1/4)1/16;1;+1+1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 99,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+     "query": "(1/4)1/8;0;-1-1;inv",
+     "length": 3,
+     "variant": "ball",
+     "variant_label": "normal + inverted, incl. bounded",
+     "count": 25,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+     "query": "(1/4)1/16;0;-1-1;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 97,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+     "query": "(1/4)1/8,1/16;0;+1+1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+     "query": "(1/4)1/16;1;+1+1-1;inv",
+     "length": 4,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 20,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+     "query": "(1/4)1/16;0;+1+1+1-1;inv",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p07.krn",
+     "query": "(1/4)1/16;0;-1-1-1;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 96,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+   "shared": true,
+   "items": [
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+     "query": "(1/4)1/16;1;-1-1-1-1-1;inv",
+     "length": 6,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+     "query": "(1/4)1/16;1;-1+1;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 22,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+     "query": "(1/4)1/16;2;+1+1+1+1+1;inv",
+     "length": 6,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+     "query": "(1/4)1/16;3;+1+2",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+     "query": "(1/4)1/16;3;+1+2-1-1",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+     "query": "(1/4)1/16,1/8;3;-1+0;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f12.krn",
+     "query": "(1/4)1/16;0;-1-1+1+1;inv",
+     "length": 5,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+     "query": "(1/4)3/8,1/16;0;-1-1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 29,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+     "query": "(1/4)1/8;0;-2+3",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 26,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "osu/classical/bach/wtc-2/wtc2f14.krn|(1/4)1/8;0;-2+3"
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+     "query": "(1/4)1/16,1/8;3;+1-2;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+     "query": "(1/4)1/16;1;-1+2;inv",
+     "length": 3,
+     "variant": "inv",
+     "variant_label": "inverted only",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+     "query": "(1/4)1/8;1;-2-2",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 22,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+     "query": "(1/4)1/8;0;-2+1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 22,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f14.krn",
+     "query": "(1/4)1/8;0;-2+3",
+     "length": 3,
+     "variant": "ball",
+     "variant_label": "normal, incl. bounded",
+     "count": 27,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "osu/classical/bach/wtc-2/wtc2f14.krn|(1/4)1/8;0;-2+3"
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/8;2;+1+1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 20,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/4;1;-1+0;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 24,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "osu/classical/bach/wtc-2/wtc2f07.krn|(1/2)1/4;1;-1+0;inv"
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/4;0;+1+1;inv",
+     "length": 3,
+     "variant": "ball",
+     "variant_label": "normal + inverted, incl. bounded",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/2,1/4;1;-1-1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 27,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/4,1/4,1/8;2;-1+0-1",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 24,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/4;1;-1+0;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 25,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "osu/classical/bach/wtc-2/wtc2f07.krn|(1/2)1/4;1;-1+0;inv"
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/4,1/2,1/4;0;+3-1-1",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 26,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-2/wtc2f07.krn",
+     "query": "(1/2)1/1,1/1,1/8,1/8,1/8,1/8,1/4,1/2;0;-1-1-1+1+1-2+3-1",
+     "length": 9,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 3,
+     "smooth": true,
+     "kind": "anchor",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/inventions/inven12.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "osu/classical/bach/inventions/inven12.krn",
+     "query": "(3/8)1/16;2;-2-2+2;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 20,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven12.krn",
+     "query": "(3/8)1/16;1;+1-1-1-1-1;inv",
+     "length": 6,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven12.krn",
+     "query": "(3/8)1/16;2;-1-1-1-1;inv",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 24,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "osu/classical/bach/inventions/inven12.krn|(3/8)1/16;2;-1-1-1-1;inv"
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven12.krn",
+     "query": "(3/8)1/16;2;-1-1-1-1;inv",
+     "length": 5,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "osu/classical/bach/inventions/inven12.krn|(3/8)1/16;2;-1-1-1-1;inv"
+    },
+    {
+     "piece": "osu/classical/bach/inventions/inven12.krn",
+     "query": "(3/8)1/16;1;+2+2",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 32,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "tobis/violine_cembalo/BWV_1018a_1.xml",
+   "shared": true,
+   "items": [
+    {
+     "piece": "tobis/violine_cembalo/BWV_1018a_1.xml",
+     "query": "(1/4)1/8;0;+0+0+0-1;inv",
+     "length": 5,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 27,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "tobis/violine_cembalo/BWV_1018a_1.xml|(1/4)1/8;0;+0+0+0-1;inv"
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1018a_1.xml",
+     "query": "(1/4)1/16;1;+2+2-7;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 25,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1018a_1.xml",
+     "query": "(1/4)1/16;2;+2-8;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 28,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1018a_1.xml",
+     "query": "(1/4)1/16;1;+2+2-8;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 28,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1018a_1.xml",
+     "query": "(1/4)1/8;0;+0+0+0-1;inv",
+     "length": 5,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 30,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "tobis/violine_cembalo/BWV_1018a_1.xml|(1/4)1/8;0;+0+0+0-1;inv"
+    },
+    {
+     "piece": "tobis/violine_cembalo/BWV_1018a_1.xml",
+     "query": "(1/4)1/8;0;+0-1+0;inv",
+     "length": 4,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 30,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    }
+   ]
+  },
+  {
+   "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+     "query": "(1/4)1/16;0;-1-1+2-1-1-1;inv",
+     "length": 7,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 20,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+     "query": "(1/4)1/16;0;-1-1;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 63,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+     "query": "(1/4)1/16;0;-1-1+2-1;inv",
+     "length": 5,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 24,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+     "query": "(1/4)1/16;2;+1+1;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 16,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+     "query": "(1/4)1/16;0;-1-1+2-1-1-1+2;inv",
+     "length": 8,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+     "query": "(1/4)1/16;0;-1-1+2;inv",
+     "length": 4,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 64,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": "musedata/bach/keyboard/wtc-1/wtc1p14.krn|(1/4)1/16;0;-1-1+2;inv"
+    },
+    {
+     "piece": "musedata/bach/keyboard/wtc-1/wtc1p14.krn",
+     "query": "(1/4)1/16;0;-1-1+2;inv",
+     "length": 4,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 50,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": "musedata/bach/keyboard/wtc-1/wtc1p14.krn|(1/4)1/16;0;-1-1+2;inv"
+    }
+   ]
+  },
+  {
+   "piece": "osu/classical/bach/wtc-1/wtc1f07.krn",
+   "shared": false,
+   "items": [
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f07.krn",
+     "query": "(1/4)1/16;1;-2-3;inv",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal + inverted",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f07.krn",
+     "query": "(1/4)1/16;3;-1+5",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f07.krn",
+     "query": "(1/4)1/16;0;+4-2",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 17,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f07.krn",
+     "query": "(1/4)1/8;0;-1-1;inv",
+     "length": 3,
+     "variant": "direct",
+     "variant_label": "normal only",
+     "count": 19,
+     "smooth": false,
+     "kind": "decoy",
+     "pair_id": null
+    },
+    {
+     "piece": "osu/classical/bach/wtc-1/wtc1f07.krn",
+     "query": "(1/4)1/16;2;-2-1",
+     "length": 3,
+     "variant": "all",
+     "variant_label": "normal",
+     "count": 18,
+     "smooth": true,
+     "kind": "target",
+     "pair_id": null
+    }
+   ]
+  }
+ ]
+}

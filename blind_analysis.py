@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""
+Analysis of blind-test responses (responses/*.json written by blind_test.py).
+
+Question: do raters give higher relevance (0-4) to motifs whose occurrence count is a "good"
+(2^a*3^b >= 8) number than to matched motifs with a non-smooth count?
+
+Tests (unit = rater / piece, NOT the individual rating; no distributional assumptions):
+  1. per-rater AUC  P(rating_smooth > rating_nonsmooth) (+0.5 ties), within-piece comparisons only
+       -> mean AUC, one-sample t / Wilcoxon vs 0.5 over raters, two-way cluster-bootstrap CI
+  2. within-piece permutation test (smooth labels shuffled inside each rater x piece)
+  3. count-adjusted effect: rater-standardised rating ~ smooth + log2(count) + length (OLS),
+       cluster-bootstrap CI for the smooth coefficient
+  4. matched pairs (same motif, smooth vs non-smooth counting variant): paired Wilcoxon
+  5. anchor check, inter-rater reliability on shared pieces (Krippendorff alpha, ordinal)
+
+Usage: python blind_analysis.py [--responses responses] [--out blind_report.txt] [--boot 2000]
+"""
+import argparse
+import glob
+import json
+import math
+import os
+import numpy as np
+import pandas as pd
+from scipy import stats
+
+
+# ── data ──────────────────────────────────────────────────────────────────────
+
+def load_ratings(files):
+    rows = []
+    for fp in files:
+        with open(fp, encoding='utf-8') as f:
+            r = json.load(f)
+        for p in r['pieces']:
+            for it in p.get('items', []):
+                if it.get('rating') is None or it.get('missing'):
+                    continue
+                rows.append({'rater': r['rater'], 'tag': r.get('tag', ''), 'seed': r['session_seed'], 'piece_idx': p['piece_idx'],
+                             'piece': p['piece'], 'shared': p.get('shared', False), 'item': it['id'],
+                             'kind': it['kind'], 'smooth': bool(it['smooth']), 'count': it['count'],
+                             'length': it['length'], 'variant': it['variant'], 'pair_id': it['pair_id'],
+                             'query': it['query'], 'rating': it['rating'],
+                             'views': it.get('views', 0), 't_rate_ms': it.get('t_rate_ms')})
+    df = pd.DataFrame(rows)
+    if len(df):
+        df['log2c'] = np.log2(df['count'])
+        df['unit'] = df['rater'] + '|' + df['tag'] + '|' + df['seed'].astype(str) + '|' + df['piece_idx'].astype(str)
+    return df
+
+
+def main_items(df):
+    return df[df['kind'].isin(('target', 'decoy'))]
+
+
+# ── statistics ────────────────────────────────────────────────────────────────
+
+def auc(pos, neg):
+    """P(pos > neg) + 0.5 P(tie)."""
+    pos, neg = np.asarray(pos, float), np.asarray(neg, float)
+    if len(pos) == 0 or len(neg) == 0:
+        return np.nan
+    g = (pos[:, None] > neg[None, :]).sum() + 0.5 * (pos[:, None] == neg[None, :]).sum()
+    return g / (len(pos) * len(neg))
+
+
+def unit_auc(sub):
+    """AUC pooled from within-piece comparisons only (weights = number of pairs per piece)."""
+    num = den = 0.0
+    for _, g in sub.groupby('unit'):
+        p, n = g[g.smooth]['rating'].values, g[~g.smooth]['rating'].values
+        if len(p) and len(n):
+            num += auc(p, n) * len(p) * len(n)
+            den += len(p) * len(n)
+    return num / den if den else np.nan
+
+
+def rater_aucs(df):
+    return {r: unit_auc(g) for r, g in main_items(df).groupby('rater')}
+
+
+def boot_ci(df, stat, B, rng):
+    """Two-way cluster bootstrap: resample raters, then pieces (units) within rater."""
+    m = main_items(df)
+    raters = m['rater'].unique()
+    by = {r: [g for _, g in m[m.rater == r].groupby('unit')] for r in raters}
+    out = []
+    for _ in range(B):
+        parts = []
+        for r in rng.choice(raters, len(raters)):
+            units = by[r]
+            idx = rng.integers(0, len(units), len(units))
+            parts.extend(units[i] for i in idx)
+        if parts:
+            d = pd.concat(parts)
+            d['unit'] = np.repeat(np.arange(len(parts)), [len(p) for p in parts])
+            v = stat(d)
+            if v == v:
+                out.append(v)
+    return (np.percentile(out, [2.5, 97.5]) if len(out) > 20 else (np.nan, np.nan))
+
+
+def mean_auc_stat(d):
+    a = [unit_auc(g) for _, g in d.groupby('rater')]
+    a = [x for x in a if x == x]
+    return float(np.mean(a)) if a else np.nan
+
+
+def perm_test(df, P, rng):
+    m = main_items(df).copy()
+    obs = mean_auc_stat(m)
+    units = [g for _, g in m.groupby('unit')]
+    cnt = 0
+    for _ in range(P):
+        parts = []
+        for g in units:
+            g = g.copy()
+            g['smooth'] = rng.permutation(g['smooth'].values)
+            parts.append(g)
+        if mean_auc_stat(pd.concat(parts)) >= obs - 1e-12:
+            cnt += 1
+    return obs, (cnt + 1) / (P + 1)
+
+
+def zscore_by_rater(df):
+    df = df.copy()
+    g = df.groupby('rater')['rating']
+    sd = g.transform('std').replace(0, np.nan)
+    df['z'] = ((df['rating'] - g.transform('mean')) / sd).fillna(0.0)
+    return df
+
+
+def ols_smooth(d):
+    d = zscore_by_rater(main_items(d))
+    if len(d) < 8 or d['smooth'].nunique() < 2:
+        return np.nan
+    X = np.column_stack([np.ones(len(d)), d['smooth'].astype(float), d['log2c'] - d['log2c'].mean(),
+                         d['length'] - d['length'].mean()])
+    try:
+        beta = np.linalg.lstsq(X, d['z'].values, rcond=None)[0]
+    except Exception:
+        return np.nan
+    return float(beta[1])
+
+
+def krippendorff_alpha_ordinal(mat):
+    """mat: units x raters with NaN for missing. Ordinal metric."""
+    vals = np.unique(mat[~np.isnan(mat)])
+    if len(vals) < 2:
+        return np.nan
+    k = len(vals)
+    idx = {v: i for i, v in enumerate(vals)}
+    o = np.zeros((k, k))
+    for row in mat:
+        v = [idx[x] for x in row if not np.isnan(x)]
+        m = len(v)
+        if m < 2:
+            continue
+        for a in range(m):
+            for b in range(m):
+                if a != b:
+                    o[v[a], v[b]] += 1.0 / (m - 1)
+    n_c = o.sum(axis=1)
+    n = n_c.sum()
+    if n <= 1:
+        return np.nan
+    cum = np.cumsum(n_c)
+    delta = np.zeros((k, k))
+    for c in range(k):
+        for d_ in range(k):
+            if c != d_:
+                lo, hi = min(c, d_), max(c, d_)
+                delta[c, d_] = (n_c[lo:hi + 1].sum() - (n_c[lo] + n_c[hi]) / 2.0) ** 2
+    Do = (o * delta).sum() / n
+    De = (np.outer(n_c, n_c) * delta).sum() / (n * (n - 1))
+    return 1.0 - Do / De if De > 0 else np.nan
+
+
+# ── report ────────────────────────────────────────────────────────────────────
+
+def analyze(df, B=2000, P=2000, seed=1):
+    rng = np.random.default_rng(seed)
+    L = []
+    w = L.append
+    m = main_items(df)
+    anc = df[df.kind == 'anchor']
+    w(f"Raters: {df.rater.nunique()}   rating records: {len(df)}   "
+      f"(target/decoy {len(m)}, anchors {len(anc)})")
+    w(f"Pieces rated (rater x piece units): {m.unit.nunique()}")
+    w("")
+    w("Mean rating (0-4):")
+    for lab, g in (('smooth count (target)', m[m.smooth]), ('non-smooth count (decoy)', m[~m.smooth])):
+        w(f"  {lab:28s} n={len(g):4d}  mean={g.rating.mean():.2f}  sd={g.rating.std():.2f}")
+    if len(anc):
+        w(f"  {'anchor (count<=3)':28s} n={len(anc):4d}  mean={anc.rating.mean():.2f}   "
+          f"(manipulation check: expected clearly lowest)")
+    w("")
+
+    ra = rater_aucs(df)
+    a = np.array([v for v in ra.values() if v == v])
+    w("1) Per-rater AUC (0.5 = no preference for smooth counts)")
+    if len(a) >= 2:
+        t, pt = stats.ttest_1samp(a, 0.5)
+        try:
+            pw = stats.wilcoxon(a - 0.5).pvalue
+        except ValueError:
+            pw = float('nan')
+        lo, hi = boot_ci(df, mean_auc_stat, B, rng)
+        w(f"   mean AUC = {a.mean():.3f}   rater-level: t({len(a)-1}) = {t:.2f}, p = {pt:.4f};  "
+          f"Wilcoxon p = {pw:.4f}")
+        w(f"   95% cluster-bootstrap CI: [{lo:.3f}, {hi:.3f}]   per-rater range {a.min():.2f}-{a.max():.2f}")
+    elif len(a) == 1:
+        w(f"   one rater only: AUC = {a[0]:.3f} (no rater-level inference possible)")
+    w("")
+
+    obs, p = perm_test(df, P, rng)
+    w("2) Within-piece permutation test (labels shuffled inside every rater x piece)")
+    w(f"   observed mean AUC = {obs:.3f}   one-sided p = {p:.4f}")
+    w("")
+
+    beta = ols_smooth(df)
+    lo, hi = boot_ci(df, ols_smooth, B, rng)
+    w("3) Count-adjusted effect (rater-standardised rating ~ smooth + log2 count + length)")
+    w(f"   beta(smooth) = {beta:+.3f} SD of rating   95% cluster-bootstrap CI [{lo:+.3f}, {hi:+.3f}]")
+    w("")
+
+    pr = m[m.pair_id.notna()]
+    w("4) Matched pairs (same motif, smooth vs non-smooth counting variant)")
+    diffs = []
+    for (_, pid), g in pr.groupby(['unit', 'pair_id']):
+        s, n = g[g.smooth], g[~g.smooth]
+        if len(s) and len(n):
+            diffs.append(s.rating.iloc[0] - n.rating.iloc[0])
+    if len(diffs) >= 6:
+        d = np.array(diffs, float)
+        try:
+            pw = stats.wilcoxon(d).pvalue
+        except ValueError:
+            pw = float('nan')
+        w(f"   pairs = {len(d)}   mean(smooth - nonsmooth) = {d.mean():+.2f}   Wilcoxon p = {pw:.4f}   "
+          f"ties = {(d == 0).mean():.0%}")
+    else:
+        w(f"   too few pairs ({len(diffs)})")
+    w("")
+
+    w("5) Reliability on shared pieces")
+    sh = df[df.shared]
+    if sh.rater.nunique() >= 2:
+        piv = sh.pivot_table(index=['piece', 'query', 'variant'], columns='rater', values='rating')
+        w(f"   Krippendorff alpha (ordinal) = {krippendorff_alpha_ordinal(piv.values):.3f} "
+          f"on {len(piv)} items x {piv.shape[1]} raters")
+        if piv.shape[1] >= 2:
+            rs = [stats.spearmanr(piv.iloc[:, i], piv.iloc[:, j], nan_policy='omit')[0]
+                  for i in range(piv.shape[1]) for j in range(i + 1, piv.shape[1])]
+            w(f"   mean pairwise Spearman = {np.nanmean(rs):.3f}")
+    else:
+        w("   needs >= 2 raters on the shared pieces")
+    return "\n".join(L)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--responses', default='responses')
+    ap.add_argument('--out', default='blind_report.txt')
+    ap.add_argument('--boot', type=int, default=2000)
+    ap.add_argument('--perm', type=int, default=2000)
+    ap.add_argument('--export', default=None, help='also write all ratings of all raters to this CSV file')
+    a = ap.parse_args()
+    files = sorted(glob.glob(os.path.join(a.responses, '*.json')))
+    df = load_ratings(files)
+    if not len(df):
+        raise SystemExit('no ratings found')
+    if a.export:
+        df.drop(columns=['unit']).to_csv(a.export, index=False, encoding='utf-8')
+        print(f'exported {len(df)} ratings of {df.rater.nunique()} raters to {a.export}')
+    reps = []
+    for tag, d in df.groupby('tag'):          # experiments are never pooled
+        reps.append(f"=== experiment '{tag or 'default (count>=8)'}' ===\n" + analyze(d, a.boot, a.perm))
+    rep = "\n\n".join(reps)
+    print(rep)
+    with open(a.out, 'w', encoding='utf-8') as f:
+        f.write(rep + '\n')
+
+
+if __name__ == '__main__':
+    main()
