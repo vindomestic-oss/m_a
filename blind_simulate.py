@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import blind_analysis as ba
 
 CUTS = np.array([-1.0, -0.2, 0.6, 1.4])
+BIN_THR = 0.9          # binary scale: ticked if latent relevance > BIN_THR (~25-30% ticked)
 
 
 def sim_rater(sess, name, rng, effect, count_slope, item_q, bias_sd=0.6, noise_sd=1.0):
@@ -33,14 +34,15 @@ def sim_rater(sess, name, rng, effect, count_slope, item_q, bias_sd=0.6, noise_s
                    + rng.normal(0, noise_sd))
             if it['kind'] == 'anchor':
                 lat -= 2.5
-            rating = int(np.searchsorted(CUTS, lat))
+            rating = int(lat > BIN_THR) if sess.get('scale') == 'binary' else int(np.searchsorted(CUTS, lat))
             items.append({'id': f'p{pi}_i{k}', 'kind': it['kind'], 'smooth': it['smooth'],
                           'count': it['count'], 'variant': it['variant'], 'pair_id': it['pair_id'],
                           'query': it['query'], 'length': it['length'], 'rating': rating, 'missing': False,
                           'shown_count': it['count'], 'views': 1, 't_rate_ms': 1000})
         pieces.append({'piece_idx': pi, 'piece': p['piece'], 'shared': p['shared'],
                        'elapsed_ms': 1000, 'items': items})
-    return {'session_seed': sess['seed'], 'rater': name, 'pieces': pieces}
+    return {'session_seed': sess['seed'], 'tag': sess.get('tag', ''), 'scale': sess.get('scale', 'ordinal'),
+            'rater': name, 'pieces': pieces}
 
 
 def load_sessions(d):
@@ -82,7 +84,7 @@ def main():
         return
 
     from scipy import stats
-    hits_t = hits_w = 0
+    hits_t = hits_w = hits_mh = 0
     for _ in range(a.reps):
         item_q = {}
         resp = [sim_rater(sessions[i], f'sim{i+1}', rng, a.effect, a.count_slope, item_q) for i in range(a.raters)]
@@ -96,12 +98,15 @@ def main():
         df = ba.load_ratings(sorted(glob.glob(os.path.join(tmp, '*.json'))))
         aucs = np.array(list(ba.rater_aucs(df).values()))
         hits_t += stats.ttest_1samp(aucs, 0.5).pvalue < 0.05 and aucs.mean() > 0.5
+        _o, _lo, _hi, _c, _p, _k = ba.mantel_haenszel(df) if sessions[0].get('scale') == 'binary' else (0,)*6
+        hits_mh += (_p == _p) and _p < 0.05 and _o > 1
         try:
             hits_w += stats.wilcoxon(aucs - 0.5).pvalue < 0.05 and aucs.mean() > 0.5
         except ValueError:
             pass
     print(f'raters={a.raters} effect={a.effect} count_slope={a.count_slope}: '
-          f'power(t over raters)={hits_t / a.reps:.2f}  power(Wilcoxon)={hits_w / a.reps:.2f}  [{a.reps} reps]')
+          f'power(t over rater AUCs)={hits_t / a.reps:.2f}  power(Wilcoxon)={hits_w / a.reps:.2f}  '
+          f'power(MH odds ratio)={hits_mh / a.reps:.2f}  [{a.reps} reps]')
 
 
 if __name__ == '__main__':

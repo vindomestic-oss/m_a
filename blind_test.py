@@ -34,10 +34,10 @@ _OVERLAY_JS = os.path.join(_here, 'blind_overlay.js')
 
 # ── page post-processing ──────────────────────────────────────────────────────
 
-def make_blind_html(html: str, piece_idx: int, n_pieces: int, items: list) -> str:
+def make_blind_html(html: str, piece_idx: int, n_pieces: int, items: list, binary: bool = False) -> str:
     """Turn a normal render_score() page into a blind-test page."""
     html = re.sub(r'<div class="fn">.*?</div>', '', html, count=1, flags=re.S)   # hide file name
-    cfg = {'pieceIdx': piece_idx, 'nPieces': n_pieces,
+    cfg = {'pieceIdx': piece_idx, 'nPieces': n_pieces, 'binary': binary,
            'items': [{'id': it['id'], 'query': it['query'], 'variant': it['variant'],
                       'label': it['variant_label']} for it in items]}
     with open(_OVERLAY_JS, encoding='utf-8') as f:
@@ -77,18 +77,18 @@ def load_session(path):
 
 # ── render in a subprocess (isolates verovio crashes) ─────────────────────────
 
-def _blind_render_worker(path, piece_idx, n_pieces, items, queue):
+def _blind_render_worker(path, piece_idx, n_pieces, items, queue, binary=False):
     try:
         html = _core.render_score(path, '1', 0)[0]
-        queue.put(('ok', make_blind_html(html, piece_idx, n_pieces, items)))
+        queue.put(('ok', make_blind_html(html, piece_idx, n_pieces, items, binary)))
     except Exception as e:
         queue.put(('error', str(e)))
 
 
-def render_piece(path, piece_idx, n_pieces, items, timeout=90):
+def render_piece(path, piece_idx, n_pieces, items, timeout=90, binary=False):
     ctx = multiprocessing.get_context('spawn')
     q = ctx.Queue()
-    proc = ctx.Process(target=_blind_render_worker, args=(path, piece_idx, n_pieces, items, q), daemon=True)
+    proc = ctx.Process(target=_blind_render_worker, args=(path, piece_idx, n_pieces, items, q, binary), daemon=True)
     proc.start()
     try:
         res = q.get(timeout=timeout)          # read BEFORE join (pipe-buffer deadlock)
@@ -121,6 +121,7 @@ class BlindRun:
     def __init__(self, sess, session_path, rater):
         self.sess, self.rater = sess, rater
         self.n = len(sess['pieces'])
+        self.binary = sess.get('scale') == 'binary'
         os.makedirs(os.path.join(_here, 'responses'), exist_ok=True)
         safe = re.sub(r'[^A-Za-z0-9_-]', '_', rater)
         tag = sess.get('tag', '')
@@ -130,7 +131,7 @@ class BlindRun:
             with open(self.resp_path, encoding='utf-8') as f:
                 self.resp = json.load(f)
         else:
-            self.resp = {'session_seed': sess['seed'], 'tag': sess.get('tag', ''), 'session_file': os.path.basename(session_path),
+            self.resp = {'session_seed': sess['seed'], 'tag': sess.get('tag', ''), 'scale': sess.get('scale', 'ordinal'), 'session_file': os.path.basename(session_path),
                          'rater': rater, 'started': datetime.datetime.now().isoformat(timespec='seconds'),
                          'pieces': []}
         done = {r['piece_idx'] for r in self.resp['pieces']}
@@ -156,13 +157,18 @@ class BlindRun:
         self.current_piece = None
         btn = ("<p><button onclick=\"fetch('/blind/begin',{method:'POST'}).then(function(){"
                "document.body.innerHTML='Loading…';})\">Start</button></p>")
+        if self.binary:
+            how = ('Tick every motif that you consider <b>relevant</b> for this piece. Any number of the listed '
+                   'motifs may be relevant, from none to all. ')
+        else:
+            how = ('Rate every motif from <b>0</b> (not relevant for this piece) to <b>4</b> (surely relevant). '
+                   'Any number of the listed motifs may be relevant, from none to all. ')
         self._set(lambda v: _simple_page(v,
             '<h2>Motif relevance test</h2>'
             f'<p>You will see {self.n} short pieces, one after another. For each piece a list of motifs is shown. '
-            'Rate every motif from <b>0</b> (not relevant for this piece) to <b>4</b> (surely relevant). '
+            + how +
             'Click a motif to see its first and last occurrence in the score. '
-            'Please do not count the occurrences. Any number of the listed motifs may be relevant, '
-            'from none to all.</p>' + resume + btn))
+            'Please do not count the occurrences.</p>' + resume + btn))
 
     def show_loading(self):
         self.current_piece = None
@@ -182,7 +188,7 @@ class BlindRun:
         if not path:
             html, err = None, 'file not found'
         else:
-            html, err = render_piece(path, i, self.n, piece['items'])
+            html, err = render_piece(path, i, self.n, piece['items'], binary=self.binary)
         with self.lock:
             if html:
                 self.cache[i] = html
@@ -371,7 +377,7 @@ def _cmd_preview(a):
     path = resolve_paths([piece['piece']]).get(piece['piece'])
     if not path:
         raise SystemExit(f"file not found for {piece['piece']}")
-    html, err = render_piece(path, a.preview, len(sess['pieces']), piece['items'])
+    html, err = render_piece(path, a.preview, len(sess['pieces']), piece['items'], binary=sess.get('scale') == 'binary')
     if err:
         raise SystemExit(err)
     html = re.sub(r"new EventSource\('/events'\)", "{set onmessage(f){}, close(){}}", html)   # standalone file
@@ -414,7 +420,7 @@ def _cmd_check(a):
     bad = []
     for pi, piece in enumerate(sess['pieces']):
         path = paths.get(piece['piece'])
-        html, err = render_piece(path, pi, len(sess['pieces']), piece['items']) if path else (None, 'file not found')
+        html, err = render_piece(path, pi, len(sess['pieces']), piece['items'], binary=sess.get('scale') == 'binary') if path else (None, 'file not found')
         if err:
             print(f"[{pi}] {piece['piece']}: RENDER ERROR {err}")
             bad.append((piece['piece'], '-', '-', 'render error', err))

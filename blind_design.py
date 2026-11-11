@@ -23,6 +23,12 @@ import random
 
 TAG = ''            # set from --tag; stored in every session (separates experiments)
 MIN_COUNT = 8       # set from --min-count
+# preset "binary": only the "normal + inverted" count (no bounded), one variant per motif (no pairs),
+# no anchors, decoys drawn at random (no count/length matching), tick-box (relevant yes/no) scale
+ONLY_MAIN = NO_PAIRS = NO_ANCHOR = NO_MATCH = False
+ALL_MOTIFS = False            # show EVERY motif of the piece with count >= MIN_COUNT (random order only)
+MIN_M, MAX_M = 3, 15          # ALL_MOTIFS: piece must have MIN_M..MAX_M such motifs (piece filter, not motif sampling)
+SCALE = 'ordinal'
 VARIANT_KEY = {'all': 'union', 'direct': 'direct', 'inv': 'inv',
                'ball': 'b_union', 'bdirect': 'b_direct', 'binv': 'b_inv'}
 
@@ -49,6 +55,8 @@ def variant_label(v, m):
 def motif_variants(m):
     """Distinct counting variants of one motif -> {variant: count} (duplicates removed)."""
     out = {'all': m['union']}
+    if ONLY_MAIN:
+        return out
     if m['inv'] > 0 and m['direct'] != m['union']:
         out['direct'] = m['direct']
     if m['inv'] > 0 and m['inv'] != m['union']:
@@ -79,7 +87,13 @@ def eligible_pieces(cache, min_count=8):
             for var, c in motif_variants(m).items():
                 if c >= min_count:
                     items.append((m, var, c))
-        if sum(is_smooth(c) for _, _, c in items) >= 1 and len({i[0]['query'] for i in items}) >= 5:
+        nq = len({i[0]['query'] for i in items})
+        n_sm = len({i[0]['query'] for i in items if is_smooth(i[2])})
+        if ALL_MOTIFS:       # piece-level filter: size window and a mix of smooth / non-smooth counts
+            ok = MIN_M <= nq <= MAX_M and 0 < n_sm < nq
+        else:
+            ok = n_sm >= 1 and nq >= 5
+        if ok:
             out[rel] = {'items': items, 'motifs': v['motifs']}
     return out
 
@@ -90,6 +104,14 @@ def _dist(a, b):
 
 def build_piece(rel, info, rng, n=None):
     items = info['items']
+    if ALL_MOTIFS:           # no sampling: every motif of the piece, only the order is random
+        seen, chosen = set(), []
+        for m, v, c in items:
+            if m['query'] not in seen:
+                seen.add(m['query'])
+                chosen.append(make_item(rel, m, v, 'target' if is_smooth(c) else 'decoy'))
+        rng.shuffle(chosen)
+        return chosen
     n = n or rng.randint(5, 7)
     sm = [i for i in items if is_smooth(i[2])]
     ns = [i for i in items if not is_smooth(i[2])]
@@ -119,8 +141,9 @@ def build_piece(rel, info, rng, n=None):
     by_q = {}
     for it in items:
         by_q.setdefault(it[0]['query'], []).append(it)
-    pairs = [(a, b) for lst in by_q.values() for a in lst for b in lst
-             if is_smooth(a[2]) and not is_smooth(b[2]) and max(a[2], b[2]) <= 1.6 * min(a[2], b[2])]
+    pairs = [] if NO_PAIRS else [
+        (a, b) for lst in by_q.values() for a in lst for b in lst
+        if is_smooth(a[2]) and not is_smooth(b[2]) and max(a[2], b[2]) <= 1.6 * min(a[2], b[2])]
     k_left, n_pair = k, 0
     if 1 <= k <= n - 1 and pairs and rng.random() < 0.5:
         a, b = rng.choice(pairs)
@@ -144,6 +167,11 @@ def build_piece(rel, info, rng, n=None):
     for _ in range(free_dec):
         rng.shuffle(refs)
         pick = None
+        if NO_MATCH:               # plain random draw from all remaining non-smooth motifs
+            if not ns:
+                return None
+            pick = rng.choice(ns)
+            refs = []
         for ref in refs:           # decoy must match some reference target: count x1.6, length +-2
             cand = [it for it in ns if max(it[2], ref[0]) <= 1.6 * min(it[2], ref[0])
                     and abs(it[0]['length'] - ref[1]) <= 2]
@@ -195,7 +223,7 @@ def build_session(elig, seed, n_pieces, n_shared, shared_pieces):
         if items:
             pieces.append({'piece': rel, 'shared': False, 'items': items})
     # anchor into a random non-shared piece
-    for p in rng.sample(pieces, len(pieces)):
+    for p in ([] if NO_ANCHOR else rng.sample(pieces, len(pieces))):
         if p['shared']:
             continue
         a = anchor_for(p['piece'], elig[p['piece']], rng)
@@ -208,7 +236,7 @@ def build_session(elig, seed, n_pieces, n_shared, shared_pieces):
     rng.shuffle(tail)
     order = head + tail
     rng.shuffle(order)
-    return {'seed': seed, 'tag': TAG, 'min_count': MIN_COUNT, 'pieces': order}
+    return {'seed': seed, 'tag': TAG, 'min_count': MIN_COUNT, 'scale': SCALE, 'pieces': order}
 
 
 def main():
@@ -221,9 +249,17 @@ def main():
     ap.add_argument('--out', default='sessions')
     ap.add_argument('--min-count', type=int, default=8, help='only motifs/variants with count >= this')
     ap.add_argument('--tag', default='', help='experiment tag, e.g. min16 (separates response files/analysis)')
+    ap.add_argument('--min-motifs', type=int, default=3, help='(binary preset) min motifs per piece')
+    ap.add_argument('--max-motifs', type=int, default=15, help='(binary preset) max motifs per piece')
+    ap.add_argument('--preset', choices=('binary',), default=None,
+                    help="binary: only normal+inverted count, no pairs/anchors/matching, tick-box scale")
     a = ap.parse_args()
-    global TAG, MIN_COUNT
+    global TAG, MIN_COUNT, ONLY_MAIN, NO_PAIRS, NO_ANCHOR, NO_MATCH, SCALE, ALL_MOTIFS, MIN_M, MAX_M
     TAG, MIN_COUNT = a.tag, a.min_count
+    if a.preset == 'binary':
+        ONLY_MAIN = NO_PAIRS = NO_ANCHOR = NO_MATCH = ALL_MOTIFS = True
+        SCALE = 'binary'
+        MIN_M, MAX_M = a.min_motifs, a.max_motifs
     with open(a.cache, encoding='utf-8') as f:
         elig = eligible_pieces(json.load(f), a.min_count)
     print(f"{len(elig)} eligible pieces")

@@ -45,7 +45,9 @@
     'background:#fafafa;border:1px solid #ddd;border-radius:5px');
   panel.appendChild(el('div', 'font-weight:bold;font-size:14px;margin-bottom:4px',
     'Piece ' + (B.pieceIdx + 1) + ' of ' + B.nPieces));
-  panel.appendChild(el('div', 'font-size:12px;color:#555;margin-bottom:8px',
+  panel.appendChild(el('div', 'font-size:12px;color:#555;margin-bottom:8px', B.binary ?
+    'Tick every motif that you consider <b>relevant</b> for this piece (any number, from none to all). ' +
+    'Click a row to see its first and last occurrence in the score.' :
     'Rate how relevant each motif is for this piece: <b>0</b> = not relevant, <b>4</b> = surely relevant. ' +
     'Click a row to see its first and last occurrence in the score (the label shows which variant is meant).'));
   var tbl = el('table', 'border-collapse:collapse;width:100%');
@@ -67,7 +69,7 @@
       var src = dict.querySelector('tr[data-midx="' + idx + '"] td:nth-child(2)');
       if (src) { svgCell = src.innerHTML; }
     }
-    tr.appendChild(el('td', 'padding:4px 14px 4px 0;zoom:2.2', idx >= 0 ? svgCell : '<i style="color:#c00">motif not found</i>'));
+    tr.appendChild(el('td', 'padding:2px 14px 2px 0;zoom:' + (B.items.length > 8 ? '1.5' : '2.2'), idx >= 0 ? svgCell : '<i style="color:#c00">motif not found</i>'));
     tr.appendChild(el('td', 'padding:6px 14px 6px 0;font-size:12px;color:#444;white-space:nowrap',
       '<span style="background:#eef;border-radius:3px;padding:2px 6px">' + it.label + '</span>'));
     var nav = el('td', 'padding:6px 14px 6px 0;font-size:11px;white-space:nowrap');
@@ -75,7 +77,18 @@
     var aL = el('a', 'color:#1a5fb4;cursor:pointer', 'last &#9654;');
     nav.appendChild(aF); nav.appendChild(aL); tr.appendChild(nav);
     var rate = el('td', 'padding:6px 0;white-space:nowrap;text-align:right');
-    for (var v = 0; v <= 4; v++) {
+    if (B.binary) {
+      var lab1 = el('label', 'cursor:pointer;font-size:14px');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.style.cssText = 'cursor:pointer;margin-right:6px;transform:scale(1.4)';
+      cb.addEventListener('change', function () {
+        ratings[it.id] = cb.checked ? 1 : 0; tRate[it.id] = Date.now() - t0; refresh();
+      });
+      lab1.appendChild(cb); lab1.appendChild(document.createTextNode('relevant'));
+      lab1.addEventListener('click', function (e) { e.stopPropagation(); });
+      rate.appendChild(lab1);
+    }
+    for (var v = 0; v <= 4 && !B.binary; v++) {
       (function (v) {
         var lab = el('label', 'margin-left:10px;cursor:pointer;font-size:14px');
         var inp = document.createElement('input');
@@ -134,6 +147,12 @@
   function needed() { return B.items.filter(function (it) { return it._idx >= 0; }); }
   function refresh() {
     var n = needed(), done = n.filter(function (it) { return ratings[it.id] !== undefined; }).length;
+    if (B.binary) {
+      var yes = n.filter(function (it) { return ratings[it.id] === 1; }).length;
+      status.textContent = 'Marked relevant: ' + yes + ' of ' + n.length;
+      btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+      return;
+    }
     status.textContent = 'Rated ' + done + ' of ' + n.length;
     var ok = (done === n.length);
     btn.disabled = !ok; btn.style.opacity = ok ? '1' : '0.4'; btn.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -145,7 +164,7 @@
     var payload = {
       piece_idx: B.pieceIdx, elapsed_ms: Date.now() - t0,
       items: B.items.map(function (it) {
-        return {id: it.id, rating: ratings[it.id] === undefined ? null : ratings[it.id],
+        return {id: it.id, rating: ratings[it.id] === undefined ? (B.binary ? 0 : null) : ratings[it.id],
                 missing: it._idx < 0, shown_count: shownCount[it.id] === undefined ? null : shownCount[it.id],
                 views: views[it.id] || 0, t_rate_ms: tRate[it.id] === undefined ? null : tRate[it.id]};
       })

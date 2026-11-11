@@ -37,7 +37,7 @@ def load_ratings(files):
             for it in p.get('items', []):
                 if it.get('rating') is None or it.get('missing'):
                     continue
-                rows.append({'rater': r['rater'], 'tag': r.get('tag', ''), 'seed': r['session_seed'], 'piece_idx': p['piece_idx'],
+                rows.append({'rater': r['rater'], 'tag': r.get('tag', ''), 'scale': r.get('scale', 'ordinal'), 'seed': r['session_seed'], 'piece_idx': p['piece_idx'],
                              'piece': p['piece'], 'shared': p.get('shared', False), 'item': it['id'],
                              'kind': it['kind'], 'smooth': bool(it['smooth']), 'count': it['count'],
                              'length': it['length'], 'variant': it['variant'], 'pair_id': it['pair_id'],
@@ -259,6 +259,117 @@ def analyze(df, B=2000, P=2000, seed=1):
     return "\n".join(L)
 
 
+# ── binary (tick-box) version ─────────────────────────────────────────────────
+
+def mantel_haenszel(d):
+    """Stratified 2x2 analysis; strata = rater x piece. Returns (OR_MH, CI_low, CI_high, chi2_CMH, p, n_strata)."""
+    S1 = S2 = 0.0               # sum(ad/n), sum(bc/n)
+    P_ = Q_ = R_ = S_ = 0.0     # Robins-Breslow-Greenland terms
+    sa = sE = sV = 0.0
+    k = 0
+    for _, g in main_items(d).groupby('unit'):
+        a = int(((g.smooth) & (g.rating == 1)).sum()); b = int(((g.smooth) & (g.rating == 0)).sum())
+        c = int(((~g.smooth) & (g.rating == 1)).sum()); dd = int(((~g.smooth) & (g.rating == 0)).sum())
+        n = a + b + c + dd
+        if n < 2 or (a + b) == 0 or (c + dd) == 0:
+            continue
+        k += 1
+        r_, s_ = a * dd / n, b * c / n
+        S1 += r_; S2 += s_
+        P_ += (a + dd) * r_ / n; Q_ += (a + dd) * s_ / n + (b + c) * r_ / n; S_ += (b + c) * s_ / n
+        sa += a; sE += (a + b) * (a + c) / n
+        sV += (a + b) * (c + dd) * (a + c) * (b + dd) / (n * n * (n - 1))
+    if k == 0 or S1 == 0 or S2 == 0 or sV == 0:
+        return np.nan, np.nan, np.nan, np.nan, np.nan, k
+    OR = S1 / S2
+    se = math.sqrt(P_ / (2 * S1 ** 2) + Q_ / (2 * S1 * S2) + S_ / (2 * S2 ** 2))
+    chi2 = (abs(sa - sE) - 0.5) ** 2 / sV
+    return OR, OR * math.exp(-1.96 * se), OR * math.exp(1.96 * se), chi2, float(stats.chi2.sf(chi2, 1)), k
+
+
+def logit_smooth(d, ridge=1e-3):
+    """log-odds ratio of 'smooth' from logistic regression: relevant ~ smooth + log2 count + length + rater."""
+    m = main_items(d)
+    if len(m) < 20 or m.smooth.nunique() < 2 or m.rating.nunique() < 2:
+        return np.nan
+    cols = [np.ones(len(m)), m.smooth.astype(float).values,
+            (m.log2c - m.log2c.mean()).values, (m.length - m.length.mean()).values]
+    for r in sorted(m.rater.unique())[1:]:
+        cols.append((m.rater == r).astype(float).values)
+    X = np.column_stack(cols)
+    y = m.rating.values.astype(float)
+    beta = np.zeros(X.shape[1])
+    pen = np.eye(X.shape[1]) * ridge
+    pen[0, 0] = 0.0
+    for _ in range(50):
+        eta = np.clip(X @ beta, -30, 30)
+        mu = 1 / (1 + np.exp(-eta))
+        W = mu * (1 - mu) + 1e-9
+        H = X.T @ (X * W[:, None]) + pen
+        step = np.linalg.solve(H, X.T @ (y - mu) - pen @ beta)
+        beta += step
+        if np.max(np.abs(step)) < 1e-8:
+            break
+    return float(beta[1])
+
+
+def analyze_binary(df, B=2000, P=2000, seed=1):
+    rng = np.random.default_rng(seed)
+    L = []
+    w = L.append
+    m = main_items(df)
+    w(f"Raters: {df.rater.nunique()}   judgements: {len(m)}   pieces (rater x piece units): {m.unit.nunique()}")
+    w(f"Share of motifs ticked 'relevant': overall {m.rating.mean():.0%}")
+    for lab, g in (('smooth count', m[m.smooth]), ('non-smooth count', m[~m.smooth])):
+        w(f"  {lab:18s} n={len(g):4d}  ticked = {g.rating.mean():.0%}")
+    w("")
+
+    ra = rater_aucs(df)
+    a = np.array([v for v in ra.values() if v == v])
+    w("1) Per-rater within-piece AUC = P(smooth ticked & non-smooth not) + 0.5*ties  (0.5 = no preference)")
+    if len(a) >= 2:
+        t, pt = stats.ttest_1samp(a, 0.5)
+        try:
+            pw = stats.wilcoxon(a - 0.5).pvalue
+        except ValueError:
+            pw = float('nan')
+        lo, hi = boot_ci(df, mean_auc_stat, B, rng)
+        w(f"   mean AUC = {a.mean():.3f}   over raters: t({len(a)-1}) = {t:.2f}, p = {pt:.4f};  Wilcoxon p = {pw:.4f}")
+        w(f"   95% cluster-bootstrap CI [{lo:.3f}, {hi:.3f}]   per-rater range {a.min():.2f}-{a.max():.2f}")
+    elif len(a) == 1:
+        w(f"   one rater only: AUC = {a[0]:.3f} (no rater-level inference possible)")
+    w("")
+
+    OR, lo, hi, chi2, p, k = mantel_haenszel(df)
+    w("2) Mantel-Haenszel odds ratio, stratified by rater x piece (controls for piece and rater)")
+    w(f"   OR = {OR:.2f}  (95% CI {lo:.2f}-{hi:.2f})   CMH chi2 = {chi2:.2f}, p = {p:.4f}   informative strata: {k}")
+    w("   (OR > 1: a smooth-count motif is more likely to be ticked than a non-smooth one in the same piece)")
+    w("")
+
+    obs, pp = perm_test(df, P, rng)
+    w("3) Within-piece permutation test of the AUC (labels shuffled inside every rater x piece)")
+    w(f"   observed mean AUC = {obs:.3f}   one-sided p = {pp:.4f}")
+    w("")
+
+    b = logit_smooth(df)
+    lo, hi = boot_ci(df, logit_smooth, B, rng)
+    w("4) Count-adjusted logistic regression: ticked ~ smooth + log2(count) + length + rater")
+    w(f"   OR(smooth) = {math.exp(b):.2f}   95% cluster-bootstrap CI [{math.exp(lo):.2f}, {math.exp(hi):.2f}]")
+    w("")
+
+    w("5) Reliability on shared pieces (binary Krippendorff alpha, 0 = chance agreement)")
+    sh = df[df.shared]
+    if sh.rater.nunique() >= 2:
+        piv = sh.pivot_table(index=['piece', 'query', 'variant'], columns='rater', values='rating')
+        w(f"   alpha = {krippendorff_alpha_ordinal(piv.values):.3f} on {len(piv)} items x {piv.shape[1]} raters")
+        both = piv.dropna(thresh=2)
+        pa = [(both.iloc[:, i] == both.iloc[:, j]).mean() for i in range(both.shape[1]) for j in range(i + 1, both.shape[1])]
+        w(f"   mean pairwise raw agreement = {np.mean(pa):.0%}")
+    else:
+        w("   needs >= 2 raters on the shared pieces")
+    return "\n".join(L)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--responses', default='responses')
@@ -276,7 +387,9 @@ def main():
         print(f'exported {len(df)} ratings of {df.rater.nunique()} raters to {a.export}')
     reps = []
     for tag, d in df.groupby('tag'):          # experiments are never pooled
-        reps.append(f"=== experiment '{tag or 'default (count>=8)'}' ===\n" + analyze(d, a.boot, a.perm))
+        fn = analyze_binary if (d['scale'] == 'binary').all() else analyze
+        reps.append(f"=== experiment '{tag or 'default (count>=8)'}' "
+                    f"({'tick-box' if fn is analyze_binary else '0-4 scale'}) ===\n" + fn(d, a.boot, a.perm))
     rep = "\n\n".join(reps)
     print(rep)
     with open(a.out, 'w', encoding='utf-8') as f:
