@@ -376,15 +376,28 @@ def main():
     ap.add_argument('--out', default='blind_report.txt')
     ap.add_argument('--boot', type=int, default=2000)
     ap.add_argument('--perm', type=int, default=2000)
+    ap.add_argument('--unsuitable', default='blind_unsuitable.json', help='JSON {piece: reason}; these pieces are dropped from the analysis')
+    ap.add_argument('--keep-unsuitable', action='store_true', help='do not drop unsuitable pieces')
     ap.add_argument('--export', default=None, help='also write all ratings of all raters to this CSV file')
     a = ap.parse_args()
     files = sorted(glob.glob(os.path.join(a.responses, '*.json')))
     df = load_ratings(files)
     if not len(df):
         raise SystemExit('no ratings found')
+    bad = {}
+    if os.path.isfile(a.unsuitable):
+        with open(a.unsuitable, encoding='utf-8') as f:
+            bad = json.load(f)
+    df['unsuitable'] = df['piece'].isin(bad)
+    n_bad = int(df['unsuitable'].sum())
+    if n_bad and not a.keep_unsuitable:
+        print(f"Dropped {n_bad} judgements from {df.loc[df.unsuitable, 'piece'].nunique()} unsuitable piece(s): "
+              + ", ".join(sorted(df.loc[df.unsuitable, 'piece'].unique())))
     if a.export:
         df.drop(columns=['unit']).to_csv(a.export, index=False, encoding='utf-8')
         print(f'exported {len(df)} ratings of {df.rater.nunique()} raters to {a.export}')
+    if not a.keep_unsuitable:
+        df = df[~df['unsuitable']]
     reps = []
     for tag, d in df.groupby('tag'):          # experiments are never pooled
         fn = analyze_binary if (d['scale'] == 'binary').all() else analyze

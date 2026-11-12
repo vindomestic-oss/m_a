@@ -247,6 +247,8 @@ def main():
     ap.add_argument('--pieces', type=int, default=12)
     ap.add_argument('--shared', type=int, default=4)
     ap.add_argument('--out', default='sessions')
+    ap.add_argument('--unsuitable', default='blind_unsuitable.json',
+                    help='JSON {piece_rel: reason} of pieces never used for sessions (shared pieces are chosen BEFORE this filter, so they stay stable)')
     ap.add_argument('--min-count', type=int, default=8, help='only motifs/variants with count >= this')
     ap.add_argument('--tag', default='', help='experiment tag, e.g. min16 (separates response files/analysis)')
     ap.add_argument('--min-motifs', type=int, default=3, help='(binary preset) min motifs per piece')
@@ -262,11 +264,19 @@ def main():
         MIN_M, MAX_M = a.min_motifs, a.max_motifs
     with open(a.cache, encoding='utf-8') as f:
         elig = eligible_pieces(json.load(f), a.min_count)
-    print(f"{len(elig)} eligible pieces")
+    bad = {}
+    if a.unsuitable and os.path.isfile(a.unsuitable):
+        with open(a.unsuitable, encoding='utf-8') as f:
+            bad = json.load(f)
+    elig_all = elig                        # shared pieces are drawn from the unfiltered pool (stable)
+    elig = {r: v for r, v in elig_all.items() if r not in bad}
+    print(f"{len(elig)} eligible pieces ({len(elig_all) - len(elig)} excluded as unsuitable)")
     srng = random.Random(10_000)           # fixed -> shared pieces identical for everybody
     shared = []
-    for rel in pick_pieces(elig, a.shared * 8, srng):
-        it = build_piece(rel, elig[rel], srng)
+    for rel in pick_pieces(elig_all, a.shared * 8, srng):
+        if rel in bad:
+            continue
+        it = build_piece(rel, elig_all[rel], srng)
         if it:
             shared.append((rel, it))
         if len(shared) == a.shared:
