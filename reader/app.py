@@ -2243,6 +2243,86 @@ def _fix_section_pickup_bars(content: str) -> str:
                 continue
 
             # Compute max single-voice duration (excluding chord notes)
+def _trim_padding_rests(content: str) -> str:
+    """Remove hidden padding rests that complete a section-final bar and its pickup bar.
+
+    Converters (e.g. musedata -> MusicXML) pad BOTH the last (short) bar of a section and the
+    short pickup bar that starts the next section to a full bar with a hidden rest
+    (<note print-object="no"><rest/>).  Together the two bars are really ONE bar, so the padding
+    creates a false silence (e.g. 2 quarters) between the pickup notes and the next downbeat and
+    breaks motifs across it ("patterns spanning rests are skipped").
+
+    Trimmed only on a strict structural signature: two ADJACENT measures where, in EVERY part,
+    the measure ends with hidden rest(s) (no <backup>/<forward>), the remaining lengths agree
+    across parts, and their sum is exactly one full bar.  The second measure gets implicit='yes'
+    (a pickup is not a numbered bar)."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    parts = [p.findall('measure') for p in root.findall('part')]
+    if not parts or any(len(m) != len(parts[0]) for m in parts):
+        return content
+
+    def info(msr):
+        """(total_dur, trailing_hidden_rest_dur, trailing_rest_elements) or None if not eligible."""
+        if msr.find('backup') is not None or msr.find('forward') is not None:
+            return None
+        notes = [n for n in msr.findall('note')]
+        total = sum(int(n.findtext('duration') or 0) for n in notes if n.find('chord') is None)
+        trail, k = [], len(notes)
+        while k > 0 and notes[k - 1].find('rest') is not None and notes[k - 1].get('print-object') == 'no':
+            trail.append(notes[k - 1])
+            k -= 1
+        if not trail or k == 0:                      # nothing to trim / measure would be empty
+            return None
+        return total, sum(int(n.findtext('duration') or 0) for n in trail), trail
+
+    # full bar length per measure index (from the first part's attributes)
+    bar, divs, full = [], 1, None
+    for msr in parts[0]:
+        for attrs in msr.findall('attributes'):
+            d = attrs.findtext('divisions')
+            if d:
+                divs = int(d)
+            ts = attrs.find('time')
+            if ts is not None:
+                full = divs * int(ts.findtext('beats') or 4) * 4 // int(ts.findtext('beat-type') or 4)
+        bar.append(full)
+
+    changed, i = False, 0
+    n_meas = len(parts[0])
+    while i < n_meas - 1:
+        full_i = bar[i]
+        if not full_i:
+            i += 1
+            continue
+        ia = [info(p[i]) for p in parts]
+        ib = [info(p[i + 1]) for p in parts]
+        if all(ia) and all(ib):
+            la = {a[0] - a[1] for a in ia}
+            lb = {b[0] - b[1] for b in ib}
+            if len(la) == 1 and len(lb) == 1 and la.pop() + lb.pop() == full_i:
+                for pi, p in enumerate(parts):
+                    for r in ia[pi][2]:
+                        p[i].remove(r)
+                    for r in ib[pi][2]:
+                        p[i + 1].remove(r)
+                    p[i + 1].set('implicit', 'yes')
+                changed = True
+                i += 2
+                continue
+        i += 1
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
+
+
             voice_dur: dict = {}
             for n in msr.findall('note'):
                 if n.find('chord') is not None:
@@ -3373,6 +3453,8 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
     pages = "\n".join(f'<div style="margin-bottom:24px">{s}</div>' for s in svgs)
 
     # ── motif analysis ────────────────────────────────────────────────────────
+            content = _strip_excess_metronome_marks(content)
+            content = _trim_padding_rests(content)
     mei_str = _vtk.getMEI()
     # Per-file beat_dur_q override
     _path_lower = str(path).lower().replace('\\', '/')
