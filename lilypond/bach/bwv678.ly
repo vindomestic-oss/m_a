@@ -139,10 +139,18 @@ sopran = {
       a8 fis d fis a d h!4 c8 h c es
       f8 es f4. g8 es!2 a4\rest
       %% Takt 60 ==================================================
-      c16\rest es, d c << \new Voice { \halsup d8([ fis) fis( g)] g2.^\fermata }
-                          \new Voice { \halsdown \shiftOn s8 es![ es d] \stemUp d2. }
-                       >>
+      c16\rest es, d c d8([ fis) fis( g)] g2.^\fermata
     }
+}
+
+%% Takt 60: Zusatzstimme (es es d d) als eigene Stimme, damit die Sopran-Melodie
+%% (es d c d fis fis g g) in einer Stimme durchlaeuft.
+sopranextra = {
+   \new Voice \relative c'' {
+      \global
+      \halsdown \shiftOn
+      s1.*59 s4 s8 es![ es d] \stemUp d2.
+   }
 }
 
 alt = {
@@ -367,6 +375,7 @@ right = {
    <<
       \sopran
       \alt
+      \sopranextra
    >>
 }
 

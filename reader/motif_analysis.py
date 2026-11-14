@@ -967,8 +967,9 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
         needed_bodies = set()
         for m in selected:
             needed_bodies.add(m['pattern'])
-            if m['n_inv_only'] > 0 or m['n_both'] > 0:
-                needed_bodies.add(tuple((-iv, dur) for iv, dur in m['pattern']))
+            # always look for the inverted form: discovery ran on capped seqs and may have
+            # missed inversions that occur only past the cap (or straddle it)
+            needed_bodies.add(tuple((-iv, dur) for iv, dur in m['pattern']))
         bodies_by_len = defaultdict(set)
         for b in needed_bodies:
             bodies_by_len[len(b)].add(b)
@@ -1036,6 +1037,24 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
                     seen_oq.add(oq)
             m['occurrences'] = dedup_occs
             m['transforms']  = transforms
+
+        # Recount may have raised a longer motif's count to equal its sub-pattern's count;
+        # the dominance check above ran on capped counts. Drop sub-patterns that are fully
+        # covered (same count, onsets = long onsets shifted by the prefix) by a longer motif.
+        def _covered(short, long_):
+            sb, lb = short['pattern'], long_['pattern']
+            if len(lb) <= len(sb) or len(short['occurrences']) != len(long_['occurrences']):
+                return False
+            s_oq = {t['onset_q'] for t in short['transforms']}
+            l_oq = {t['onset_q'] for t in long_['transforms']}
+            for k in range(len(lb) - len(sb) + 1):
+                if lb[k:k + len(sb)] == sb:
+                    sh = round(sum(lb[i][1] for i in range(k)) * 16)
+                    if s_oq == {oq + sh for oq in l_oq}:
+                        return True
+            return False
+        selected = [m for m in selected
+                    if not any(_covered(m, o) for o in selected if o is not m)]
 
     return selected
 
