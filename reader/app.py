@@ -77,6 +77,7 @@ _state = {
 Select a kern file in the panel.</body></html>""",
     "version":    _START_VERSION,
     "seqs":             [],    # [(voice_key, interval_seq), ...] for current file
+    "tail_seqs":        [],    # [(voice_key, interval_seq of split tie heads, tail_idx), ...] ("(" in search)
     "beat_dur_q":       1.0,
     "pickup_dur_q":     0.0,
     "search_rpt_info":  [],     # list of {rpt_start, rpt_end, shift, play2_end}
@@ -296,7 +297,7 @@ def find_kern_files(root: str):
     import re as _re
     def _sort_key(rel):
         fname = os.path.basename(rel)
-        m = _re.match(r'wtc([12])([pf])(\d+)\.krn', fname)
+        m = _re.match(r'wtc([12])([pf])(\d+)(?:_\w+)?\.krn', fname)
         if m:
             wtc_set = int(m.group(1))
             pf = 0 if m.group(2) == 'p' else 1
@@ -1610,7 +1611,7 @@ from motif_analysis import (
     _get_note_beat_positions, _find_motifs, _interval_seq,
     _voice_notes_from_mei, _merge_ornamental_slurs, _remove_unison_voices,
     _metric_phase, _mdl_score, _pattern_to_query, _interval_label,
-    _dur_q_to_str, _dur_q_label, _to_midi, _to_quarters,
+    _dur_q_to_str, _dur_q_label, _to_midi, _to_quarters, _tail_seqs,
 )
 
 _STEP_MIDI = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
@@ -1829,6 +1830,51 @@ def _fix_missing_tuplet_markers(content: str) -> str:
                         changed = True
                     i = j  # advance past this group
 
+    if not changed:
+        return content
+    result = ET.tostring(root, encoding='unicode')
+    if content.lstrip().startswith('<?xml'):
+        decl = content[:content.index('?>') + 2]
+        result = decl + '\n' + result
+    return result
+
+
+def _strip_excess_metronome_marks(content: str, max_marks: int = 8) -> str:
+    """Drop playback-generated tempo changes (a metronome mark every few notes).
+
+    If a score has more than `max_marks` <metronome> directions, keep only the
+    first one; the rest are rendered as clutter above the staff.
+    """
+    import re
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+    if len(list(root.iter('metronome'))) <= max_marks:
+        return content
+    first = True
+    changed = False
+    for part in root.iter('measure'):
+        for d in list(part.findall('direction')):
+            types = d.findall('direction-type')
+            if not any(t.find('metronome') is not None for t in types):
+                continue
+            if first:
+                first = False
+                continue
+            def _is_tempo_fraction(t):
+                w = t.find('words')
+                return (t.find('metronome') is not None or
+                        (w is not None and re.fullmatch(r'\s*\.?\d+\s*', w.text or '')))
+            if all(_is_tempo_fraction(t) for t in types):
+                part.remove(d)
+                changed = True
+            else:
+                for t in types:
+                    if t.find('metronome') is not None:
+                        d.remove(t)
+                        changed = True
     if not changed:
         return content
     result = ET.tostring(root, encoding='unicode')
@@ -2198,51 +2244,6 @@ def _fix_backward_repeat_on_left(content: str) -> str:
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding='unicode')
 
 
-def _fix_section_pickup_bars(content: str) -> str:
-    """Mark short pickup bars that start a repeated section (left forward-repeat)
-    as implicit='yes' and remove any redundant explicit regular right barline.
-
-    Pattern: after part 1 ends with a backward-repeat, part 2 begins with |: and
-    a short anacrusis bar (e.g. a single 16th note) before the first full measure.
-    Without this fix verovio renders the pickup as a visually numbered bar and may
-    show the preceding section's final barline inside the wrong bar."""
-    import xml.etree.ElementTree as ET
-    try:
-        root = ET.fromstring(content)
-    except ET.ParseError:
-        return content
-
-    changed = False
-    for part in root.findall('.//part'):
-        measures = part.findall('measure')
-        divs = 480
-        full_bar_div = divs * 4  # default 4/4
-
-        for idx, msr in enumerate(measures):
-            if idx == 0:
-                continue  # first measure handled by its own implicit flag
-
-            # Track divisions/time-sig changes inside this measure BEFORE inspecting it
-            for attrs in msr.findall('attributes'):
-                d = attrs.findtext('divisions')
-                if d:
-                    divs = int(d)
-                    full_bar_div = divs * 4
-                ts = attrs.find('time')
-                if ts:
-                    beats = int(ts.findtext('beats') or '4')
-                    btype = int(ts.findtext('beat-type') or '4')
-                    full_bar_div = divs * beats * 4 // btype
-
-            # Must start with a left-side forward-repeat barline
-            left_bar = msr.find('.//barline[@location="left"]')
-            if left_bar is None:
-                continue
-            rep = left_bar.find('repeat')
-            if rep is None or rep.get('direction') != 'forward':
-                continue
-
-            # Compute max single-voice duration (excluding chord notes)
 def _trim_padding_rests(content: str) -> str:
     """Remove hidden padding rests that complete a section-final bar and its pickup bar.
 
@@ -2323,6 +2324,51 @@ def _trim_padding_rests(content: str) -> str:
     return result
 
 
+def _fix_section_pickup_bars(content: str) -> str:
+    """Mark short pickup bars that start a repeated section (left forward-repeat)
+    as implicit='yes' and remove any redundant explicit regular right barline.
+
+    Pattern: after part 1 ends with a backward-repeat, part 2 begins with |: and
+    a short anacrusis bar (e.g. a single 16th note) before the first full measure.
+    Without this fix verovio renders the pickup as a visually numbered bar and may
+    show the preceding section's final barline inside the wrong bar."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return content
+
+    changed = False
+    for part in root.findall('.//part'):
+        measures = part.findall('measure')
+        divs = 480
+        full_bar_div = divs * 4  # default 4/4
+
+        for idx, msr in enumerate(measures):
+            if idx == 0:
+                continue  # first measure handled by its own implicit flag
+
+            # Track divisions/time-sig changes inside this measure BEFORE inspecting it
+            for attrs in msr.findall('attributes'):
+                d = attrs.findtext('divisions')
+                if d:
+                    divs = int(d)
+                    full_bar_div = divs * 4
+                ts = attrs.find('time')
+                if ts:
+                    beats = int(ts.findtext('beats') or '4')
+                    btype = int(ts.findtext('beat-type') or '4')
+                    full_bar_div = divs * beats * 4 // btype
+
+            # Must start with a left-side forward-repeat barline
+            left_bar = msr.find('.//barline[@location="left"]')
+            if left_bar is None:
+                continue
+            rep = left_bar.find('repeat')
+            if rep is None or rep.get('direction') != 'forward':
+                continue
+
+            # Compute max single-voice duration (excluding chord notes)
             voice_dur: dict = {}
             for n in msr.findall('note'):
                 if n.find('chord') is not None:
@@ -3408,6 +3454,8 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             content = _fix_beam_groups(content)
             content = _fix_missing_tuplet_markers(content)
             content = _strip_new_system_hints(content)
+            content = _strip_excess_metronome_marks(content)
+            content = _trim_padding_rests(content)
             content = _fix_implicit_pickup_measures(content)
             content = _fix_musicxml_voice_order(content)
             content = _fix_backward_repeat_on_left(content)
@@ -3453,8 +3501,6 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
     pages = "\n".join(f'<div style="margin-bottom:24px">{s}</div>' for s in svgs)
 
     # ── motif analysis ────────────────────────────────────────────────────────
-            content = _strip_excess_metronome_marks(content)
-            content = _trim_padding_rests(content)
     mei_str = _vtk.getMEI()
     # Per-file beat_dur_q override
     _path_lower = str(path).lower().replace('\\', '/')
@@ -3464,7 +3510,9 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
 
     # parse voices — separate try so _voices_s survives later errors
     try:
-        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _vg_s = _voice_notes_from_mei(mei_str, auto_cell=True)
+        _tails_s = {}
+        _voices_s, _beat_dur_q_s, _pickup_dur_q_s, _rr_s, _vg_s = _voice_notes_from_mei(
+            mei_str, tie_tails_out=_tails_s, auto_cell=True)
         if _beat_override is not None:
             _beat_dur_q_s = _beat_override
     except Exception:
@@ -3473,6 +3521,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
         _pickup_dur_q_s = 0.0
         _rr_s = []
         _vg_s = []
+        _tails_s = {}
 
     # compute interval sequences for the /search endpoint + build note label map
     _search_rpt_info = None
@@ -3547,7 +3596,9 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                 nid_labels[nid] = pname.upper() + acc
         nid_to_note = {n[0]: n for _ns in _voices_s.values() for n in _ns}
         beam_of = _beam_groups_from_mei(mei_str)
+        tail_seqs = _tail_seqs(_src_v, _tails_s, _beat_dur_q_s, _pickup_dur_q_s)
     except Exception:
+        tail_seqs = []
         all_seqs = []
         nid_labels = {}
         nid_to_note = {}
@@ -3571,7 +3622,15 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
         n_both = m.get('n_both', 0)
         n_dir  = m.get('n_direct_only', union) + n_both
         n_inv  = m.get('n_inv_only', 0) + n_both
-        return [k for k in (union, n_dir, n_inv) if _is_smooth(k) and k >= 8]
+        counts = [union, n_dir, n_inv]
+        # bounded counts (<...> in the table: occurrences starting on a tie tail from an earlier
+        # beat are included) take part in the ranking as well
+        if 'b_n_direct_only' in m:
+            b_both = m['b_n_both']
+            counts += [m['b_n_direct_only'] + b_both,
+                       m['b_n_inv_only'] + b_both,
+                       m['b_n_direct_only'] + m['b_n_inv_only'] + b_both]
+        return [k for k in counts if _is_smooth(k) and k >= 8]
 
     def _any_smooth(m):
         return bool(_smooth_counts(m))
@@ -3634,8 +3693,6 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                 cnt_html += (
                     '<br><span style="font-size:10px;color:#3a7">'
                     '&#x27E8;' + '&nbsp;'.join(b_parts) + '&#x27E9;</span>')
-        mdl = m.get('mdl', 0)
-        mdl_html = f'<b>{mdl}</b>' if mdl > 0 else f'<span style="color:#bbb">{mdl}</span>'
         first_nids = m.get('occs', [[]])[0] if m.get('occs') else []
         notes_info = []
         for nid in first_nids:
@@ -3644,9 +3701,11 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
                 notes_info.append((pn.lower(), oi, dq, mv, nid))
         staff_svg = _mini_staff_svg(notes_info, beam_of)
         return (
-            f'<tr data-midx="{i}" data-count="{cnt}" data-mdl="{mdl}" data-length="{m["length"]}" '
-            f'style="border-bottom:1px solid #e8e8e8;cursor:pointer" '
-            f'onmouseover="this.style.background=\'#f0f0f0\'" '
+            f'<tr data-midx="{i}" data-count="{cnt}" data-length="{m["length"]}" '
+            + ('class="motif-low" ' if cnt < _LOW_OCC else '')
+            + ('style="display:none;border-bottom:1px solid #e8e8e8;cursor:pointer" ' if cnt < _LOW_OCC
+               else 'style="border-bottom:1px solid #e8e8e8;cursor:pointer" ')
+            + f'onmouseover="this.style.background=\'#f0f0f0\'" '
             f'onmouseout="if(this.getAttribute(\'data-active\')!==\'1\')this.style.background=\'\'">'
             f'<td style="padding:5px 10px 5px 0;white-space:nowrap">'
             f'<span style="display:inline-block;width:10px;height:10px;border-radius:2px;'
@@ -3659,10 +3718,11 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             f'{staff_svg}</div></td>'
             f'<td style="padding:5px 10px 5px 0;text-align:center">&times;{cnt_html}</td>'
             f'<td style="padding:5px 8px 5px 0;text-align:center;color:#888">{m["length"]}</td>'
-            f'<td style="padding:5px 0;text-align:right;font-size:11px;color:#557">{mdl_html}</td>'
             f'</tr>'
         )
 
+    _LOW_OCC = 4   # motifs with fewer occurrences are hidden behind a link (long patterns widen the table)
+    _n_low = sum(1 for m in motifs if m.get('display_count', m['count']) < _LOW_OCC)
     auto_rows = "".join(_row(i, m) for i, m in enumerate(motifs))
     def _strip_p2_nid(nid):
         return nid[:-4] if nid.endswith('__p2') else nid
@@ -3811,11 +3871,14 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
         f'title="Сортировать по числу вхождений">Вхожд.&#9660;</th>'
         f'<th id="sort-length-hdr" style="padding:0 8px 4px 0;text-align:center;cursor:pointer" '
         f'title="Сортировать по числу нот">Нот</th>'
-        f'<th id="sort-mdl-hdr" style="padding:0 0 4px 0;cursor:pointer;text-align:right" '
-        f'title="Сортировать по MDL-оценке">MDL</th>'
         f'</tr></thead>'
         f'<tbody>{auto_rows}</tbody>'
-        f'</table></div>'
+        f'</table>'
+        + (f'<div style="margin:6px 0 2px 0;font:11px sans-serif">'
+           f'<a href="#" id="motif-low-link" data-n="{_n_low}" data-lim="{_LOW_OCC}" '
+           f'onclick="return window.toggleLowMotifs()" style="color:#1a55a0">'
+           f'show motifs with occ &lt; {_LOW_OCC} ({_n_low})</a></div>' if _n_low else '')
+        + f'</div>'
     )
 
     # ── combined script (highlight + search) ─────────────────────────────────
@@ -4012,8 +4075,8 @@ document.addEventListener('keydown',function(e){{
 var _dictSortKey=null;
 var _dictSortAsc=false;
 var _dictOrigOrder=null;
-var _sortLabels={{count:'Вхожд.',length:'Нот',mdl:'MDL'}};
-var _sortHdrs={{count:'sort-count-hdr',length:'sort-length-hdr',mdl:'sort-mdl-hdr'}};
+var _sortLabels={{count:'Вхожд.',length:'Нот'}};
+var _sortHdrs={{count:'sort-count-hdr',length:'sort-length-hdr'}};
 function sortDict(key){{
   var tbody=document.querySelector('#motif-dict tbody');
   if(!tbody)return;
@@ -4163,6 +4226,8 @@ function highlight(){{
         activeKey=key; activeFilter=filter;
         var row=document.querySelector('#motif-dict tr[data-midx="'+idx+'"]');
         if(row){{row.style.background='#e8f0fe';row.setAttribute('data-active','1');}}
+        var inpq=document.getElementById('motif-search-input');
+        if(inpq){{var fq=_queryForFilter(idx,filter);if(fq)inpq.value=fq;}}
         _highlightFilter(idx,filter);
         if(st2){{
           var badge2='';
@@ -4221,7 +4286,7 @@ function highlight(){{
           dtr.id=detailId;
           dtr.style.background='#f4f4ff';
           var dtd=document.createElement('td');
-          dtd.colSpan=5;
+          dtd.colSpan=4;
           dtd.style.cssText='padding:3px 10px 5px 20px;font:10px monospace;color:#555;line-height:1.6';
           var html='';
           for(var pi=0;pi<prof.length;pi++){{
@@ -4313,8 +4378,7 @@ function addVocabMotif(occs,queryStr,repeat_pairs,displayCount,isVolta,vidx){{
     '<div style="display:flex;align-items:center;gap:8px">'+
     '<span style="font-family:monospace;font-size:11px;color:#aaa">'+esc+'</span></div></td>'+
     '<td style="padding:5px 10px 5px 0;text-align:center">\xd7'+(isSmooth(cnt)&&cnt>=8?'<b>'+cnt+'</b>':String(cnt))+'</td>'+
-    '<td style="padding:5px 0;text-align:center;color:#888">'+nNotes+'</td>'+
-    '<td></td>';
+    '<td style="padding:5px 0;text-align:center;color:#888">'+nNotes+'</td>';
   tbody.appendChild(tr);
   // fetch staff SVG for first occurrence
   if(occs[0]&&occs[0].length){{
@@ -4346,6 +4410,36 @@ function addVocabMotif(occs,queryStr,repeat_pairs,displayCount,isVolta,vidx){{
   }});
 }}
 
+function _tiedQuery(q){{
+  // "(" before the first interval: also count occurrences that start on the tail of a tie
+  // (the bracketed counts of the dictionary). Only for interval / contour queries.
+  var scalePfx='';
+  var sm=q.match(/^\\([^)]+\\)/);
+  if(sm){{scalePfx=sm[0];q=q.slice(sm[0].length);}}
+  var parts=q.split(';');
+  if(parts.length<3||!parts[2])return scalePfx+q;
+  if(parts[2].charAt(0)==='(')return scalePfx+q;
+  parts[2]='('+parts[2];
+  return scalePfx+parts.join(';');
+}}
+
+function _queryForFilter(idx,filter){{
+  // search-field text for a dictionary count: all | direct | inv  and bounded ball | bdirect | binv
+  var q=motifs[idx].queryStr;
+  if(!q)return '';
+  var base=q.replace(/;inv\\s*$/,'').trim();
+  var isB=(filter.charAt(0)==='b');
+  var f=isB?filter.slice(1):filter;
+  var out;
+  if(f==='all')out=q;
+  else if(f==='direct')out=base;
+  else{{var iq=_invertQueryStr(base);out=iq?iq:base;}}
+  // the bracketed counts may include inverted tie-tail starts even when the motif itself has no
+  // inversions among its regular occurrences (then its queryStr has no ";inv")
+  if(isB&&f==='all'&&!/;inv\\s*$/.test(out)&&(motifs[idx].b_inv||[]).some(function(x){{return x;}}))out+=';inv';
+  return isB?_tiedQuery(out):out;
+}}
+
 function _invertQueryStr(q){{
   // Invert the intervals part of a query string "[(<scale>)]dur;phase;ivs" → same with -ivs
   // Preserve optional (scale) prefix.
@@ -4372,6 +4466,10 @@ function _findDictMatch(query){{
   // optional explicit "(scale)" prefix: if typed, it must equal the motif's; if absent, ignored
   var _pm=base.match(/^\\([^)]*\\)/); var typedPfx=_pm?_pm[0]:'';
   base=base.slice(typedPfx.length);
+  // "(" before the first interval = bounded variant (tie-tail starts included)
+  var tied=false;
+  var _tm=base.match(/^([^;]*;[^;]*;)\\(/);
+  if(_tm){{tied=true;base=_tm[1]+base.slice(_tm[0].length);}}
   var invBase=_invertQueryStr(base);
   for(var i=0;i<motifs.length;i++){{
     var mq=motifs[i].queryStr;
@@ -4384,21 +4482,34 @@ function _findDictMatch(query){{
     if(base===mqBase){{
       // Direct match: user typed the motif's own query (with or without ;inv suffix)
       var filter=hasInv?'all':'direct';
-      return{{idx:i,filter:filter,variant:filter}};
+      return{{idx:i,filter:(tied?'b':'')+filter,variant:filter,tied:tied}};
     }}
     if(invBase&&invBase===mqBase){{
       // User typed the inverted form of this motif's query (no ;inv = inv-only; ;inv = union)
       var filter2=hasInv?'all':'inv';
-      return{{idx:i,filter:filter2,variant:filter2}};
+      return{{idx:i,filter:(tied?'b':'')+filter2,variant:filter2,tied:tied}};
     }}
   }}
   return null;
 }}
 
+window.toggleLowMotifs=function(force){{
+  // rare motifs (long patterns) are hidden by default; the link under the table shows / hides them
+  var a=document.getElementById('motif-low-link');
+  if(!a)return false;
+  var rows=document.querySelectorAll('#motif-dict tr.motif-low');
+  var show=(typeof force==='boolean')?force:(rows.length&&rows[0].style.display==='none');
+  rows.forEach(function(r){{r.style.display=show?'':'none';}});
+  var lim=a.getAttribute('data-lim'), n=a.getAttribute('data-n');
+  a.innerHTML=show?('hide motifs with occ &lt; '+lim):('show motifs with occ &lt; '+lim+' ('+n+')');
+  return false;
+}};
+
 function _activateDictRow(match, st){{
   var idx=match.idx; var filter=match.filter; var variant=match.variant;
   var row=document.querySelector('#motif-dict tr[data-midx="'+idx+'"]');
   if(!row)return;
+  if(row.classList.contains('motif-low')&&row.style.display==='none')window.toggleLowMotifs(true);
   clearActiveRows(); clearRects();
   activeKey='auto:'+idx; activeFilter=filter;
   row.style.background='#e8f0fe';
@@ -4420,6 +4531,7 @@ function _activateDictRow(match, st){{
   if(variant==='direct'){{badge='\u00d7direct';bcolor='#1a7f37';}}
   else if(variant==='inv'){{badge='\u21c5inv';bcolor='#c05a00';}}
   else{{badge='\u2295all';bcolor='#1a55a0';}}
+  if(match.tied)badge='\u27e8'+badge+'\u27e9';
   st.innerHTML='<span style="background:'+bcolor+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">'+badge+'</span>'
     +' <b>M'+n+'</b>';
 }}
@@ -4470,6 +4582,7 @@ function _runVocab(){{
     }})(q,vi);
   }});
 }}
+window.__motifApi={{motifs:motifs,filteredByInv:filteredByInv,drawBoxes:drawBoxes,clearRects:clearRects,colorMotifOccs:colorMotifOccs}};
 function _onReady(){{highlight();_runVocab();}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_onReady);
 else _onReady();
@@ -4516,7 +4629,6 @@ function _buildTsdOverlay(){{
     if(!sys||sys===svg)sys=null;
     var noteBB=el.getBBox();
     var _sr=svg.getBoundingClientRect(),_vb=svg.viewBox.baseVal;
-window.__motifApi={{motifs:motifs,filteredByInv:filteredByInv,drawBoxes:drawBoxes,clearRects:clearRects,colorMotifOccs:colorMotifOccs}};
     var _px=(_sr.width&&_vb&&_vb.width)?_vb.width/_sr.width:0;
     var x=noteBB.x+15*_px;
     var sysBB=sys?sys.getBBox():null;
@@ -4647,7 +4759,8 @@ window.toggleTSDGen8=function(){{
 <div id="score-pages" style="position:relative">{pages}</div>
 </body>
 </html>"""
-    return html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s, _search_rpt_info, nid_to_note, beam_of
+    return (html, n_pages, version, all_seqs, _beat_dur_q_s, _pickup_dur_q_s, _search_rpt_info, nid_to_note, beam_of,
+            tail_seqs)
 
 # ── background render + update ────────────────────────────────────────────────
 
@@ -4684,8 +4797,10 @@ def _bring_browser_to_front():
 def _render_worker(path: str, version: str, queue, transpose_semitones: int = 0):
     """Runs in a subprocess to isolate verovio segfaults from the main process."""
     try:
-        html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of = render_score(path, version, transpose_semitones)
-        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of))
+        (html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of,
+         tail_seqs) = render_score(path, version, transpose_semitones)
+        queue.put(('ok', html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of,
+                   tail_seqs))
     except Exception as e:
         queue.put(('error', str(e)))
 
@@ -4722,11 +4837,12 @@ def load_file_bg(path: str, status_cb):
         status_cb(f"ERROR: {result[1]}", error=True)
         return
 
-    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of = result
+    _, html, n_pages, ver, seqs, beat_dur_q, pickup_dur_q, search_rpt_info, nid_to_note, beam_of, tail_seqs = result
     with _state_lock:
         _state["html"]            = html
         _state["version"]         = ver
         _state["seqs"]            = seqs
+        _state["tail_seqs"]       = tail_seqs
         _state["beat_dur_q"]      = beat_dur_q
         _state["pickup_dur_q"]    = pickup_dur_q
         _state["search_rpt_info"] = search_rpt_info

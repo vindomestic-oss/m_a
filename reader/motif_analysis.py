@@ -76,7 +76,9 @@ def _query_scale(cell_q, min_dur_q):
         return cell_q
     compound = (round(cell_q * 4) % 3 == 0)
     if n0 % 3 == 0:
-        n_eff = min(n0, 6) if (compound and n0 >= 6) else 3
+        # n0 divisible by 9 in a compound beat = triplets (3 groups of 3, e.g. nine triplet 16ths in
+        # 3/8): the phase is the position inside the triplet group, as in simple meter.
+        n_eff = min(n0, 6) if (compound and n0 >= 6 and n0 % 9 != 0) else 3
     elif n0 > 4:
         n_eff = 4
     else:
@@ -149,7 +151,7 @@ def _metric_phase(onset_q, dur_q, beat_dur_q=1.0):
     # round(beat_dur_q * 4) divisible by 3 identifies compound beats (1.5→6, 0.75→3, etc.).
     is_compound = (round(beat_dur_q * 4) % 3 == 0)
     if n_per_beat % 3 == 0:
-        if is_compound and n_per_beat >= 6:
+        if is_compound and n_per_beat >= 6 and n_per_beat % 9 != 0:
             # Compound meter (e.g. 16th in 12/8): keep up to 6 phases so that
             # phase 0 only hits beat boundaries, not also dotted-eighth positions.
             n_per_beat = min(n_per_beat, 6)
@@ -307,7 +309,16 @@ def _voice_notes_from_mei(mei_str, tie_tails_out=None, auto_cell=False, info_out
     # unreliable.  Pick the most-frequent implied base from reliable notes; fall
     # back to whole/half only if no reliable notes exist.
     _base_candidates = {}  # implied_base -> count
+    # Notes inside <tuplet> have ppq = nominal * numbase/num (a triplet 16th is 4 ticks at base 24,
+    # not 6): they must not vote, otherwise a piece full of triplet 16ths (e.g. a 3/8 sonata with
+    # nine triplet 16ths per bar) gets base 16 instead of 24 and every duration comes out 1.5x too long.
+    _in_tuplet = set()
+    for _tp in tree.iter(tag_pfx + 'tuplet'):
+        for _e in _tp.iter():
+            _in_tuplet.add(id(_e))
     for _el in tree.iter():
+        if id(_el) in _in_tuplet:
+            continue
         _ppq = _el.get('dur.ppq')
         if _ppq is None:
             continue
@@ -734,6 +745,13 @@ def _interval_seq(notes, beat_dur_q=1.0, pickup_dur_q=0.0):
     return result
 
 
+# A shorter pattern whose every occurrence sits inside an occurrence of a longer pattern, k times
+# per occurrence, is just a window tiled k times into that longer figure (pairs, triples ...).
+# Only small k is treated as such a tiling: larger factors are genuine higher-level repetition
+# (e.g. four figures per passage) and both levels stay in the dictionary.
+_MAX_TILING = 3
+
+
 def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=None,
                  beat_dur_q=1.0, pickup_dur_q=0.0, all_seqs_full=None):
     """
@@ -912,13 +930,69 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
             if _linear_window_dominated(body_i, cand_oqs16[i], body_j, cand_oqs16[j]):
                 window_suppressed[j] = True
 
+    # Candidate-level coverage: a pattern S is explained by a longer candidate L (even one that
+    # would only rank far below the max_motifs cut, because its count is k times smaller) when
+    # every occurrence of S lies inside an occurrence of L and each L holds S the same number
+    # of times, e.g. a one-bar figure that always comes as a sequence of three bars (L = S c S c S,
+    # count(S) = 3 * count(L)). See also the same test on the selected motifs further down.
+    _pid = {}
+    cand_enc = [''.join(chr(0x100 + _pid.setdefault(pr, len(_pid))) for pr in cb)
+                for (cb, _ph), _o in candidates]
+    cand_len = [len(cb) for (cb, _ph), _o in candidates]
+    cand_cnt = [len(o) for (_k, o) in candidates]
+
+    def _covers_cand(ci, j):
+        """0 if candidate j does not explain candidate ci, else the multiplicity k (S per L)."""
+        sb, lb = candidates[ci][0][0], candidates[j][0][0]
+        offs = [k for k in range(len(lb) - len(sb) + 1) if lb[k:k + len(sb)] == sb]
+        if not offs:
+            return 0
+        shifts = [round(sum(lb[i][1] for i in range(k)) * 16) for k in offs]
+        l_oq = sorted(cand_oqs16[j])
+        where = {}
+        for jj, lq in enumerate(l_oq):
+            for sh in shifts:
+                where.setdefault(lq + sh, set()).add(jj)
+        per_long = [0] * len(l_oq)
+        for q in cand_oqs16[ci]:
+            js = where.get(q)
+            if not js or len(js) != 1:
+                return 0
+            per_long[next(iter(js))] += 1
+        return per_long[0] if len(set(per_long)) == 1 else 0
+
+    def _find_cover(ci):
+        """The candidate that explains pattern ci as a k-fold tiling (2 <= k <= _MAX_TILING): the one
+        with the largest count (least aggregated), the longest among equals. None if there is none.
+        (k = 1, equal counts, is left to the dominance checks.)"""
+        best = None
+        for j in range(len(candidates)):
+            if (j != ci and cand_len[j] > cand_len[ci] and cand_cnt[j] < cand_cnt[ci]
+                    and cand_enc[ci] in cand_enc[j]):
+                k = _covers_cand(ci, j)
+                if 2 <= k <= _MAX_TILING:
+                    if best is None or (cand_cnt[j], cand_len[j]) > (cand_cnt[best], cand_len[best]):
+                        best = j
+        return best
+
     selected        = []
     selected_bodies = []
+    promoted = set()          # candidates already handled as the stand-in of a covered sub-pattern
     for ci, ((body, phase), occs) in enumerate(candidates):
         if len(selected) >= max_motifs:
             break
-        if window_suppressed[ci]:
+        if ci in promoted or window_suppressed[ci]:
             continue
+        # a covered sub-pattern is replaced by its (longest) covering pattern, which then goes through
+        # the normal checks below at the sub-pattern's rank; otherwise the longer pattern could fall
+        # below the max_motifs cut because its own count is k times smaller
+        cur = _find_cover(ci)             # a single tiling step: higher levels stay separate
+        if cur is not None:
+            if cur in promoted or window_suppressed[cur]:
+                continue
+            promoted.add(cur)
+            ci = cur
+            (body, phase), occs = candidates[ci]
         body_oqs16 = cand_oqs16[ci]
         dominated = any(
             (len(sb) > len(body) and
@@ -1038,23 +1112,35 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
             m['occurrences'] = dedup_occs
             m['transforms']  = transforms
 
-        # Recount may have raised a longer motif's count to equal its sub-pattern's count;
-        # the dominance check above ran on capped counts. Drop sub-patterns that are fully
-        # covered (same count, onsets = long onsets shifted by the prefix) by a longer motif.
-        def _covered(short, long_):
-            sb, lb = short['pattern'], long_['pattern']
-            if len(lb) <= len(sb) or len(short['occurrences']) != len(long_['occurrences']):
-                return False
-            s_oq = {t['onset_q'] for t in short['transforms']}
-            l_oq = {t['onset_q'] for t in long_['transforms']}
-            for k in range(len(lb) - len(sb) + 1):
-                if lb[k:k + len(sb)] == sb:
-                    sh = round(sum(lb[i][1] for i in range(k)) * 16)
-                    if s_oq == {oq + sh for oq in l_oq}:
-                        return True
+    # Drop a sub-pattern S that is fully explained by a longer selected pattern L: every occurrence
+    # of S lies inside an occurrence of L and every L contains S the same number of times k
+    # (k = 1: equal counts; k >= 2: S is just a window tiled k times into the longer figure, e.g.
+    # a four-note window cut out of an eight-note figure by the non-overlap rule: count(S) =
+    # k * count(L) is then an artefact of the window length, not independent evidence).
+    # The dominance check above ran on capped counts, and it only knew the equal-count case.
+    def _covered(short, long_):
+        sb, lb = short['pattern'], long_['pattern']
+        if len(lb) <= len(sb):
             return False
-        selected = [m for m in selected
-                    if not any(_covered(m, o) for o in selected if o is not m)]
+        offs = [k for k in range(len(lb) - len(sb) + 1) if lb[k:k + len(sb)] == sb]
+        if not offs:
+            return False
+        shifts = [round(sum(lb[i][1] for i in range(k)) * 16) for k in offs]
+        l_oq = sorted({t['onset_q'] for t in long_['transforms']})
+        where = {}                       # onset of an S window -> set of long occurrences holding it
+        for j, lq in enumerate(l_oq):
+            for sh in shifts:
+                where.setdefault(lq + sh, set()).add(j)
+        per_long = [0] * len(l_oq)
+        for t in short['transforms']:
+            js = where.get(t['onset_q'])
+            if not js or len(js) != 1:   # outside every long occurrence, or ambiguous
+                return False
+            per_long[next(iter(js))] += 1
+        return len(set(per_long)) == 1 and 1 <= per_long[0] <= _MAX_TILING
+
+    selected = [m for m in selected
+                if not any(_covered(m, o) for o in selected if o is not m)]
 
     return selected
 
@@ -1292,6 +1378,13 @@ def _search_motif(query):
     else:
         raise ValueError("Формат: длит;фаза;+iv-iv… или длит;фаза (только ритм)")
 
+    # "(" right before the first interval: also count occurrences that START ON THE TAIL of a tie
+    # whose head lies in an earlier beat (the bracketed counts of the dictionary). Intervals / contour only.
+    tied = False
+    if not rhythm_only and ivs_str.lstrip().startswith('('):
+        tied = True
+        ivs_str = ivs_str.lstrip()[1:]
+
     # detect ? on first duration token → optional leading note
     _dur_tokens = dur_str.split(',')
     _opt_first_flag = len(_dur_tokens) > 0 and _dur_tokens[0].strip().endswith('?')
@@ -1371,6 +1464,7 @@ def _search_motif(query):
         beat_dur_q        = _state.get("beat_dur_q", 1.0)
         pickup_dur_q      = _state.get("pickup_dur_q", 0.0)
         search_rpt_info   = _state.get("search_rpt_info")
+        tail_seqs         = list(_state.get("tail_seqs", [])) if tied else []
 
     # compute phase using the smallest note duration in the pattern as unit
     # rhythm_only: durs elements are (op, val) → s[1] = val
@@ -1386,11 +1480,18 @@ def _search_motif(query):
     # Phase 1: collect ALL matching positions across voices (no greedy yet).
     # Phase 2: sort by (onset_q, is_inv=False first) then run joint greedy — mirrors
     # _find_motifs step 3 so direct always beats inverted at the same onset.
-    _all_cands = []   # (onset_q, is_inv, vi_idx, i, onset_f, nids)
-    for _vi_idx, (_vk, seq) in enumerate(seqs):
+    _all_cands = []   # (onset_q, is_inv, vi_idx, i, onset_f, nids, next_start, from_tail)
+    _scan_targets = [(_j, _sq, None, False) for _j, (_vk0, _sq) in enumerate(seqs)]
+    if tied:
+        _vk_idx = {_vk0: _j for _j, (_vk0, _sq) in enumerate(seqs)}
+        # voices with tie heads split back into head' + tail: matches may only START at a tail note
+        _scan_targets += [(_vk_idx.get(_vk0, -1), _tsq, set(_tidx), True) for _vk0, _tsq, _tidx in tail_seqs]
+    for _vi_idx, seq, _only_idx, _is_tail in _scan_targets:
         if len(seq) < n:
             continue
         for i in range(len(seq) - n + 1):
+            if _only_idx is not None and i not in _only_idx:
+                continue
             _curr_is_inv = False
             # phase of first note, measured in units of the smallest pattern duration
             if explicit_scale_q is not None and min_dur_q is not None:
@@ -1481,10 +1582,12 @@ def _search_motif(query):
                 while _nsi < len(seq) and seq[_nsi][4] < _scale_end - 1e-9:
                     _nsi += 1
                 _next_start_i = _nsi
-            _all_cands.append((onset_q, _curr_is_inv, _vi_idx, i, seq[i][4], nids, _next_start_i))
+            _all_cands.append((onset_q, _curr_is_inv, _vi_idx, i, seq[i][4], nids, _next_start_i, _is_tail))
 
     # Phase 2: sort (direct before inverted at same onset, then by voice), joint greedy.
     # Cross-dedup does NOT advance per-voice last_end — same semantics as _find_motifs.
+    _tail_cands = [c for c in _all_cands if c[7]]
+    _all_cands = [c[:7] for c in _all_cands if not c[7]]
     _all_cands.sort(key=lambda x: (x[0], x[1], x[2]))
     _last_end_v = {}
     seen_onsets = set()
@@ -1505,6 +1608,27 @@ def _search_motif(query):
         seen_onsets.add(_oq)
         used_nids.update(_ns_base)
         _last_end_v[_vi] = _nsi
+
+    # tie-tail starts: same rule as the dictionary's bounded extras — taken after the regular
+    # occurrences, only if neither the onset nor any note is already used
+    n_tail = 0
+    if _tail_cands:
+        _tail_cands.sort(key=lambda x: (x[0], x[1], x[2]))
+        for _oq, _inv, _vi, _i, _of, _ns, _nsi, _ft in _tail_cands:
+            if _oq in seen_onsets:
+                continue
+            _ns_base = [_n[:-4] if _n.endswith('__p2') else _n for _n in _ns]
+            if used_nids.intersection(_ns_base):
+                continue
+            occs_with_onset.append((_of, _ns))
+            is_inv_flags.append(_inv)
+            seen_onsets.add(_oq)
+            used_nids.update(_ns_base)
+            n_tail += 1
+        if n_tail:      # keep score (onset) order: numbering and repeat pairs follow the music
+            _ord = sorted(range(len(occs_with_onset)), key=lambda k: occs_with_onset[k][0])
+            occs_with_onset = [occs_with_onset[k] for k in _ord]
+            is_inv_flags    = [is_inv_flags[k] for k in _ord]
 
     def _strip_p2(nid):
         return nid[:-4] if nid.endswith('__p2') else nid
@@ -1543,7 +1667,7 @@ def _search_motif(query):
     display_count = len(occs) - _skip_p2_true_count
     is_volta_result = bool(search_rpt_info)
     return {"occs": occs, "count": display_count, "repeat_pairs": repeat_pairs,
-            "is_inv": is_inv_flags, "is_volta": is_volta_result}
+            "is_inv": is_inv_flags, "is_volta": is_volta_result, "n_tail": n_tail, "tied": tied}
 
 
 def _mdl_score(n, L, transforms):
@@ -1565,20 +1689,14 @@ def _mdl_score(n, L, transforms):
     return round(n * (L - 1) - L - transp_cost)
 
 
-def _bounded_extras(motifs, seq_voices, tails, beat_dur_q, pickup_dur_q):
+def _split_tail_voices(seq_voices, tails, beat_dur_q, pickup_dur_q):
     """
-    "Bounded" occurrences: motif starts on the TAIL of a tie whose head lies in an earlier beat.
-    Tie merging gives the head a long duration, so such occurrences are missed by _find_motifs.
-    Here every merged head that crosses a beat boundary is split back into head' + tail
-    (head'->tail is a contiguous unison step) and only occurrences STARTING at a tail are kept.
-    (An occurrence *ending* on a tie head needs no special handling: the last note's duration
-    is not part of the pattern body.)
-    Returns {motif_index: [(nids, is_inv, onset_q16, voice_key), ...]}
+    Voices with every tie head that crosses a beat boundary split back into head' + tail
+    (head'->tail is a contiguous unison step). Yields (voice_key, split_notes, tail_idx) where
+    tail_idx are the indexes in split_notes of the tail notes (starts of "bounded" occurrences).
     """
-    extras = defaultdict(list)
     if not tails:
-        return extras
-    inv_pats = [tuple((-iv, d) for iv, d in m['pattern']) for m in motifs]
+        return
     for vk, notes in seq_voices.items():
         tmap = tails.get(vk)
         if not tmap:
@@ -1602,8 +1720,31 @@ def _bounded_extras(motifs, seq_voices, tails, beat_dur_q, pickup_dur_q):
             split.append((n[0], n[1], n[2], n[3] - tdur, n[4], n[5]))
             tail_idx.append(len(split))
             split.append((tnote[0] + suf, tnote[1], tnote[2], tdur, tnote[4], t_on))
-        if not tail_idx:
-            continue
+        if tail_idx:
+            yield vk, split, tail_idx
+
+
+def _tail_seqs(seq_voices, tails, beat_dur_q, pickup_dur_q):
+    """[(voice_key, interval_seq_of_split_voice, tail_idx), ...] for the search endpoint ("(" marker)."""
+    return [(vk, _interval_seq(split, beat_dur_q, pickup_dur_q), tail_idx)
+            for vk, split, tail_idx in _split_tail_voices(seq_voices, tails, beat_dur_q, pickup_dur_q)]
+
+
+def _bounded_extras(motifs, seq_voices, tails, beat_dur_q, pickup_dur_q):
+    """
+    "Bounded" occurrences: motif starts on the TAIL of a tie whose head lies in an earlier beat.
+    Tie merging gives the head a long duration, so such occurrences are missed by _find_motifs.
+    Here every merged head that crosses a beat boundary is split back into head' + tail
+    (head'->tail is a contiguous unison step) and only occurrences STARTING at a tail are kept.
+    (An occurrence *ending* on a tie head needs no special handling: the last note's duration
+    is not part of the pattern body.)
+    Returns {motif_index: [(nids, is_inv, onset_q16, voice_key), ...]}
+    """
+    extras = defaultdict(list)
+    if not tails:
+        return extras
+    inv_pats = [tuple((-iv, d) for iv, d in m['pattern']) for m in motifs]
+    for vk, split, tail_idx in _split_tail_voices(seq_voices, tails, beat_dur_q, pickup_dur_q):
         seq = _interval_seq(split, beat_dur_q, pickup_dur_q)
         for i in tail_idx:
             if i >= len(seq):
