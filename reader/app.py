@@ -379,6 +379,8 @@ _BACH_CYCLE_ORDER = [
     'French Suites',
     'Keyboard Partitas',
     'Goldberg Variations',
+    'Aria variata (BWV 989)',
+    'French Overture (BWV 831)',
     'Art of Fugue',
     'Violin Sonatas & Partitas',
     'Cello Suites',
@@ -389,6 +391,7 @@ _BACH_CYCLE_ORDER = [
     'Orchestral Suites',
     'Organ Sonatas',
     'Orgelbüchlein',
+    'Great Eighteen',
     'Organ Mass (Clavier-Übung III)',
     'Chorale Preludes',
     'Chorale Harmonizations',
@@ -543,6 +546,8 @@ def _bwv_to_cycle(n: int) -> str:
     if 812 <= n <= 817:  return 'French Suites'
     if 825 <= n <= 830:  return 'Keyboard Partitas'
     if n == 988:         return 'Goldberg Variations'
+    if n == 989:         return 'Aria variata (BWV 989)'
+    if n == 831:         return 'French Overture (BWV 831)'
     if n == 1080:        return 'Art of Fugue'
     if 1001 <= n <= 1006: return 'Violin Sonatas & Partitas'
     if 1007 <= n <= 1012: return 'Cello Suites'
@@ -556,7 +561,8 @@ def _bwv_to_cycle(n: int) -> str:
     if 531 <= n <= 598:  return 'Toccatas & Preludes'
     if 599 <= n <= 644:  return 'Orgelbüchlein'
     if 645 <= n <= 650:  return 'Chorale Preludes'   # Schübler chorales
-    if 651 <= n <= 689:  return 'Organ Mass (Clavier-Übung III)'
+    if 651 <= n <= 668:  return 'Great Eighteen'                  # Leipzig chorale preludes (BWV 668a incl.)
+    if 669 <= n <= 689:  return 'Organ Mass (Clavier-Übung III)'
     if 690 <= n <= 771:  return 'Chorale Preludes'
     # Chorales (harmonized, from cantatas)
     if 250 <= n <= 438:  return 'Chorale Harmonizations'
@@ -611,6 +617,15 @@ def _display_title(rel: str) -> str:
         if mv:  return f"Var. {int(mv.group(1))}"
         if 'aria' in s:  return 'Aria'
         return 'BWV 988'
+
+    # ── Aria variata BWV 989 / French Overture BWV 831 (split files NN-name) ─
+    m989 = _re.match(r'bwv-989-aria-variata-(\d+)-(.+)$', s)
+    if m989:
+        k = int(m989.group(1))
+        return 'Aria' if k == 1 else f"Var. {k - 1}"
+    m831 = _re.match(r'bwv-831-french-overture-(\d+)-(.+)$', s)
+    if m831:
+        return f"{int(m831.group(1))}. " + m831.group(2).capitalize()
 
     # ── Art of Fugue ──────────────────────────────────────────────────────────
     mc = _re.match(r'contrapunctus([ivxlcdm]+)', s)
@@ -1546,26 +1561,20 @@ def find_imslp_files():
 
 
 def find_music21_files():
-    """Return [(rel, full), ...] for music21 corpus files verovio can render (.krn, .mxl, .xml)."""
-    try:
-        from music21 import corpus as m21corpus
-        paths = m21corpus.getCorePaths()
-    except Exception:
-        return []
+    """Return [(rel, full), ...] for the music21 corpus copy in music21_corpus/ (.krn, .mxl, .xml).
+
+    The corpus lives next to the program (not in site-packages) so that the m_a folder can be copied as a whole."""
+    base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'music21_corpus')
     files = []
-    for p in sorted(paths, key=lambda x: str(x).lower()):
-        s = str(p)
-        ext = s.rsplit('.', 1)[-1].lower()
-        if ext not in ('krn', 'mxl', 'xml'):
-            continue
-        norm = s.replace('\\', '/')
-        parts = norm.split('/')
-        try:
-            idx = next(i for i, part in enumerate(parts) if part == 'corpus')
-            rel = 'music21/' + '/'.join(parts[idx + 1:])
-        except StopIteration:
-            rel = 'music21/' + os.path.basename(s)
-        files.append((rel, s))
+    for root, dirs, names in os.walk(base):
+        dirs.sort()
+        for f in sorted(names):
+            if f.rsplit('.', 1)[-1].lower() not in ('krn', 'mxl', 'xml'):
+                continue
+            full = os.path.join(root, f)
+            rel = 'music21/' + os.path.relpath(full, base).replace(os.sep, '/')
+            files.append((rel, full))
+    files.sort(key=lambda x: x[0].lower())
     # re-sort Palestrina by mass number first, then movement name
     pal   = [(r, f) for r, f in files if '/palestrina/' in r]
     other = [(r, f) for r, f in files if '/palestrina/' not in r]
@@ -3336,7 +3345,49 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
             fifths_el.text = str(new_fifths)
 
     # --- transpose every <note><pitch> and update <accidental> ---
-    for note in root.iter('note'):
+    # Notes are visited measure by measure in time order (voices interleaved) so that a note which
+    # cancels an accidental written earlier in the same bar gets its natural/sharp/flat sign.
+    def _notes_in_time_order():
+        seen = set()
+        for part in root.iter('part'):
+            for meas in part.iter('measure'):
+                pos = 0
+                last_on = 0
+                items = []
+                for ch in meas:
+                    tag = ch.tag.split('}')[-1]
+                    if tag == 'note':
+                        try:
+                            d = int(float(ch.findtext('duration') or 0))
+                        except ValueError:
+                            d = 0
+                        if ch.find('chord') is not None:
+                            on = last_on
+                        else:
+                            on = pos
+                            last_on = on
+                            pos += d
+                        items.append((on, len(items), ch))
+                    elif tag in ('backup', 'forward'):
+                        try:
+                            d = int(float(ch.findtext('duration') or 0))
+                        except ValueError:
+                            d = 0
+                        pos += d if tag == 'forward' else -d
+                items.sort(key=lambda t: (t[0], t[1]))
+                for _on, _i, n in items:
+                    seen.add(id(n))
+                    yield id(meas), n
+        for n in root.iter('note'):
+            if id(n) not in seen:
+                yield None, n
+
+    _bar_id = object()
+    _bar_state = {}
+    for _mid, note in _notes_in_time_order():
+        if _mid != _bar_id:
+            _bar_id = _mid
+            _bar_state = {}
         pitch = note.find('pitch')
         if pitch is None:
             continue
@@ -3394,6 +3445,15 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
             want = 'natural'                        # cancels key sig → written natural
         else:
             want = None                             # plain natural, nothing needed
+
+        # An accidental written earlier in this bar (same staff, same step and octave) is still in
+        # force: a note that differs from it needs its own sign (e.g. F-natural after F-sharp).
+        _skey = (note.findtext('staff') or '1', new_step, new_oct_n)
+        _key_alter = {'s': 1, 'f': -1}.get(new_key_accs.get(new_step), 0)
+        _effective = _bar_state.get(_skey, _key_alter)
+        if want is None and new_alter_val != _effective:
+            want = _ALTER_TO_MXL.get(new_alter_val, 'natural')
+        _bar_state[_skey] = new_alter_val
 
         old_accid = note.find('accidental')
         if old_accid is not None:

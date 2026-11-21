@@ -98,7 +98,7 @@ def build_movement(part_header, measures, footer, state_before, first, last, nl)
     ms[0] = m0
     out = []
     for i, m in enumerate(ms):
-        out.append(re.sub(r'(<measure[^>]*?number=")(-?\d+)(")', lambda mm: mm.group(1) + str(i + 1) + mm.group(3), m, count=1))
+        out.append(re.sub(r'(<measure[^>]*?number=")([^"]*)(")', lambda mm: mm.group(1) + str(i + 1) + mm.group(3), m, count=1))
     return part_header + ''.join(out) + footer
 
 

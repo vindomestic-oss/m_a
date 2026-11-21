@@ -94,15 +94,13 @@ def find_file(filename: str) -> str | None:
 
 def find_chorales() -> list[str]:
     """Return paths to Bach chorale .mxl files from the music21 corpus (matches browser filenames)."""
-    import music21.corpus as _corp
-    sep = os.sep
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'music21_corpus', 'bach')
     results = []
-    for p in sorted(_corp.getCorePaths(), key=lambda x: str(x).lower()):
-        s = str(p)
-        norm = s.replace('\\', '/')
-        if '/bach/bwv' in norm and s.endswith('.mxl'):
-            results.append(s)
-    return results
+    for root, _d, names in os.walk(base):
+        for f in names:
+            if f.startswith('bwv') and f.endswith('.mxl'):
+                results.append(os.path.join(root, f))
+    return sorted(results, key=lambda x: os.path.basename(x).lower())
 
 # ── feature extraction ────────────────────────────────────────────────────────
 

@@ -9,6 +9,13 @@
 
 \version "2.24.0"
 
+%% \compressMusic #'(n . d) music — removed from LilyPond 2.24; it scaled the
+%% durations of `music` by n/d (same as \scaleDurations). Several Bach sources
+%% (bwv612/617/631a/641/652/667) still use it.
+compressMusic =
+#(define-music-function (fraction music) (pair? ly:music?)
+   (ly:music-compress music (ly:make-moment (car fraction) (cdr fraction))))
+
 %% Output file path — set before including this file
 #(define ly:dump-output-file
    (if (defined? 'ly:dump-output-file) ly:dump-output-file #f))

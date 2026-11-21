@@ -138,12 +138,48 @@ def analyze_file(ctx, path):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+def _movement_type_from_xml(path):
+    """Return lowercase movement type string from a MusicXML file, or None."""
+    import xml.etree.ElementTree as _ET, re as _re
+    try:
+        tree = _ET.parse(path)
+        root = tree.getroot()
+        ns = root.tag.split('}')[0].lstrip('{') if '}' in root.tag else ''
+        def q(tag): return ('{' + ns + '}' + tag) if ns else tag
+        for el in root.findall('.//' + q('words')):
+            if not el.text:
+                continue
+            w = el.text.strip()
+            m = _re.match(r'^\d+[a-z]?\.\s+(.+)', w, _re.IGNORECASE)
+            if m:
+                return m.group(1).strip().lower()
+    except Exception:
+        pass
+    return None
+
+
+_RECITATIVE_KEYWORDS = ('recitativ', 'reciativ', 'rezitativ')
+_CHORAL_KEYWORDS = ('choral', 'chorale', 'chor')
+
+
+def _is_recitative(mtype):
+    if not mtype:
+        return False
+    return any(mtype.startswith(k) for k in _RECITATIVE_KEYWORDS)
+
+
+def _is_choral(mtype):
+    if not mtype:
+        return False
+    return any(mtype.startswith(k) for k in _CHORAL_KEYWORDS)
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--filter', default=None,
                         help='Only analyse files whose rel path contains this substring '
-                             '(comma-separated → OR logic, e.g. "wtc,inventions")')
+                             '(comma-separated -> OR logic, e.g. "wtc,inventions")')
     parser.add_argument('--composer', default=None,
                         help='Only analyse files whose composer matches (e.g. "Bach", '
                              '"Telemann"; uses _composer_from_rel)')
@@ -161,6 +197,12 @@ def main():
     parser.add_argument('--append', action='store_true',
                         help='Load --cache, analyse only files NOT already in the cache '
                              '(or matched by --filter/--composer), merge, regenerate report.')
+    parser.add_argument('--report-only', action='store_true',
+                        help='Load --cache, skip all analysis, generate report from cache only.')
+    parser.add_argument('--exclude-recitative', action='store_true',
+                        help='Exclude recitative movements (detected from words tags in XML).')
+    parser.add_argument('--exclude-choral', action='store_true',
+                        help='Exclude choral/chorale movements (detected from words tags in XML).')
     args = parser.parse_args()
 
     _xml_files = kr.find_lilypond_files()
@@ -177,6 +219,22 @@ def main():
                         for t in terms)]
     else:
         files = [(r, f) for r, f in all_files if not r.startswith('music21/')]
+    # ── exclude recitative / choral movements ────────────────────────────────
+    if args.exclude_recitative or args.exclude_choral:
+        filtered = []
+        n_rec = 0; n_cho = 0
+        for r, f in files:
+            if f.lower().endswith('.xml'):
+                mt = _movement_type_from_xml(f)
+                if args.exclude_recitative and _is_recitative(mt):
+                    n_rec += 1; continue
+                if args.exclude_choral and _is_choral(mt):
+                    n_cho += 1; continue
+            filtered.append((r, f))
+        print(f"Movement filter: excluded {n_rec} recitatives, {n_cho} chorals "
+              f"({len(files) - len(filtered)} total). {len(filtered)} files remain.")
+        files = filtered
+
     report_path_override = args.output
     lo = args.lo
 
@@ -187,7 +245,10 @@ def main():
             cached_results = json.load(_f)
         print(f"Loaded cache: {len(cached_results)} files from {args.cache}")
 
-    if args.append:
+    if args.report_only:
+        files_to_run = []
+        print(f"Report-only mode: using {len(cached_results)} cached results, no analysis.")
+    elif args.append:
         # Only analyse files not already in cache
         files_to_run = [(r, f) for r, f in files if r not in cached_results]
         print(f"Append mode: {len(cached_results)} cached + "
@@ -200,7 +261,9 @@ def main():
             f' matching {args.filter!r}' if args.filter else ''
     print(f"Found {total} files{label}. Analysing {len(files_to_run)}…")
 
-    results = dict(cached_results)   # start from cache; new results will be merged in
+    # filter cache to only files in the current (possibly movement-filtered) scope
+    allowed_rels = {r for r, f in files}
+    results = {r: v for r, v in cached_results.items() if r in allowed_rels}
     n_ok = 0
     n_err = 0
 
@@ -221,7 +284,7 @@ def main():
     if args.cache:
         with open(args.cache, 'w', encoding='utf-8') as _f:
             json.dump(results, _f)
-        print(f"Cache saved: {len(results)} files → {args.cache}")
+        print(f"Cache saved: {len(results)} files -> {args.cache}")
 
     # Recount totals from merged results for the report header
     total    = len(files)          # all files in scope (filter/composer)

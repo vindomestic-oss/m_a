@@ -752,6 +752,9 @@ def _interval_seq(notes, beat_dur_q=1.0, pickup_dur_q=0.0):
 _MAX_TILING = 3
 
 
+from itertools import accumulate as _accumulate
+
+
 def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=None,
                  beat_dur_q=1.0, pickup_dur_q=0.0, all_seqs_full=None):
     """
@@ -879,33 +882,41 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
             return False
         return any(p[k:] + p[:k] == q for k in range(1, len(p)))
 
-    def _linear_window_dominated(long_body, long_oqs16, short_body, short_oqs16):
-        """Return True if short is a sliding-window fragment of long (or same length shifted).
-        long must have count >= count of short (longer or equal pattern chosen as representative).
+    _pid = {}
+    cand_enc = [''.join(chr(0x100 + _pid.setdefault(pr, len(_pid))) for pr in cb)
+                for (cb, _ph), _o in candidates]      # one char per (interval, dur) step
+
+    def _linear_window_dominated(li, si):
+        """Return True if candidate si (short) is a sliding-window fragment of candidate li (long) (or same
+        length shifted). long must have count >= count of short.
         Checks both directions: long starts before short (k>0) and short starts before long (k<0).
         Overlap must be >= max(2, min(Llong, Lshort)//2) intervals.
-        Onset confirmation: short_oqs16 mostly aligns with long_oqs16 shifted by k notes.
-        """
+        Onset confirmation: short onsets mostly align with long onsets shifted by k notes.
+        Candidate shifts k are found with str.find on the step encoding (first steps must be equal)."""
+        long_body, short_body = candidates[li][0][0], candidates[si][0][0]
+        long_enc, short_enc = cand_enc[li], cand_enc[si]
+        long_oqs16, short_oqs16 = cand_oqs16[li], cand_oqs16[si]
         Ll, Ls = len(long_body), len(short_body)
         min_overlap = max(2, min(Ll, Ls) // 2)
         occ_match = max(2, len(short_oqs16) * 2 // 3)
         # Direction 1: long starts k notes before short
-        for k in range(1, Ll - min_overlap + 1):
+        k = long_enc.find(short_enc[0], 1)
+        while 0 < k <= Ll - min_overlap:
             overlap = min(Ll - k, Ls)
-            if overlap < min_overlap:
-                break
-            if long_body[k:k + overlap] == short_body[:overlap]:
+            if long_enc[k:k + overlap] == short_enc[:overlap]:
                 shift16 = round(sum(long_body[i][1] for i in range(k)) * 16)
                 if len(short_oqs16 & {oq + shift16 for oq in long_oqs16}) >= occ_match:
                     return True
-        # Direction 2: short starts k notes before long (only equal-length, or short longer —
-        # but we only call with Ll >= Ls so this handles equal-length reverse shifts)
+            k = long_enc.find(short_enc[0], k + 1)
+        # Direction 2: short starts k notes before long (equal-length reverse shifts)
         if Ll == Ls:
-            for k in range(1, Ls - min_overlap + 1):
-                if short_body[k:] == long_body[:Ls - k]:
+            k = short_enc.find(long_enc[0], 1)
+            while 0 < k <= Ls - min_overlap:
+                if short_enc[k:] == long_enc[:Ls - k]:
                     shift16 = round(sum(short_body[i][1] for i in range(k)) * 16)
                     if len(long_oqs16 & {oq + shift16 for oq in short_oqs16}) >= occ_match:
                         return True
+                k = short_enc.find(long_enc[0], k + 1)
         return False
 
     # Pre-pass: mark linear-window-shift duplicates suppressed by their longest same-count parent.
@@ -927,7 +938,7 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
             Li, Lj = len(body_i), len(body_j)
             if Li < Lj:
                 continue  # i is shorter than j; can't be j's parent
-            if _linear_window_dominated(body_i, cand_oqs16[i], body_j, cand_oqs16[j]):
+            if _linear_window_dominated(i, j):
                 window_suppressed[j] = True
 
     # Candidate-level coverage: a pattern S is explained by a longer candidate L (even one that
@@ -935,19 +946,26 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
     # every occurrence of S lies inside an occurrence of L and each L holds S the same number
     # of times, e.g. a one-bar figure that always comes as a sequence of three bars (L = S c S c S,
     # count(S) = 3 * count(L)). See also the same test on the selected motifs further down.
-    _pid = {}
-    cand_enc = [''.join(chr(0x100 + _pid.setdefault(pr, len(_pid))) for pr in cb)
-                for (cb, _ph), _o in candidates]
     cand_len = [len(cb) for (cb, _ph), _o in candidates]
     cand_cnt = [len(o) for (_k, o) in candidates]
 
+    _cum_dur = {}
+
     def _covers_cand(ci, j):
         """0 if candidate j does not explain candidate ci, else the multiplicity k (S per L)."""
-        sb, lb = candidates[ci][0][0], candidates[j][0][0]
-        offs = [k for k in range(len(lb) - len(sb) + 1) if lb[k:k + len(sb)] == sb]
+        lb = candidates[j][0][0]
+        se, le = cand_enc[ci], cand_enc[j]          # one char per (interval, dur) step: str.find is much faster
+        offs = []
+        k = le.find(se)
+        while k >= 0:
+            offs.append(k)
+            k = le.find(se, k + 1)
         if not offs:
             return 0
-        shifts = [round(sum(lb[i][1] for i in range(k)) * 16) for k in offs]
+        cum = _cum_dur.get(j)
+        if cum is None:                                   # cum[k] = sum of the first k durations
+            cum = _cum_dur[j] = [0] + list(_accumulate(d for _iv, d in lb))
+        shifts = [round(cum[k] * 16) for k in offs]
         l_oq = sorted(cand_oqs16[j])
         where = {}
         for jj, lq in enumerate(l_oq):
@@ -1385,6 +1403,15 @@ def _search_motif(query):
         tied = True
         ivs_str = ivs_str.lstrip()[1:]
 
+    # "[spec]" as the first element: condition on the event right BEFORE the motif (any mode), e.g.
+    # "[>1/8],1/8,1/8;2;-1+1": the preceding note is longer than 1/8 or a rest longer than 1/8 lies
+    # before it (start of voice also satisfies > and >=)
+    bracket_pre_gap = None
+    _mb = re.match(r'^\s*\[([^\]]+)\]\s*,?(.*)$', dur_str)
+    if _mb:
+        bracket_pre_gap = _parse_dur(_mb.group(1))
+        dur_str = _mb.group(2)
+
     # detect ? on first duration token → optional leading note
     _dur_tokens = dur_str.split(',')
     _opt_first_flag = len(_dur_tokens) > 0 and _dur_tokens[0].strip().endswith('?')
@@ -1396,8 +1423,8 @@ def _search_motif(query):
         if len(durs) < 2:
             raise ValueError("Для ритмического поиска нужно минимум 2 длительности")
         # if first spec has operator (not exact), treat it as pre-gap condition
-        pre_gap_spec = None
-        if durs[0][0] != '=':
+        pre_gap_spec = bracket_pre_gap
+        if pre_gap_spec is None and durs[0][0] != '=':
             pre_gap_spec = durs[0]
             durs = durs[1:]
             if len(durs) < 2:
@@ -1416,7 +1443,7 @@ def _search_motif(query):
         pattern = None
     else:
         opt_first_dur = None
-        pre_gap_spec = None
+        pre_gap_spec = bracket_pre_gap
         # contour mode: ivs_str contains only +/-/= chars, no digits (e.g. "+-+")
         contour_chars = re.findall(r'[+\-=]', ivs_str)
         if contour_chars and not re.search(r'\d', ivs_str):

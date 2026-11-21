@@ -1,0 +1,409 @@
+BWV, которых ещё нет в меню kern_reader
+Составлено 2026-11-19 из bwv_collection_status.txt (то, что реально есть в меню) и bach_works.json (каталог IMSLP).
+Название берётся из каталога IMSLP; для номеров без названия оно пустое.
+Файлы MusicXML / .mxl кладутся в musicxml/musedata/ (меню подхватывает всё оттуда автоматически),
+kern — в kern/.. , после чего перезапуск kern_reader.
+==============================================================================
+
+Кантаты  (BWV 1–224): нет 1 из 222
+  BWV 216   Erwählte Pleissenstadt, BWV 216a
+
+Мотеты  (BWV 225–231): нет 1 из 7
+  BWV 231   Sei Lob und Preis mit Ehren, BWV 231
+
+Мессы / Магнификат / Sanctus  (BWV 232–243): нет 9 из 12
+  BWV 233   Kyrie in F major, BWV 233a
+  BWV 235   Mass in G minor, BWV 235
+  BWV 236   Mass in G major, BWV 236
+  BWV 237   Sanctus in C major, BWV 237
+  BWV 238   Sanctus in D major, BWV 238
+  BWV 239   Sanctus in D minor, BWV 239
+  BWV 240   Sanctus in G major, BWV 240
+  BWV 241   Sanctus in D major, BWV 241
+  BWV 242   Christe eleison in G minor, BWV 242
+
+Пассионы и оратории  (BWV 244–249): нет 4 из 6
+  BWV 246   Lukaspassion, BWV 246
+  BWV 247   Markuspassion, BWV 247
+  BWV 248   Weihnachtsoratorium, BWV 248
+  BWV 249   Entfliehet, verschwindet, entweichet, ihr Sorgen, BWV 249a
+
+Хоралы (4-голосные)  (BWV 253–438): нет 0 из 182
+
+Песни (Шемелли, Нотенбюхлайн)  (BWV 439–524): нет 80 из 86
+  BWV 439   Ach, daß nicht die letzte Stunde, BWV 439
+  BWV 440   Auf, auf! die rechte Zeit ist hier, BWV 440
+  BWV 441   Auf, auf! mein Herz, mit Freuden, BWV 441
+  BWV 442   Beglückter Stand getreuer Seelen, BWV 442
+  BWV 443   Beschränkt, ihr Weisen dieser Welt, BWV 443
+  BWV 444   Brich entzwei, mein armes Herze, BWV 444
+  BWV 445   Brunnquell aller Güter, BWV 445
+  BWV 446   Der lieben Sonnen Licht und Pracht, BWV 446
+  BWV 447   Der Tag ist hin, die Sonne gehet nieder, BWV 447
+  BWV 448   Der Tag mit seinem Lichte, BWV 448
+  BWV 449   Dich bet ich an, mein höchster Gott, BWV 449
+  BWV 450   Die bittre Leidenszeit beginnet abermal, BWV 450
+  BWV 451   Die güldne Sonne, BWV 451
+  BWV 452   Dir, dir, Jehova, will ich singen, BWV 452
+  BWV 453   Eins ist not! ach Herr, dies Eine, BWV 453
+  BWV 455   Erwürgtes Lamm! das die verwahrten Siegel, BWV 455
+  BWV 456   Es glänzet der Christen inwendiges Leben, BWV 456
+  BWV 457   Es ist nun aus mit meinem Leben, BWV 457
+  BWV 458   Es ist vollbracht! Vergiß ja nicht dies Wort, BWV 458
+  BWV 459   Es kostet viel, ein Christ zu sein, BWV 459
+  BWV 460   Gib dich zufrieden und sei stille, BWV 460
+  BWV 461   Gott lebet noch, BWV 461
+  BWV 463   Herr, nicht schicke deine Rache, BWV 463
+  BWV 464   Ich bin ja, Herr, in deiner Macht, BWV 464
+  BWV 465   Ich freue mich in dir, BWV 465
+  BWV 466   Ich halte treulich still, BWV 466
+  BWV 467   Ich laß dich nicht, BWV 467
+  BWV 468   Ich liebe Jesum alle Stund, BWV 468
+  BWV 469   Ich steh an deiner Krippen hier, BWV 469
+  BWV 470   Jesu, Jesu, du bist mein, BWV 470
+  BWV 471   Jesu, deine Liebeswunden, BWV 471
+  BWV 472   Jesu, meines Glaubens Zier, BWV 472
+  BWV 473   Jesu, meines Herzens Freud, BWV 473
+  BWV 474   Jesus ist das schönste Licht, BWV 474
+  BWV 475   Jesus, unser Trost und Leben, BWV 475
+  BWV 476   Ihr Gestirn, ihr hohlen Lüfte, BWV 476
+  BWV 477   Kein Stündlein geht dahin, BWV 477
+  BWV 478   Komm, süßer Tod, BWV 478
+  BWV 479   Kommt, Seelen, dieser Tag, BWV 479
+  BWV 480   Kommt wieder aus der finstern Gruft, BWV 480
+  BWV 481   Lasset uns mit Jesu ziehen, BWV 481
+  BWV 482   Liebes Herz, bedenke doch, BWV 482
+  BWV 483   Liebster Gott, wann werd ich sterben?, BWV 483
+  BWV 484   Liebster Herr Jesu, wo bleibst du so lange?, BWV 484
+  BWV 485   Liebster Immanuel, Herzog der Frommen, BWV 485
+  BWV 486   Mein Jesu, dem die Seraphinen, BWV 486
+  BWV 487   Mein Jesu! was vor Seelenweh, BWV 487
+  BWV 488   Meines Lebens letzte Zeit, BWV 488
+  BWV 489   Nicht so traurig, nicht so sehr, BWV 489
+  BWV 490   Nur mein Jesus ist mein Leben, BWV 490
+  BWV 491   O du Liebe meiner Liebe, BWV 491
+  BWV 492   O finstre Nacht, wenn wirst du doch vergehen, BWV 492
+  BWV 493   O Jesulein süß, o Jesulein mild, BWV 493
+  BWV 494   O liebe Seele, zieh die Sinnen, BWV 494
+  BWV 495   O wie selig seid ihr doch, ihr Frommen, BWV 495
+  BWV 496   Seelenbräutigam, BWV 496
+  BWV 497   Seelenweide, BWV 497
+  BWV 498   Selig! wer an Jesum denkt, BWV 498
+  BWV 499   Sei gegrüßet, Jesu gütig, BWV 499
+  BWV 500   So gehst du nun, mein Jesu, hin, BWV 500
+  BWV 501   So gibst du nun, mein Jesu, gute Nacht, BWV 501
+  BWV 502   So wünsch ich mir zu guter Letzt, BWV 502
+  BWV 503   Steh ich bei meinem Gott, BWV 503
+  BWV 504   Vergiß mein nicht, daß ich dein nicht vergesse, BWV 504
+  BWV 505   Vergiß mein nicht, BWV 505
+  BWV 506   Was bist du doch, o Seele, so betrübet, BWV 506
+  BWV 507   Wo ist mein Schäflein, das ich liebe, BWV 507
+  BWV 508   Bist du bei mir, BWV 508
+  BWV 509   Gedenke doch, mein Geist, BWV 509
+  BWV 513   O Ewigkeit, du Donnerwort, BWV 513
+  BWV 514   Schaff's mit mir, Gott, nach deinem Willen, BWV 514
+  BWV 515   So oft ich meine Tobackspfeife, BWV 515a
+  BWV 517   Wie wohl ist mir, o Freund der Seelen, BWV 517
+  BWV 518   Willst du dein Herz mir schenken, BWV 518
+  BWV 519   Hier lieg' ich nun, BWV 519
+  BWV 520   Das walt’ mein Gott, BWV 520
+  BWV 521   Gott mein Herz dir Dank zusendet, BWV 521
+  BWV 522   Meine Seele, laß es gehen, BWV 522
+  BWV 523   Ich gnüge mich an meinem Stande, BWV 523
+  BWV 524   Quodlibet, BWV 524
+
+Органные сонаты  (BWV 525–530): нет 0 из 6
+
+Органные прелюдии, фуги, токкаты, фантазии  (BWV 531–598): нет 40 из 66
+  BWV 546   Prelude and Fugue in C minor, BWV 546
+  BWV 553   Prelude and Fugue in C major, BWV 553
+  BWV 554   Prelude and Fugue in D minor, BWV 554
+  BWV 555   Prelude and Fugue in E minor, BWV 555
+  BWV 556   Prelude and Fugue in F major, BWV 556
+  BWV 557   Prelude and Fugue in G major, BWV 557
+  BWV 558   Prelude and Fugue in G minor, BWV 558
+  BWV 559   Prelude and Fugue in A minor, BWV 559
+  BWV 560   Prelude and Fugue in B-flat major, BWV 560
+  BWV 561   Fantasia and Fugue in A minor, BWV 561
+  BWV 564   Toccata, Adagio and Fugue in C major, BWV 564
+  BWV 566   Toccata and Fugue in C major, BWV 566a
+  BWV 569   Prelude in A minor, BWV 569
+  BWV 570   Fantasia in C major, BWV 570
+  BWV 571   Fantasia in G major, BWV 571
+  BWV 572   Fantasia in G major, BWV 572
+  BWV 573   Fantasia in C major, BWV 573
+  BWV 574   Fugue on a Theme by Giovanni Legrenzi, BWV 574a
+  BWV 575   Fugue in C minor, BWV 575
+  BWV 576   Fugue in G major, BWV 576
+  BWV 577   Fugue in G major, BWV 577
+  BWV 578   Fugue in G minor, BWV 578
+  BWV 579   Fugue on a Theme by Corelli, BWV 579
+  BWV 580   Fugue in D major, BWV 580
+  BWV 581   Fugue in G major, BWV 581
+  BWV 583   Trio in D minor, BWV 583
+  BWV 584   Trio in G minor, BWV 584
+  BWV 585   Trio in C minor, BWV 585
+  BWV 586   Trio in G major, BWV 586
+  BWV 587   Aria in F major, BWV 587
+  BWV 588   Canzona in D minor, BWV 588
+  BWV 589   Alla breve in D major, BWV 589
+  BWV 590   Pastorale in F major, BWV 590
+  BWV 591   Kleines harmonisches Labyrinth, BWV 591
+  BWV 592   Harpsichord Concerto in G major, BWV 592a
+  BWV 593   Organ Concerto in A minor, BWV 593
+  BWV 594   Organ Concerto in C major, BWV 594
+  BWV 595   Organ Concerto in C major, BWV 595
+  BWV 596   Organ Concerto in D minor, BWV 596
+  BWV 598   Pedal-Exercitium, BWV 598
+
+Orgelbüchlein  (BWV 599–644): нет 14 из 46
+  BWV 603   Puer natus in Bethlehem, BWV 603
+  BWV 607   Vom Himmel kam der Engel Schaar, BWV 607
+  BWV 608   In dulci jubilo, BWV 608
+  BWV 611   Christum wir sollen loben schon, BWV 611
+  BWV 614   Das alte Jahr vergangen ist, BWV 614
+  BWV 616   Mit Fried und Freud ich fahr dahin, BWV 616
+  BWV 617   Herr Gott, nun schleuß den Himmel auf, BWV 617
+  BWV 621   Da Jesus an dem Kreuze stund, BWV 621
+  BWV 622   O Mensch, bewein dein Sünde groß, BWV 622
+  BWV 625   Christ lag in Todes Banden, BWV 625
+  BWV 637   Durch Adams Fall ist ganz verderbt, BWV 637
+  BWV 639   Ich ruf zu dir, Herr Jesu Christ, BWV 639
+  BWV 640   In dich hab' ich gehoffet, Herr, BWV 640
+  BWV 644   Ach wie nichtig, ach wie flüchtig, BWV 644
+
+Шюблеровские хоралы  (BWV 645–650): нет 0 из 6
+
+18 больших хоральных прелюдий  (BWV 651–668): нет 4 из 18
+  BWV 658   Fantasia super 'Von Gott will ich nicht lassen', BWV 658a
+  BWV 662   Allein Gott in der Höh sei Ehr, BWV 662
+  BWV 665   Jesus Christus, unser Heiland, BWV 665
+  BWV 667   Komm, Gott, Schöpfer, heiliger Geist, BWV 667
+
+Clavier-Übung III и др. хоральные обработки  (BWV 669–771): нет 75 из 103
+  BWV 684   Christ, unser Herr, zum Jordan kam, BWV 684
+  BWV 685   Christ, unser Herr, zum Jordan kam, BWV 685
+  BWV 686   Aus tiefer Not schrei ich zu dir, BWV 686
+  BWV 689   Fuga super 'Jesus Christus unser Heiland', BWV 689
+  BWV 690   Wer nur den lieben Gott lässt walten, BWV 690
+  BWV 692   Ach Gott und Herr, BWV 692
+  BWV 694   Wo soll ich fliehen hin, BWV 694
+  BWV 695   Fantasia super 'Christ lag in Todesbanden', BWV 695
+  BWV 696   Christum wir sollen loben schon, BWV 696
+  BWV 697   Gelobet seist du, Jesu Christ, BWV 697
+  BWV 698   Herr Christ, der ein’ge Gottes Sohn, BWV 698
+  BWV 699   Nun komm, der Heiden Heiland, BWV 699
+  BWV 700   Vom Himmel hoch, da komm ich her, BWV 700
+  BWV 701   Vom Himmel hoch, da komm ich her, BWV 701
+  BWV 702   Das Jesulein soll doch mein Trost, BWV 702
+  BWV 703   Gottes Sohn ist kommen, BWV 703
+  BWV 704   Lob sei dem allmächtigen Gott, BWV 704
+  BWV 705   Durch Adams Fall ist ganz verderbt, BWV 705
+  BWV 706   Liebster Jesu, wir sind hier, BWV 706
+  BWV 707   Ich hab mein Sach Gott heimgestellt, BWV 707
+  BWV 708   Ich hab mein Sach Gott heimgestellt, BWV 708
+  BWV 709   Herr Jesu Christ, dich zu uns wend, BWV 709
+  BWV 710   Wir Christenleut hab'n jetzund Freud, BWV 710
+  BWV 711   Allein Gott in der Höh' sei Ehr', BWV 711
+  BWV 712   In dich hab ich gehoffet, Herr, BWV 712
+  BWV 713   Fantasia super 'Jesu, meine Freude', BWV 713
+  BWV 714   Ach Gott und Herr, BWV 714
+  BWV 715   Allein Gott in der Höh sei Ehr, BWV 715
+  BWV 716   Fuga super 'Allein Gott in der Höh sei Ehr', BWV 716
+  BWV 717   Allein Gott in der Höh sei Ehr, BWV 717
+  BWV 718   Fantasia sopra 'Christ lag in Todesbanden', BWV 718
+  BWV 719   Der Tag, der ist so freudenreich, BWV 719
+  BWV 722   Gelobet seist du, Jesu Christ, BWV 722
+  BWV 725   Herr Gott, dich loben wir, BWV 725
+  BWV 726   Herr Jesu Christ, dich zu uns wend, BWV 726
+  BWV 728   Jesus, meine Zuversicht, BWV 728
+  BWV 729   In dulci jubilo, BWV 729
+  BWV 730   Liebster Jesu, wir sind hier, BWV 730
+  BWV 731   Liebster Jesu, wir sind hier, BWV 731
+  BWV 732   Lobt Gott, ihr Christen, allzugleich, BWV 732
+  BWV 733   Fuga sopra il Magnificat, BWV 733
+  BWV 736   Valet will ich dir geben, BWV 736
+  BWV 737   Vater unser im Himmelreich, BWV 737
+  BWV 738   Vom Himmel hoch, da komm ich her, BWV 738
+  BWV 739   Wie schön leuchtet der Morgenstern, BWV 739
+  BWV 740   Wir glauben all' an einen Gott, Vater, BWV 740
+  BWV 741   Ach Gott vom Himmel sieh darein, BWV 741
+  BWV 742   Ach Herr, mich armen Sünder, BWV 742
+  BWV 743   Ach, was ist doch unser Leben, BWV 743
+  BWV 744   Auf meinen lieben Gott, BWV 744
+  BWV 745   Aus der Tiefe rufe ich, BWV 745
+  BWV 746   Christ ist erstanden, BWV 746
+  BWV 747   Christus, der uns selig macht, BWV 747
+  BWV 748   Gott der Vater wohn uns bei, BWV 748
+  BWV 749   Herr Jesu Christ, dich zu uns wend, BWV 749
+  BWV 750   Herr Jesu Christ, meins Lebens Licht, BWV 750
+  BWV 752   Jesu, der du meine Seele, BWV 752
+  BWV 753   Jesu, meine Freude, BWV 753
+  BWV 754   Liebster Jesu, wir sind hier, BWV 754
+  BWV 755   Nun freut euch, lieben Christen gmein, BWV 755
+  BWV 756   Nun ruhen alle Wälder, BWV 756
+  BWV 757   O Herre Gott, dein göttlich Wort, BWV 757
+  BWV 758   O Vater, allmächtiger Gott, BWV 758
+  BWV 759   Schmücke dich, o liebe Seele, BWV 759
+  BWV 760   Vater unser im Himmelreich, BWV 760
+  BWV 761   Vater unser im Himmelreich, BWV 761
+  BWV 762   Vater unser im Himmelreich, BWV 762
+  BWV 763   Wie schön leuchtet der Morgenstern, BWV 763
+  BWV 764   Wie schön leuchtet der Morgenstern, BWV 764
+  BWV 765   Wir glauben all an einen Gott, BWV 765
+  BWV 766   Christ, der du bist der helle Tag, BWV 766
+  BWV 767   O Gott, du frommer Gott, BWV 767
+  BWV 768   Sei gegrüsset, Jesu gütig, BWV 768
+  BWV 770   Ach, was soll ich Sünder machen, BWV 770
+  BWV 771   Allein Gott in der Höh sei Ehr', BWV 771
+
+Инвенции и синфонии  (BWV 772–801): нет 0 из 30
+
+Дуэты BWV 802–805  (BWV 802–805): нет 1 из 4
+  --
+Французские и английские сюиты  (BWV 806–817): нет 0 из 12
+
+Клавирные партиты  (BWV 825–830): нет 0 из 6
+
+Увертюра, Итальянский концерт и др. большие клавирные  (BWV 831–845): нет 15 из 15
+
+  BWV 832   Suite in A major, BWV 832
+  BWV 833   Praeludium et partita dei tuono terzo, BWV 833
+  BWV 834   Allemande in C minor, BWV 834
+  BWV 835   Allemande in A minor, BWV 835
+  BWV 836   Allemande in G minor, BWV 836
+  BWV 837   Allemande in G minor, BWV 837
+  BWV 838   Allemande and Courante in A major, BWV 838
+  BWV 839   Sarabande in G minor, BWV 839
+  BWV 840   Courante in G major, BWV 840
+  BWV 841   Minuet in G major, BWV 841
+  BWV 842   Minuet in G minor, BWV 842
+  BWV 843   Minuet in G major, BWV 843
+  BWV 844   Scherzo in D minor, BWV 844
+  BWV 845   Gigue in F minor, BWV 845
+
+ХТК I и II  (BWV 846–893): нет 0 из 48
+
+Прелюдии, фуги, фантазии, токкаты для клавира  (BWV 894–923): нет 17 из 30
+  BWV 894   Prelude and Fugue in A minor, BWV 894
+  BWV 896   Prelude and Fugue in A major, BWV 896
+  BWV 897   Prelude and Fugue in A minor, BWV 897
+  BWV 898   Prelude and Fugue on 'B-A-C-H', BWV 898
+  BWV 899   Prelude and Fughetta in D minor, BWV 899
+  BWV 900   Prelude and Fughetta in E minor, BWV 900
+  BWV 901   Prelude and Fughetta in F major, BWV 901
+  BWV 902   Prelude and Fughetta in G major, BWV 902
+  BWV 904   Fantasia and Fugue in A minor, BWV 904
+  BWV 905   Fantasia and Fugue in D minor, BWV 905
+  BWV 906   Fantasia and Fugue in C minor, BWV 906
+  BWV 907   Fantasia and Fughetta in B-flat major, BWV 907
+  BWV 908   Fantasia and Fughetta in D major, BWV 908
+  BWV 909   Concerto and Fugue in C minor, BWV 909
+  BWV 920   Fantasia in G minor, BWV 920
+  BWV 921   Prelude in C minor, BWV 921
+  BWV 922   Prelude in A minor, BWV 922
+
+Малые прелюдии и сюиты  (BWV 924–987): нет 50 из 64
+  BWV 925   Prelude in D major, BWV 925
+  BWV 926   Prelude in D minor, BWV 926
+  BWV 927   Prelude in F major, BWV 927
+  BWV 928   Prelude in F major, BWV 928
+  BWV 929   Prelude in G minor, BWV 929
+  BWV 930   Prelude in G minor, BWV 930
+  BWV 931   Prelude in A minor, BWV 931
+  BWV 932   Prelude in E minor, BWV 932
+  BWV 945   Fugue in E minor, BWV 945
+  BWV 946   Fugue in C major, BWV 946
+  BWV 947   Fugue in A minor, BWV 947
+  BWV 948   Fugue in D minor, BWV 948
+  BWV 949   Fugue in A major, BWV 949
+  BWV 950   Fugue in A major, BWV 950
+  BWV 951   Fugue in B minor, BWV 951a
+  BWV 952   Fugue in C major, BWV 952
+  BWV 953   Fugue in C major, BWV 953
+  BWV 954   Fugue in B-flat major, BWV 954
+  BWV 955   Fugue in B-flat major, BWV 955a
+  BWV 956   Fugue in E minor, BWV 956
+  BWV 957   Machs mit mir, Gott, nach deiner Güt, BWV 957
+  BWV 958   Fugue in A minor, BWV 958
+  BWV 959   Fugue in A minor, BWV 959
+  BWV 960   Fugue in E minor, BWV 960
+  BWV 961   Fughetta in C minor, BWV 961
+  BWV 962   Fugue in E minor, BWV 962
+  BWV 963   Sonata in D major, BWV 963
+  BWV 964   Sonata in D minor, BWV 964
+  BWV 965   Sonata in A minor, BWV 965
+  BWV 966   Sonata in C major, BWV 966
+  BWV 967   Sonata in A minor, BWV 967
+  BWV 968   Adagio in G major, BWV 968
+  BWV 969   Andante in G minor, BWV 969
+  BWV 970   Presto in D minor, BWV 970
+  BWV 972   Concerto in D major, BWV 972
+  BWV 973   Concerto in G major, BWV 973
+  BWV 974   Concerto in D minor, BWV 974
+  BWV 975   Concerto in G minor, BWV 975
+  BWV 976   Concerto in C major, BWV 976
+  BWV 977   Concerto in C major, BWV 977
+  BWV 978   Concerto in F major, BWV 978
+  BWV 979   Concerto in B minor, BWV 979
+  BWV 980   Concerto in G major, BWV 980
+  BWV 981   Concerto in C minor, BWV 981
+  BWV 982   Concerto in B-flat major, BWV 982
+  BWV 983   Concerto in G minor, BWV 983
+  BWV 984   Concerto in C major, BWV 984
+  BWV 985   Concerto in G minor, BWV 985
+  BWV 986   Concerto in G major, BWV 986
+  BWV 987   Concerto in D minor, BWV 987
+
+Гольдберг и поздние клавирные  (BWV 988–1000): нет 6 из 13
+   BWV 990   Sarabande con partite in C major, BWV 990
+  BWV 991   Air with Variations in C minor, BWV 991
+  BWV 992   Capriccio in B-flat major, BWV 992
+  BWV 993   Capriccio in E major, BWV 993
+  BWV 994   Applicatio in C major, BWV 994
+
+Скрипка и виолончель соло  (BWV 1001–1012): нет 0 из 12
+
+Камерные сонаты  (BWV 1013–1040): нет 8 из 27
+  BWV 1020  Violin Sonata in G minor, BWV 1020
+  BWV 1027  Sonata for Viola da Gamba in G major, BWV 1027
+  BWV 1028  Sonata for Viola da Gamba in D major, BWV 1028
+  BWV 1029  Sonata for Viola da Gamba in G minor, BWV 1029
+  BWV 1036  Trio Sonata in D minor, BWV 1036
+  BWV 1037  Trio Sonata in C major, BWV 1037
+  BWV 1038  Trio Sonata in G major, BWV 1038
+  BWV 1040  Trio Sonata in F major, BWV 1040
+
+Концерты  (BWV 1041–1065): нет 17 из 25
+  BWV 1045  Sinfonia in D major, BWV 1045
+  BWV 1047  Brandenburg Concerto No.2 in F major, BWV 1047
+  BWV 1048  Brandenburg Concerto No.3 in G major, BWV 1048
+  BWV 1049  Brandenburg Concerto No.4 in G major, BWV 1049
+  BWV 1051  Brandenburg Concerto No.6 in B-flat major, BWV 1051
+  BWV 1053  Harpsichord Concerto No.2 in E major, BWV 1053
+  BWV 1054  Harpsichord Concerto No.3 in D major, BWV 1054
+  BWV 1055  Harpsichord Concerto No.4 in A major, BWV 1055
+  BWV 1057  Harpsichord Concerto No.6 in F major, BWV 1057
+  BWV 1058  Harpsichord Concerto No.7 in G minor, BWV 1058
+  BWV 1059  Harpsichord Concerto No.8 in D minor, BWV 1059
+  BWV 1060  Concerto for 2 Harpsichords in C minor, BWV 1060
+  BWV 1061  Concerto for 2 Harpsichords in C major, BWV 1061
+  BWV 1062  Concerto for 2 Harpsichords in C minor, BWV 1062
+  BWV 1063  Concerto for 3 Harpsichords in D minor, BWV 1063
+  BWV 1064  Concerto for 3 Harpsichords in C major, BWV 1064
+  BWV 1065  Concerto for 4 Harpsichords in A minor, BWV 1065
+
+Оркестровые сюиты и каноны  (BWV 1066–1078): нет 9 из 13
+  BWV 1070  Overture in G minor, BWV 1070
+  BWV 1071  Sinfonia in F major, BWV 1071
+  BWV 1072  Canon in D major, BWV 1072
+  BWV 1073  Canon in A minor, BWV 1073
+  BWV 1074  Canon in A minor, BWV 1074
+  BWV 1075  Canon in D major, BWV 1075
+  BWV 1076  Canon in G major, BWV 1076
+  BWV 1077  Canon in G major, BWV 1077
+  BWV 1078  Canon in F major, BWV 1078
+
+Музыкальное приношение и Искусство фуги  (BWV 1079–1080): нет 0 из 2
+
+ВСЕГО отсутствует номеров: 351
