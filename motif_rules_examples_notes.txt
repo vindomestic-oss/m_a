@@ -1,0 +1,214 @@
+MOTIF COUNTING RULES - CURRENT STATE, WITH LETTER EXAMPLES (LETTERS = NOTES)
+(2026-11-23; code: reader/motif_analysis.py, _find_motifs / analyze_motifs / _search_motif)
+
+NOTATION
+  One letter = one NOTE (a scale degree); a < b < c < ... higher in the alphabet = higher pitch.
+  The same letter = the same pitch. One alphabet step = one scale step.
+  All notes are 16ths unless stated. A beat = 4 sixteenths (phase 0..3).
+  A SPACE = a rest; the next note starts on the next beat (so its phase is 0).
+  "|" separates voices (all voices start at time 0).
+  A motif is a SHAPE, not a set of pitches: the sequence of steps between consecutive notes
+  (plus durations). "abc" = shape +1+1 (up, up); "cde" and "hij" are the same shape.
+  A motif needs >= 3 notes (>= 2 steps). n notes = n-1 steps.
+  "x -> shape:N because ..." = what the dictionary reports.
+  [run]  = executed through _find_motifs:  python motif_examples_check_notes.py "abc abc|abc abc"
+  [code] = read from the code, not executed in this session.
+  Incidental patterns straddling the joins between figures are omitted from the listings.
+
+
+=== 1. WHAT IS ONE OCCURRENCE ==============================================
+
+1.1 [run]  abc abc abc          ->  +1+1 : 3
+    Three separate figures with the same shape.
+
+1.2 [run]  abcdefg              ->  +1+1 : 2     (abc and def)
+    [run]  abcde                ->  nothing
+    Two occurrences of one pattern in one voice may not share a note. In abcde the
+    second +1+1 would be cde and would share "c" with abc -> only one occurrence
+    -> no motif. In abcdefg, def starts on the note after abc ends -> 2.
+    (Code: after an occurrence of s steps starting at step i, the next one may
+    start at step i+s+1 or later: last_end = start + s + 1.)
+
+1.3 [run]  abcdefgh             ->  +1+1+1 : 2   (abcd, efgh)
+    Greedy, left to right. The shorter shape +1+1 (abc, efg ...) is just a
+    window of the longer one -> see 4.1.
+
+1.4 [run]  abc abc              ->  +1+1 : 2     (a rest between the figures)
+    A pattern never contains a rest: all its steps must be "contiguous" (each
+    note ends exactly where the next one starts). A rest only separates occurrences.
+
+1.5 [run]  abc cde abc cde      ->  +1+1 : 4
+    [run]  abc abc hij abc      ->  +1+1 : 4
+    Transposition does not matter: abc, cde, hij are the same motif.
+    (Their positions are kept: the dictionary shows the transposition of each
+    occurrence relative to the first, e.g. (+2) for cde.)
+
+1.6 [run]  aaaa                 ->  nothing
+    A pattern made only of unisons is never a motif.
+
+
+=== 2. METRIC PHASE =========================================================
+
+2.1 [run]  abc abc fabc         ->  +1+1 : 2  (phase 0);  the third abc is alone
+    In "fabc" the figure starts one sixteenth after the beat (phase 1). The same
+    shape (same steps and durations) at a different metric phase is a DIFFERENT
+    motif, so it is not added to the other two; alone it is not listed (needs 2).
+    Phase unit = the shortest note of the pattern; phase = position of the first
+    note inside the beat, in that unit.
+    Caps: binary subdivisions are capped at 4 phases (32nds behave like 16ths);
+    triplets collapse to 3 phases; in compound meters (6/8, 9/8, 12/8, 3/8) the
+    beat is the dotted quarter, 16ths there have 6 phases.
+
+2.2 [code] Duration is part of the shape. "abc" in 16ths and "abc" with the first
+    note an 8th are different motifs.
+
+
+=== 3. VOICES AND INVERSIONS ================================================
+
+3.1 [run]  abc abc | abc abc    ->  +1+1 : 2   (NOT 4)
+    [run]  abc abc | cde cde    ->  +1+1 : 2
+    Same onset in two voices counts once (cross-voice deduplication; one set of
+    onsets for all voices and for both direct and inverted forms). The voice
+    processed first wins. Voices that merely double another voice are removed
+    before the analysis (_remove_unison_voices).
+
+3.2 [run]  abc cba              ->  +1+1 : 2   (direct 1 + inverted 1)
+    [run]  abc abc cba          ->  +1+1 : 3   (direct 2 + inverted 1)
+    A shape and its inversion (every step negated, same durations, same phase)
+    are ONE motif; the count is the union of positions. "Direct" = the form that
+    occurs first in the piece. Shown as  xN_dir  ⇅N_inv  ⊕N_all.
+
+3.3 [run]  abc abc | jih jih    ->  +1+1 : 2   (direct 2, inverted 0)
+    The mirror voice sits at exactly the same onsets as the direct one -> the same
+    positions -> counted once, shown as direct. In the current code the "both"
+    counter (n_both) is therefore always 0: the documented n_both (CLAUDE.md,
+    motif_counting_rules.md section 4) is not produced by _find_motifs any more,
+    because the second form at an already occupied onset is dropped.
+    (Open decision: keep as is, or remove n_both from docs/UI.)
+
+
+=== 4. WHICH PATTERNS GET INTO THE DICTIONARY ================================
+   Candidates are sorted: count (desc), length (desc), phase (asc). Walking down
+   the list, a candidate is dropped when:
+
+4.1 SUB-PATTERN DOMINANCE (a longer, already selected pattern contains it)
+    [run]  abcd abcd abcd              ->  +1+1+1 : 3
+    The 3-note shape +1+1 (abc) also occurs 3 times, but each time it is just the
+    first three notes of an abcd -> dropped.
+    [run]  abcd abcd abcd abc abc      ->  +1+1 : 5,  +1+1+1 : 3
+    Now abc occurs also outside abcd (5 > 3), so it is ranked first and both stay.
+    (Dominance compares shape+durations only, not the phase.)
+
+4.2 PERIODIC LINE / CYCLIC WINDOW SHIFT (same length, rotated)
+    [run]  abcdabcdabcd                ->  abcd (+1+1+1) : 3,   cdab (+1-3+1) : 2
+    abcd occurs at notes 1-4, 5-8, 9-12 (no shared notes). The rotations of the
+    figure (bcda, cdab, dabc) are the same line seen from another starting note
+    (rotations of the same-length shape: _is_window_shift). bcda and dabc are not
+    listed; cdab is. I verified the output, but did not trace why exactly this
+    rotation survives (it has a different count/phase than abcd).
+
+4.3 LINEAR WINDOW SHIFT (child = parent shifted by k notes, parent count >= child)
+    A pattern is dropped when it is the same figure as a longer/equal-length parent
+    seen one or more notes later (overlap of >= 2 steps, and EVERY position of the child equals a
+    parent position + the shift; was 2/3 until 2026-11-23). Phase is ignored.
+    NOTE: the toy line  cdcba cdcba cdcba cdcb cdcb  ->  +1-1-1 : 5, +1-1-1-1 : 3
+    (dcba absent) does NOT show this rule: dcba is absent only because it always
+    occurs as the tail of cdcba, i.e. plain sub-pattern dominance (4.1). With the
+    window rule switched off the result is identical. [checked on the interval twin
+    of this example]
+    The rule matters when the child is NOT contained in a selected longer pattern,
+    e.g. when its count is higher than that of the longer one.
+    REAL CASE (organ sonata bwv-528-i, asked 2026-11-23): shape -1-1-1 at phase 0
+    has 34 direct / 37 with inversion occurrences, more than +1-1-1-1 (32), so
+    dominance does not apply. It is suppressed as a one-note-shifted copy of
+    +1-1-1 at phase 3 (43 occurrences). [checked: with the window rule switched off
+    the motif appears, 37 occurrences.] No small letter example found (about 8000
+    random small sequences showed none). The search box still finds it (see 7.1).
+
+4.4 TILING (a short figure repeated k = 2 or 3 times inside a longer figure)
+    [run]  abcfabcgabc abcfabcgabc abcfabcgabc
+           ->  the long figure only : 3        (abc occurs 9 = 3 x 3: dropped)
+    [run]  abcfabcgabchabc abcfabcgabchabc abcfabcgabchabc
+           ->  abc +1+1 : 12   and   the long figure : 3     (12 = 4 x 3: BOTH stay)
+    Rule: if every occurrence of S lies inside an occurrence of a longer L, each L
+    holding S the same number of times k, and 2 <= k <= 3 (_MAX_TILING), S is just
+    a window tiled into L, and L takes its place. For k >= 4 it is genuine
+    higher-level repetition and both levels are listed.
+
+4.5 [code] Limits: at most 50 motifs; at least 2 occurrences each. Rows with fewer
+    than 4 occurrences (_LOW_OCC) are hidden behind the link "show motifs with
+    occ < 4"; they are mostly long patterns. Order = count desc (the MDL column
+    can be clicked to sort instead).
+
+
+=== 5. NOTES THAT DO NOT COUNT AS NOTES ======================================
+5.1 [code] Grace notes (kern q/Q, MEI grace) are skipped; they borrow time, the
+    clock is not advanced.
+5.2 [code] Written-out appoggiatura: a 2-note slur whose first note is strictly
+    shorter is merged into one note (the ornament dropped, durations added).
+    Trills / mordents / turns are signs only, the note stays single.
+5.3 [code] Tied notes: the chain is merged into ONE note with the summed duration
+    (no false unison step across the barline).
+    Consequence: in  b~b c d  (b held over the bar) the figure b c d starts on the
+    LONG merged b, whose duration differs from a plain short b -> a different shape.
+    An occurrence that starts on the TAIL of a tie (head in an earlier beat) is
+    therefore not found by the plain rules; it is counted separately as a
+    "bounded" occurrence, shown in brackets  <xN ... ⊕M>  and searchable with the
+    "(" marker before the first interval. Tail starts are accepted only if their
+    onset and notes are unused.
+
+
+=== 6. REPEATS, VOLTAS, DA CAPO ==============================================
+   Notation here: |: ... :| repeat; [1. ... [2. ... volta endings; x, y = other music.
+   The score is "unfolded" into a linear timeline before searching; the second
+   playing carries the same notes (ids suffixed __p2), so it is drawn only once
+   ("N(M)" label: occurrence N and its repeat M).
+
+6.1 [code] WHEN IT IS UNFOLDED
+    - one plain repeat                         -> unfolded
+    - any volta (alone or with plain repeats)  -> everything is unfolded
+      e.g. Echo BWV 831: A with 1./2. endings + B with plain repeat -> both
+    - two or more plain repeats, no volta      -> NOT unfolded (each counted once)
+    Unfolded volta: before + body + volta1 + body (2nd time) + volta2 + after.
+
+6.2 [code] COUNTING AFTER UNFOLDING (abc = any occurrence of the shape)
+    |: abc :|                       ->  abc : 2   (played twice)
+    |: abc :|  x  abc               ->  abc : 3   (2 + 1)
+    |: abc [1. x :| [2. y           ->  abc : 1   volta: body twice in the timeline
+                                                  = 2; an EVEN total is halved
+    |: abc [1. x :| [2. y  abc      ->  abc : 3   odd (2 + 1): not halved
+    So: plain repeat = every position in the repeated part counts twice;
+    volta/mixed = even totals are halved, odd totals are kept. This is the
+    implemented rule; it is not symmetric (odd/even) -> candidate for review.
+
+6.3 [code] FILTER: a motif in an unfolded piece needs >= 2 "structural"
+    occurrences: first playing + outside the repeat + unpaired second playing
+    (+ pairs, i.e. an occurrence inside a repeated part counts as 2).
+
+6.4 [from earlier sessions, not re-checked] Da Capo / B-section repeats expressed
+    through <expansion> follow the same repeat/volta handling (offering-013b:
+    B repeats via Da Capo -> halved).
+
+6.5 [fixed 2026-11-23] SEARCH vs DICTIONARY on repeats. The search box used to
+    drop every second-playing copy: the note-collision check stripped the "__p2"
+    suffix, so the copy "collided" with the first playing. Echo BWV 831 showed 63
+    instead of 122 occurrences and a few stray copies with their own numbers
+    (e.g. "20" and "37" at the same bar). Now search = dictionary (122 occurrences,
+    61 repeat pairs).
+
+
+=== 7. DICTIONARY vs SEARCH =================================================
+7.1 [code] The search box applies none of the dictionary's filters (window shift,
+    sub-pattern dominance, tiling, 50 cap, >= 2 occurrences): any query is
+    answered as asked.
+7.2 [code] Cross-voice dedup and the "last_end" rule differ slightly:
+    dictionary: a candidate dropped because its onset is already taken still
+                blocks its own voice (last_end moves on);
+    search:     a dropped candidate does NOT move last_end, so that voice can
+                give the next independent occurrence immediately.
+    Search also refuses occurrences that share a note with an already accepted
+    occurrence in ANY voice (used_nids); the dictionary relies on onsets and the
+    per-voice last_end only.
+7.3 [code] Discovery in the dictionary runs on capped sequences for very long
+    pieces; occurrences are then re-counted on the full sequences, so counts are
+    complete, but a rare pattern can be missed at discovery.

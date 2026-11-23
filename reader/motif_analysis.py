@@ -898,7 +898,7 @@ def _find_motifs(all_seqs, min_len=2, min_count=2, max_motifs=50, max_pat_len=No
         long_oqs16, short_oqs16 = cand_oqs16[li], cand_oqs16[si]
         Ll, Ls = len(long_body), len(short_body)
         min_overlap = max(2, min(Ll, Ls) // 2)
-        occ_match = max(2, len(short_oqs16) * 2 // 3)
+        occ_match = len(short_oqs16)     # strict: EVERY occurrence of the short pattern is the parent's, shifted
         # Direction 1: long starts k notes before short
         k = long_enc.find(short_enc[0], 1)
         while 0 < k <= Ll - min_overlap:
