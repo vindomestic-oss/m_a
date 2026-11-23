@@ -1626,14 +1626,14 @@ def _search_motif(query):
             continue
         if _oq in seen_onsets:
             continue  # cross-onset dedup — don't advance last_end_v
-        # strip __p2 suffix before NID collision check so repeat copies don't block each other
-        _ns_base = [_n[:-4] if _n.endswith('__p2') else _n for _n in _ns]
-        if used_nids.intersection(_ns_base):
+        # keep the __p2 suffix in the NID collision check: a repeat copy ('x__p2') is a separate
+        # occurrence of the same physical note 'x' and must not be blocked by its first playing
+        if used_nids.intersection(_ns):
             continue  # shares notes with an already-accepted occurrence — don't advance last_end_v
         occs_with_onset.append((_of, _ns))
         is_inv_flags.append(_inv)
         seen_onsets.add(_oq)
-        used_nids.update(_ns_base)
+        used_nids.update(_ns)
         _last_end_v[_vi] = _nsi
 
     # tie-tail starts: same rule as the dictionary's bounded extras — taken after the regular
@@ -1644,13 +1644,12 @@ def _search_motif(query):
         for _oq, _inv, _vi, _i, _of, _ns, _nsi, _ft in _tail_cands:
             if _oq in seen_onsets:
                 continue
-            _ns_base = [_n[:-4] if _n.endswith('__p2') else _n for _n in _ns]
-            if used_nids.intersection(_ns_base):
+            if used_nids.intersection(_ns):
                 continue
             occs_with_onset.append((_of, _ns))
             is_inv_flags.append(_inv)
             seen_onsets.add(_oq)
-            used_nids.update(_ns_base)
+            used_nids.update(_ns)
             n_tail += 1
         if n_tail:      # keep score (onset) order: numbering and repeat pairs follow the music
             _ord = sorted(range(len(occs_with_onset)), key=lambda k: occs_with_onset[k][0])
