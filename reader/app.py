@@ -203,6 +203,37 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", len(msg))
                 self.end_headers()
                 self.wfile.write(msg)
+        elif self.path == "/edit":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                req = json.loads(self.rfile.read(length).decode("utf-8"))
+                with _state_lock:
+                    _cur_path = _state.get("current_path")
+                if not _cur_path:
+                    raise ValueError("no file loaded")
+                if req.get("undo"):
+                    res = {"msg": _undo_last_edit(_cur_path)}
+                else:
+                    res = _edit_with_undo(_cur_path, str(req.get("nid", "")), int(req.get("semitones", 0)))
+                import threading as _th
+                _th.Thread(target=load_file_bg, args=(_cur_path, lambda s, **kw: None), daemon=True).start()
+                resp = json.dumps({"ok": True, **res}).encode("utf-8")
+                self.send_response(200)
+            except Exception as e:
+                import traceback as _tb
+                with _state_lock:
+                    _cp = _state.get("current_path")
+                try:
+                    with open(os.path.join(os.path.dirname(_EDIT_UNDO_DIR), '_edit_error.log'), 'a', encoding='utf-8') as _lf:
+                        _lf.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} path={_cp!r}\n{_tb.format_exc()}\n")
+                except Exception:
+                    pass
+                resp = json.dumps({"ok": False, "error": f"{e}  [{type(e).__name__}; file: {_cp}]"}).encode("utf-8")
+                self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", len(resp))
+            self.end_headers()
+            self.wfile.write(resp)
         elif self.path == "/transpose":
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8").strip()
@@ -385,6 +416,7 @@ _BACH_CYCLE_ORDER = [
     'Violin Sonatas & Partitas',
     'Cello Suites',
     'Flute Sonatas',
+    'Gamba Sonatas',
     'Violin Sonatas with Keyboard',
     'Brandenburg Concertos',
     'Concertos',
@@ -400,6 +432,8 @@ _BACH_CYCLE_ORDER = [
     'Motets & Masses',
     'Notebook for A.M. Bach',
     'Toccatas & Preludes',
+    'Kleine Präludien (BWV 924–931)',
+    'Capriccio (BWV 992)',
     'Small Keyboard Works',
     'Other Bach',
 ]
@@ -547,11 +581,14 @@ def _bwv_to_cycle(n: int) -> str:
     if 825 <= n <= 830:  return 'Keyboard Partitas'
     if n == 988:         return 'Goldberg Variations'
     if n == 989:         return 'Aria variata (BWV 989)'
+    if n == 992:         return 'Capriccio (BWV 992)'
+    if 924 <= n <= 931:  return 'Kleine Präludien (BWV 924–931)'
     if n == 831:         return 'French Overture (BWV 831)'
     if n == 1080:        return 'Art of Fugue'
     if 1001 <= n <= 1006: return 'Violin Sonatas & Partitas'
     if 1007 <= n <= 1012: return 'Cello Suites'
     if n == 1013 or 1030 <= n <= 1035: return 'Flute Sonatas'
+    if 1027 <= n <= 1029: return 'Gamba Sonatas'
     if 1014 <= n <= 1019: return 'Violin Sonatas with Keyboard'
     if 1041 <= n <= 1045: return 'Concertos'
     if 1046 <= n <= 1051: return 'Brandenburg Concertos'
@@ -626,6 +663,11 @@ def _display_title(rel: str) -> str:
     m831 = _re.match(r'bwv-831-french-overture-(\d+)-(.+)$', s)
     if m831:
         return f"{int(m831.group(1))}. " + m831.group(2).capitalize()
+
+    # ── Gamba sonatas / Capriccio / concerto BWV 1063 (split files NN-name) ──
+    mgc = _re.match(r'bwv-(992|1027|1028|1029|1063)-[a-z]+(?:-[a-z]+)*?-(\d\d)-(.+)$', s)
+    if mgc:
+        return f"{mgc.group(1)}/{int(mgc.group(2))} " + mgc.group(3).replace('-', ' ').capitalize()
 
     # ── Art of Fugue ──────────────────────────────────────────────────────────
     mc = _re.match(r'contrapunctus([ivxlcdm]+)', s)
@@ -3477,6 +3519,172 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
     return result
 
 
+_NOTE_TAG_RE = re.compile(r'<note(?=[\s>/])([^>]*?)(/?)>')
+
+
+def _inject_note_ids(content: str) -> str:
+    """MusicXML only: give every <note> the id "srcNNNNN" (N = 1-based position of the <note>
+    element in the raw file). Verovio keeps it as xml:id, so a note clicked in the browser can be
+    found again in the source file (see _edit_note_pitch). Must run on the raw text, before any
+    preprocessing that could add/drop notes."""
+    n = [0]
+
+    def _sub(m):
+        n[0] += 1
+        attrs = re.sub(r'\s+id="[^"]*"', '', m.group(1))
+        return f'<note id="src{n[0]:05d}"{attrs}{m.group(2)}>'
+    return _NOTE_TAG_RE.sub(_sub, content)
+
+
+_ED_STEPS = 'CDEFGAB'
+_ED_SEMI = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
+_ED_ACCID = {0: 'natural', 1: 'sharp', -1: 'flat', 2: 'double-sharp', -2: 'flat-flat'}
+
+
+def _ed_key_alters(fifths: int) -> dict:
+    d = {s: 0 for s in _ED_STEPS}
+    for s in ('FCGDAEB'[:fifths] if fifths > 0 else 'BEADGCF'[:-fifths] if fifths < 0 else ''):
+        d[s] = 1 if fifths > 0 else -1
+    return d
+
+
+def _ed_spell(midi: int, fifths: int):
+    """(step, alter, octave) for a MIDI pitch: prefer the key signature's own spelling, then a natural,
+    then sharps in sharp keys / flats in flat keys."""
+    ka = _ed_key_alters(fifths)
+    cands = []
+    for step in _ED_STEPS:
+        for alter in (-1, 0, 1):
+            if (_ED_SEMI[step] + alter) % 12 == midi % 12:
+                cands.append((step, alter, (midi - alter - _ED_SEMI[step]) // 12 - 1))
+    cands.sort(key=lambda c: (c[1] != ka[c[0]], c[1] != 0, (c[1] > 0) != (fifths >= 0)))
+    return cands[0]
+
+
+def _ed_name(step, alter, octv):
+    return f"{step}{ {0: '', 1: '#', -1: 'b', 2: '##', -2: 'bb'}.get(alter, '?') }{octv}"
+
+
+def _ed_read_pitch(note_xml: str):
+    m = re.search(r'<pitch>\s*<step>([A-G])</step>(?:\s*<alter>(-?\d+)(?:\.0+)?</alter>)?\s*<octave>(-?\d+)</octave>',
+                  note_xml)
+    if not m:
+        return None
+    return m.group(1), int(m.group(2) or 0), int(m.group(3))
+
+
+def _edit_note_pitch(path: str, nid: str, semitones: int) -> dict:
+    """Shift one note of a MusicXML file (.xml/.mxl) by `semitones` chromatic semitones.
+    nid = "srcNNNNN" (see _inject_note_ids). Spelling follows the key signature; the <accidental>
+    element is recomputed from the key signature and the earlier notes of the same bar and staff.
+    Returns {"old": "F#4", "new": "F4"}. Raises ValueError on anything it cannot handle."""
+    import zipfile as _zf
+    mid = re.fullmatch(r'src(\d{5})', nid or '')
+    if not mid:
+        raise ValueError(f"bad note id {nid!r}")
+    idx = int(mid.group(1))
+    ext = path.rsplit('.', 1)[-1].lower()
+    if ext not in ('xml', 'musicxml', 'mxl'):
+        raise ValueError("only MusicXML files can be edited")
+    items = None
+    if ext == 'mxl':
+        with _zf.ZipFile(path) as z:
+            items = [(i, z.read(i.filename)) for i in z.infolist()]
+        inner = next(i.filename for i, _d in items
+                     if i.filename.lower().endswith(('.xml', '.musicxml')) and 'META' not in i.filename)
+        raw = next(d for i, d in items if i.filename == inner)
+    else:
+        with open(path, 'rb') as f:
+            raw = f.read()
+    text = raw.decode('utf-8')
+
+    notes = list(_NOTE_TAG_RE.finditer(text))
+    if not 1 <= idx <= len(notes):
+        raise ValueError("note not found in file")
+    nm = notes[idx - 1]
+    nend = text.index('</note>', nm.end()) + len('</note>')
+    note = text[nm.start():nend]
+    pit = _ed_read_pitch(note)
+    if pit is None:
+        raise ValueError("this note has no pitch (rest or unpitched)")
+    step, alter, octv = pit
+    old_midi = 12 * (octv + 1) + _ED_SEMI[step] + alter
+    fifths_all = re.findall(r'<fifths>(-?\d+)</fifths>', text[:nm.start()])
+    fifths = int(fifths_all[-1]) if fifths_all else 0
+    n_step, n_alter, n_oct = _ed_spell(old_midi + semitones, fifths)
+
+    # accidental state: earlier notes of the same bar and staff
+    ms = text.rfind('<measure', 0, nm.start())
+    staff = (re.search(r'<staff>(\d+)</staff>', note) or [None, '1'])[1]
+    prev = {}
+    for pm in _NOTE_TAG_RE.finditer(text, ms, nm.start()):
+        pn = text[pm.start():text.index('</note>', pm.end())]
+        pp = _ed_read_pitch(pn)
+        if pp and ((re.search(r'<staff>(\d+)</staff>', pn) or [None, '1'])[1] == staff):
+            prev[(pp[0], pp[2])] = pp[1]
+    effective = prev.get((n_step, n_oct), _ed_key_alters(fifths)[n_step])
+
+    # rebuild the pitch and accidental parts of the note text
+    new = re.sub(r'<step>[A-G]</step>', f'<step>{n_step}</step>', note, count=1)
+    new = re.sub(r'<octave>-?\d+</octave>', f'<octave>{n_oct}</octave>', new, count=1)
+    new = re.sub(r'\s*<alter>[^<]*</alter>', '', new, count=1)
+    if n_alter:
+        ws = re.search(r'</step>(\s*)<', new).group(1)
+        new = new.replace('</step>', f'</step>{ws}<alter>{n_alter}</alter>', 1)
+    new = re.sub(r'\s*<accidental[^>]*>[^<]*</accidental>', '', new, count=1)
+    if n_alter != effective:
+        mt = re.search(r'</type>(?:\s*<dot\s*/>)*', new)
+        if mt:
+            ws = re.search(r'(\s*)<type>', new)
+            new = new[:mt.end()] + (ws.group(1) if ws else '\n        ') + \
+                  f'<accidental>{_ED_ACCID[n_alter]}</accidental>' + new[mt.end():]
+    out = text[:nm.start()] + new + text[nend:]
+
+    data = out.encode('utf-8')
+    if ext == 'mxl':
+        tmp = path + '.tmp'
+        with _zf.ZipFile(tmp, 'w', _zf.ZIP_DEFLATED) as zz:
+            for i, d in items:
+                zz.writestr(i.filename, data if i.filename == inner else d)
+        os.replace(tmp, path)
+    else:
+        with open(path, 'wb') as f:
+            f.write(data)
+    return {"old": _ed_name(step, alter, octv), "new": _ed_name(n_step, n_alter, n_oct)}
+
+
+_EDIT_UNDO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.edit_undo')
+_edit_history = []          # [(file_path, backup_path), ...], newest last; lives while the app runs
+
+
+def _edit_with_undo(path: str, nid: str, semitones: int) -> dict:
+    """_edit_note_pitch + a backup copy of the file taken first (for /undo)."""
+    import shutil
+    os.makedirs(_EDIT_UNDO_DIR, exist_ok=True)
+    bak = os.path.join(_EDIT_UNDO_DIR, f"{int(time.time() * 1000)}_{os.path.basename(path)}")
+    shutil.copy2(path, bak)
+    try:
+        res = _edit_note_pitch(path, nid, semitones)
+    except Exception:
+        os.remove(bak)
+        raise
+    _edit_history.append((path, bak))
+    return res
+
+
+def _undo_last_edit(path: str) -> str:
+    """Restore the file from the newest backup made by _edit_with_undo. Returns a short message."""
+    import shutil
+    for i in range(len(_edit_history) - 1, -1, -1):
+        fp, bak = _edit_history[i]
+        if fp == path:
+            shutil.copy2(bak, fp)
+            os.remove(bak)
+            del _edit_history[i]
+            return f"undone ({len(_edit_history)} older edits left in history)"
+    raise ValueError("nothing to undo for this file")
+
+
 def render_score(path: str, version: str = "1", transpose_semitones: int = 0) -> tuple:
     """Returns (html, n_pages, version). Raises RuntimeError on failure."""
     check_file(path)
@@ -3510,6 +3718,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             content = prepare_grand_staff(content)
             content = add_beam_markers(content)
         elif ext in ('xml', 'musicxml', 'mxl'):
+            content = _inject_note_ids(content)
             content = _fix_missing_divisions(content)
             content = _fix_beam_groups(content)
             content = _fix_missing_tuplet_markers(content)
@@ -4131,6 +4340,47 @@ document.addEventListener('keydown',function(e){{
     }}
   }}
 }});
+
+// ── light editor: right-click a note, type the shift in semitones (e.g. -1, +2), Enter ──
+// Works for MusicXML files only (their notes carry ids "srcNNNNN"); the server rewrites the file
+// and the page reloads itself through the /events stream.
+(function(){{
+  var box=null;
+  function closeBox(){{if(box){{box.remove();box=null;}}}}
+  document.addEventListener('contextmenu',function(e){{
+    var g=e.target.closest&&e.target.closest('g.note');
+    if(!g||!/^src[0-9]{{5}}$/.test(g.id))return;
+    e.preventDefault(); closeBox();
+    box=document.createElement('input'); box.type='text'; box.placeholder='± полутоны'; box.size=10;
+    box.style.cssText='position:fixed;z-index:10000;left:'+e.clientX+'px;top:'+e.clientY+'px;'
+      +'font:14px monospace;padding:2px 4px;border:2px solid #d33;background:#fff';
+    document.body.appendChild(box); box.focus();
+    box.addEventListener('keydown',function(ev){{
+      ev.stopPropagation();
+      if(ev.key==='Escape'){{closeBox();return;}}
+      if(ev.key!=='Enter')return;
+      var v=parseInt(box.value,10);
+      if(isNaN(v)||v===0){{closeBox();return;}}
+      box.disabled=true;
+      fetch('/edit',{{method:'POST',body:JSON.stringify({{nid:g.id,semitones:v}})}})
+        .then(function(r){{return r.json();}})
+        .then(function(d){{
+          if(d.ok){{box.value=d.old+' → '+d.new;}}
+          else{{alert('Edit failed: '+d.error);closeBox();}}
+        }})
+        .catch(function(err){{alert('Edit failed: '+err);closeBox();}});
+    }});
+  }});
+  document.addEventListener('mousedown',function(e){{if(box&&e.target!==box)closeBox();}});
+  // Ctrl+Z (outside input fields): undo the last edit of this file
+  document.addEventListener('keydown',function(e){{
+    if(!(e.ctrlKey&&(e.key==='z'||e.key==='Z'))||e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+    e.preventDefault();
+    fetch('/edit',{{method:'POST',body:JSON.stringify({{undo:true}})}})
+      .then(function(r){{return r.json();}})
+      .then(function(d){{if(!d.ok)alert('Undo: '+d.error);}});
+  }});
+}})();
 
 var _dictSortKey=null;
 var _dictSortAsc=false;
