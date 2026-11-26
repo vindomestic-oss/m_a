@@ -604,7 +604,7 @@
     <!--========================= Measure 41 =========================-->
     <measure implicit="no" number="41">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -730,11 +730,15 @@
         <beam number="1">end</beam>
         <beam number="2">end</beam>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 211 =========================-->
     <measure implicit="no" number="211">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -871,6 +875,9 @@
         <beam number="1">end</beam>
         <beam number="2">end</beam>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--======================== Measure 352 =========================-->
     <measure implicit="no" number="352">
@@ -2004,7 +2011,7 @@
     <!--======================== Measure 121 =========================-->
     <measure implicit="no" number="121">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -2169,11 +2176,15 @@
         <beam number="1">end</beam>
         <beam number="2">end</beam>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -2271,6 +2282,7 @@
       </note>
       <barline location="right">
         <bar-style>light-light</bar-style>
+        <ending number="2" type="discontinue" />
       </barline>
     </measure>
   </part>
@@ -2323,22 +2335,29 @@
     <!--========================= Measure 41 =========================-->
     <measure implicit="no" number="41">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 211 =========================-->
     <measure implicit="no" number="211">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--======================== Measure 352 =========================-->
     <measure implicit="no" number="352">
@@ -2413,17 +2432,21 @@
     <!--======================== Measure 121 =========================-->
     <measure implicit="no" number="121">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
@@ -2431,6 +2454,7 @@
       </note>
       <barline location="right">
         <bar-style>light-light</bar-style>
+        <ending number="2" type="discontinue" />
       </barline>
     </measure>
   </part>
@@ -2483,22 +2507,29 @@
     <!--========================= Measure 41 =========================-->
     <measure implicit="no" number="41">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 211 =========================-->
     <measure implicit="no" number="211">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--======================== Measure 352 =========================-->
     <measure implicit="no" number="352">
@@ -2573,17 +2604,21 @@
     <!--======================== Measure 121 =========================-->
     <measure implicit="no" number="121">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
@@ -2591,6 +2626,7 @@
       </note>
       <barline location="right">
         <bar-style>light-light</bar-style>
+        <ending number="2" type="discontinue" />
       </barline>
     </measure>
   </part>
@@ -2643,22 +2679,29 @@
     <!--========================= Measure 41 =========================-->
     <measure implicit="no" number="41">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 211 =========================-->
     <measure implicit="no" number="211">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--======================== Measure 352 =========================-->
     <measure implicit="no" number="352">
@@ -2733,17 +2776,21 @@
     <!--======================== Measure 121 =========================-->
     <measure implicit="no" number="121">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
         <duration>30240</duration>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <rest measure="yes" />
@@ -2751,6 +2798,7 @@
       </note>
       <barline location="right">
         <bar-style>light-light</bar-style>
+        <ending number="2" type="discontinue" />
       </barline>
     </measure>
   </part>
@@ -3007,7 +3055,7 @@
     <!--========================= Measure 41 =========================-->
     <measure implicit="no" number="41">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -3048,11 +3096,15 @@
         <duration>20160</duration>
         <type>half</type>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 211 =========================-->
     <measure implicit="no" number="211">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -3093,6 +3145,9 @@
         <duration>20160</duration>
         <type>half</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--======================== Measure 352 =========================-->
     <measure implicit="no" number="352">
@@ -3628,7 +3683,7 @@
     <!--======================== Measure 121 =========================-->
     <measure implicit="no" number="121">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -3668,11 +3723,15 @@
         <duration>20160</duration>
         <type>half</type>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -3714,6 +3773,7 @@
       </note>
       <barline location="right">
         <bar-style>light-light</bar-style>
+        <ending number="2" type="discontinue" />
       </barline>
     </measure>
   </part>

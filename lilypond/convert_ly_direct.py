@@ -789,18 +789,28 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             vc = ev.get('vc', '1')
             vc_note_counts.setdefault(vc, _Counter())[ev.get('st', '1')] += 1
     vc_home_st: dict[str, str] = {}
+    vc_balanced: set[str] = set()      # voices split about evenly between staves (no >= 2/3 majority)
+    staff_ids = {ev.get('st') for ev in note_events if ev.get('t') in ('N', 'R')}
     for vc, first_st in vc_first_st.items():
         counts = vc_note_counts.get(vc, _Counter())
+        # A voice created inside a named Staff context ("left.left.2" lives in Staff "left") belongs
+        # to that staff when its notes are split about evenly by \change Staff (bwv599: the left-hand
+        # voices flip to the right staff for half of their notes, and the first event of the voice may
+        # already sit on the other staff). Otherwise: first-appearance staff.
+        declared = vc.split('.')[0]
+        fallback = declared if (declared in staff_ids and counts.get(declared, 0) > 0) else first_st
         if counts:
             total = sum(counts.values())
             best_st, best_n = counts.most_common(1)[0]
-            # Override first-appearance staff only when the majority is overwhelming (>= 2/3)
-            if best_st != first_st and best_n >= total * 2 / 3:
+            # Override the fallback staff only when the majority is overwhelming (>= 2/3)
+            if best_st != fallback and best_n >= total * 2 / 3:
                 vc_home_st[vc] = best_st
             else:
-                vc_home_st[vc] = first_st
+                vc_home_st[vc] = fallback
+                if best_n < total * 2 / 3:
+                    vc_balanced.add(vc)
         else:
-            vc_home_st[vc] = first_st
+            vc_home_st[vc] = fallback
 
     for ev in note_events:
         t = ev.get('t')
@@ -1057,7 +1067,8 @@ def notes_to_score(note_events: list[dict]) -> m21.stream.Score:
             try:
                 # Skip rests that come from a non-home staff (cross-staff filler rests
                 # from the other grand-staff hand should not pollute the home-staff voice).
-                if ev.get('t') == 'R' and ev.get('st') != staff_id:
+                # (A truly cross-staff voice keeps its rests from either staff: they are its own.)
+                if ev.get('t') == 'R' and ev.get('st') != staff_id and vc not in vc_balanced:
                     continue
                 obj = _make_note_or_rest(ev, i)
                 on_frac = _onset_frac(ev['on']) + pickup_shift
