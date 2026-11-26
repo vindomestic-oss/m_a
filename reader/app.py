@@ -3519,7 +3519,64 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
     return result
 
 
+def _show_hidden_key_signatures(content: str) -> str:
+    """MusicXML: a <key print-object="no"> with sharps/flats makes verovio drop the key signature
+    from every following system (several musedata conversions put it at bar 1 or mid-piece).
+    Print such key signatures."""
+    return re.sub(r'<key\s+print-object="no"\s*>(?=\s*<fifths>-?[1-9])', '<key>', content)
+
+
 _NOTE_TAG_RE = re.compile(r'<note(?=[\s>/])([^>]*?)(/?)>')
+
+
+_ACC_ALTER = {'sharp': 1, 'flat': -1, 'natural': 0, 'double-sharp': 2, 'flat-flat': -2, 'sharp-sharp': 2}
+_ALTER_ACC = {1: 'sharp', -1: 'flat', 0: 'natural', 2: 'double-sharp', -2: 'flat-flat'}
+_PIN_TOKEN_RE = re.compile(r'<measure\b[^>]*>|<fifths>(-?\d+)</fifths>|<note(?=[\s>/])[^>]*?>.*?</note>', re.S)
+
+
+def _pin_hidden_accidentals(content: str) -> str:
+    """MusicXML: verovio keeps an accidental in memory for the rest of the bar by note NAME only (any
+    octave, any staff), so a note without <accidental> can come out altered by an earlier note of the
+    other hand (E4 gets accid.ges="s" after an E# in the right hand). Transposition makes this common,
+    and a tie whose two ends are read differently stays open (a long tie, or none). Give every note
+    whose true <alter> differs from what verovio would infer a hidden copy of the true accidental
+    (print-object="no")."""
+    fifths = 0
+    mem = {}
+    out = []
+    pos = 0
+    for m in _PIN_TOKEN_RE.finditer(content):
+        t = m.group(0)
+        if t.startswith('<measure'):
+            mem = {}
+            continue
+        if t.startswith('<fifths'):
+            fifths = int(m.group(1))
+            continue
+        pm = re.search(r'<step>([A-G])</step>(?:\s*<alter>(-?\d+)(?:\.0+)?</alter>)?', t)
+        if not pm:
+            continue
+        step, true_alter = pm.group(1), int(pm.group(2) or 0)
+        am = re.search(r'<accidental[^>]*>([^<]*)</accidental>', t)
+        if am:
+            mem[step] = _ACC_ALTER.get(am.group(1).strip(), true_alter)
+            continue
+        if fifths > 0:
+            key_alter = 1 if 'FCGDAEB'.index(step) < fifths else 0
+        else:
+            key_alter = -1 if 'BEADGCF'.index(step) < -fifths else 0
+        if mem.get(step, key_alter) != true_alter and true_alter in _ALTER_ACC:
+            tm = re.search(r'</type>(?:\s*<dot\s*/>)*', t)
+            if tm:
+                ws = re.search(r'(\s*)<type>', t)
+                t2 = (t[:tm.end()] + (ws.group(1) if ws else '\n        ')
+                      + f'<accidental print-object="no">{_ALTER_ACC[true_alter]}</accidental>' + t[tm.end():])
+                out.append(content[pos:m.start()])
+                out.append(t2)
+                pos = m.end()
+                mem[step] = true_alter
+    out.append(content[pos:])
+    return ''.join(out)
 
 
 def _sync_tie_accidentals(content: str) -> str:
@@ -3759,6 +3816,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             content = add_beam_markers(content)
         elif ext in ('xml', 'musicxml', 'mxl'):
             content = _inject_note_ids(content)
+            content = _show_hidden_key_signatures(content)
             content = _fix_missing_divisions(content)
             content = _fix_beam_groups(content)
             content = _fix_missing_tuplet_markers(content)
@@ -3776,6 +3834,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             # unlike MEI where key-sig notes have no accid.ges.
             if transpose_semitones:
                 content = _transpose_musicxml_pitches(content, transpose_semitones)
+            content = _pin_hidden_accidentals(content)
             content = _sync_tie_accidentals(content)
         ok = _vtk.loadData(content)
         if not ok:
