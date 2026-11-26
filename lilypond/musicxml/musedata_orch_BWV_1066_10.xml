@@ -429,7 +429,7 @@
     <!--========================= Measure 81 =========================-->
     <measure implicit="no" number="81">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -497,11 +497,15 @@
         <type>eighth</type>
         <beam number="1">end</beam>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -516,6 +520,9 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--========================= Measure 32 =========================-->
     <measure implicit="no" number="32">
@@ -1907,7 +1914,7 @@
     <!--========================= Measure 81 =========================-->
     <measure implicit="no" number="81">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -1975,11 +1982,15 @@
         <type>eighth</type>
         <beam number="1">end</beam>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -1994,6 +2005,9 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--========================= Measure 32 =========================-->
     <measure implicit="no" number="32">
@@ -3246,7 +3260,7 @@
     <!--========================= Measure 81 =========================-->
     <measure implicit="no" number="81">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -3322,11 +3336,15 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -3341,6 +3359,9 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--========================= Measure 32 =========================-->
     <measure implicit="no" number="32">
@@ -4353,7 +4374,7 @@
     <!--========================= Measure 81 =========================-->
     <measure implicit="no" number="81">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -4421,11 +4442,15 @@
         <type>eighth</type>
         <beam number="1">end</beam>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -4440,6 +4465,9 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--========================= Measure 32 =========================-->
     <measure implicit="no" number="32">
@@ -5708,7 +5736,7 @@
     <!--========================= Measure 81 =========================-->
     <measure implicit="no" number="81">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -5776,11 +5804,15 @@
         <type>eighth</type>
         <beam number="1">end</beam>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -5795,6 +5827,9 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--========================= Measure 32 =========================-->
     <measure implicit="no" number="32">
@@ -6674,7 +6709,7 @@
     <!--========================= Measure 81 =========================-->
     <measure implicit="no" number="81">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -6714,11 +6749,15 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -6733,6 +6772,9 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--========================= Measure 32 =========================-->
     <measure implicit="no" number="32">
@@ -7606,7 +7648,7 @@
     <!--========================= Measure 81 =========================-->
     <measure implicit="no" number="81">
       <barline location="left">
-        <bar-style>regular</bar-style>
+        <ending number="1" type="start" />
       </barline>
       <note>
         <pitch>
@@ -7682,11 +7724,15 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="1" type="stop" />
+        <repeat direction="backward" />
+      </barline>
     </measure>
     <!--======================== Measure 212 =========================-->
     <measure implicit="no" number="212">
       <barline location="left">
-        <repeat direction="backward" />
+        <ending number="2" type="start" />
       </barline>
       <note>
         <pitch>
@@ -7701,6 +7747,9 @@
         <duration>10080</duration>
         <type>quarter</type>
       </note>
+      <barline location="right">
+        <ending number="2" type="discontinue" />
+      </barline>
     </measure>
     <!--========================= Measure 32 =========================-->
     <measure implicit="no" number="32">
