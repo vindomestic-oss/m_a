@@ -3522,6 +3522,46 @@ def _transpose_musicxml_pitches(content: str, semitones: int) -> str:
 _NOTE_TAG_RE = re.compile(r'<note(?=[\s>/])([^>]*?)(/?)>')
 
 
+def _sync_tie_accidentals(content: str) -> str:
+    """MusicXML: verovio decides which two notes a tie joins by their pitch INCLUDING the written
+    <accidental>; if the tie-start carries one (e.g. a natural after a sharp earlier in the bar)
+    and the tie-stop does not, the tie is not closed and is drawn bars later (or never).
+    Give every such stop note a hidden copy (print-object="no") of the start note's accidental.
+    Needed after transposition too, because that recomputes all accidentals from scratch."""
+    pending = {}
+    out = []
+    pos = 0
+    for m in _NOTE_TAG_RE.finditer(content):
+        if m.start() < pos:
+            continue
+        end = content.find('</note>', m.end())
+        if end < 0:
+            break
+        end += len('</note>')
+        note = content[m.start():end]
+        pm = re.search(r'<step>([A-G])</step>(?:\s*<alter>(-?\d+)(?:\.0+)?</alter>)?\s*<octave>(-?\d+)</octave>', note)
+        if pm:
+            key = (pm.group(1), pm.group(2) or '0', pm.group(3),
+                   (re.search(r'<staff>(\d+)</staff>', note) or [None, '1'])[1],
+                   (re.search(r'<voice>([^<]*)</voice>', note) or [None, ''])[1])
+            am = re.search(r'<accidental[^>]*>([^<]*)</accidental>', note)
+            if re.search(r'<tie\s[^>]*type="stop"', note) and key in pending:
+                acc = pending.pop(key)
+                if acc and not am:
+                    t = re.search(r'</type>(?:\s*<dot\s*/>)*', note)
+                    if t:
+                        ws = re.search(r'(\s*)<type>', note)
+                        note = (note[:t.end()] + (ws.group(1) if ws else '\n        ')
+                                + f'<accidental print-object="no">{acc}</accidental>' + note[t.end():])
+                        out.append(content[pos:m.start()])
+                        out.append(note)
+                        pos = end
+            if re.search(r'<tie\s[^>]*type="start"', note):
+                pending[key] = am.group(1) if am else ''
+    out.append(content[pos:])
+    return ''.join(out)
+
+
 def _inject_note_ids(content: str) -> str:
     """MusicXML only: give every <note> the id "srcNNNNN" (N = 1-based position of the <note>
     element in the raw file). Verovio keeps it as xml:id, so a note clicked in the browser can be
@@ -3736,6 +3776,7 @@ def render_score(path: str, version: str = "1", transpose_semitones: int = 0) ->
             # unlike MEI where key-sig notes have no accid.ges.
             if transpose_semitones:
                 content = _transpose_musicxml_pitches(content, transpose_semitones)
+            content = _sync_tie_accidentals(content)
         ok = _vtk.loadData(content)
         if not ok:
             raise RuntimeError("verovio could not parse this file")
